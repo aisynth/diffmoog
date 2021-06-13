@@ -109,8 +109,18 @@ class Signal:
     Ac*sin(2pi*fc*t + amp_mod*signal)   
     Ac, fc, amp_mod, fm must to be float
     '''
-    def fm_modulation_for_input(self, input_signal, freq_c, amp_c, mod_index):
-        self.data = amp_c * torch.sin(TWO_PI * freq_c * self.time_sample + mod_index * input_signal)
+    def fm_modulation_for_input(self, input_signal, freq_c, amp_c, mod_index, waveform):
+        t = self.time_sample
+        if waveform == 'sine':
+            self.data = amp_c * torch.sin(TWO_PI * freq_c * t + mod_index * input_signal)
+        if waveform == 'square':
+            self.data = amp_c * torch.sign(torch.sin(TWO_PI * freq_c * t + mod_index * input_signal))
+        if waveform == 'triangle':
+            self.data = (2 * amp_c / PI) * torch.arcsin(torch.sin((TWO_PI * freq_c * t + mod_index * input_signal)))
+        if waveform == 'sawtooth':
+            oscillator = 2 * (t * freq_c - torch.floor(0.5 + t * freq_c))
+            oscillator = (((oscillator + 1) / 2) + mod_index * input_signal / TWO_PI) % 1
+            self.data = amp_c * (oscillator * 2 - 1)
 
     '''
     (Ac + Am*cos(2*pi*fm*t)) * cos(2*pi*fc*t)
@@ -191,12 +201,12 @@ class Signal:
 
 a = Signal()
 b = Signal()
-a.oscillator(a.time_sample, amp=0.75, freq=5, phase=0, waveform='sine')
+a.oscillator(a.time_sample, amp=0.75, freq=3, phase=0, waveform='sine')
 plt.plot(a.data)
 torch.tensor(0)
 print(torch.sign(torch.tensor(0)))
-b.fm_modulation_for_input(a.data, 880, 1, 10)
-# plt.plot(b.data)
+b.fm_modulation_for_input(a.data, 440, 1, 10, 'sawtooth')
+plt.plot(b.data)
 plt.show()
 
 print(a.data.shape)
