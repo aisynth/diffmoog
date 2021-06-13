@@ -68,8 +68,12 @@ class Signal:
         elif waveform == 'triangle':
             oscillator = (2 * amp / PI) * torch.arcsin(torch.sin((TWO_PI * freq * t + phase)))
         elif waveform == 'sawtooth':
-            oscillator = amp * 2 * (t * freq - torch.floor(0.5 + t * freq))
-            oscillator = torch.roll(oscillator, int(len(t) * phase / (TWO_PI * freq)))
+            # Sawtooth closed form
+            oscillator = 2 * (t * freq - torch.floor(0.5 + t * freq))
+            # Phase shift by normalization to range [0,1] and modulo operation
+            oscillator = (((oscillator + 1) / 2) + phase / TWO_PI) % 1
+            # re-normalization to range [-amp, amp]
+            oscillator = amp*(oscillator * 2 - 1)
 
         self.data = oscillator
 
@@ -112,7 +116,6 @@ class Signal:
     (Ac + Am*cos(2*pi*fm*t)) * cos(2*pi*fc*t)
     Ac, amp_mod, fm, fc, must to be float
     '''
-
     def am_modulation(self, fm, fc, Ac, Am):
         modulator = Am * torch.cos(2 * self.pi * fm * self.time_sample)
         carrier = torch.cos(2 * self.pi * fc * self.time_sample)
@@ -187,16 +190,24 @@ class Signal:
 
 
 a = Signal()
-a.oscillator(a.time_sample, amp=0.5, freq=100, phase=0, waveform='square')
+b = Signal()
+a.oscillator(a.time_sample, amp=0.75, freq=5, phase=0, waveform='sine')
+plt.plot(a.data)
+torch.tensor(0)
+print(torch.sign(torch.tensor(0)))
+b.fm_modulation_for_input(a.data, 880, 1, 10)
+# plt.plot(b.data)
+plt.show()
+
 print(a.data.shape)
 print(a.data.dtype)
-play_obj = sa.play_buffer(a.data.numpy(), 1, 4, a.sample_rate)
+play_obj = sa.play_buffer(b.data.numpy(), 1, 4, a.sample_rate)
 play_obj.wait_done()
-plt.plot(a.data)
+# plt.plot(a.data)
 a.low_pass(1000)
-play_obj = sa.play_buffer(a.data.numpy(), 1, 4, a.sample_rate)
-play_obj.wait_done()
-plt.plot(a.data)
+# play_obj = sa.play_buffer(a.data.numpy(), 1, 4, a.sample_rate)
+# play_obj.wait_done()
+# plt.plot(a.data)
 #
 # def fm_modulation(self, amp_mod, fm, fc, Ac, waveform):
 # a.fm_modulation(1, 3, 5, 1, 'tri')
