@@ -13,10 +13,12 @@ import torch
 import matplotlib.pyplot as plt
 import pytorch_forecasting
 
+PI = 3.141592653589793
+TWO_PI = 2 * PI
 
 # data = torchaudio.functional.compute_kaldi_pitch('sine',sample_rate =2200,frame_length=5000)
 
-class Signal():
+class Signal:
     def __init__(self):
         self.freq_sample = 44100
         self.sig_duration = 1.0  # in seconds
@@ -29,13 +31,14 @@ class Signal():
         self.conv = nn.Conv1d(1, 1, 1, 1)
         torch.wave = 0
 
-    def oscillator(self, amp, freq, phase, waveform):
+    def oscillator(self, t, amp, freq, phase, waveform):
         """Creates a basic oscillator.
 
             Retrieves a waveform shape and attributes, and construct the respected signal
 
             Args:
                 self: Self object
+                t: time vector
                 amp: Amplitude in range [0, 1]
                 freq: Frequency in range [0, 22000]
                 phase: Phase in range [0, 2pi]
@@ -54,51 +57,41 @@ class Signal():
         if not any(x == waveform for x in ['sine', 'square', 'triangle', 'sawtooth']):
             raise ValueError("Unknown waveform provided")
 
-        phase = phase % (2 * self.pi.item())
-        oscillator = torch.zeros_like(self.time_sample)
+        phase = phase % TWO_PI
+        oscillator = torch.zeros_like(t)
         if waveform == 'sine':
-            oscillator = amp * torch.sin(2 * self.pi * freq * self.time_sample + phase)
+            oscillator = amp * torch.sin(TWO_PI * freq * t + phase)
         elif waveform == 'square':
-            oscillator = amp * torch.sign(torch.sin(2 * self.pi * freq * self.time_sample + phase))
+            oscillator = amp * torch.sign(torch.sin(TWO_PI * freq * t + phase))
         elif waveform == 'triangle':
-            oscillator = (2 * amp / self.pi) * torch.arcsin(torch.sin((2 * self.pi * freq * self.time_sample)))
+            oscillator = (2 * amp / PI) * torch.arcsin(torch.sin((TWO_PI * freq * t + phase)))
         elif waveform == 'sawtooth':
-            oscillator = amp * 2 * (self.time_sample * freq - torch.floor(0.5 + self.time_sample * freq))
-            oscillator = torch.roll(oscillator, int(self.freq_sample * phase / (2 * self.pi * freq)))
+            oscillator = amp * 2 * (t * freq - torch.floor(0.5 + t * freq))
+            oscillator = torch.roll(oscillator, int(len(t) * phase / (TWO_PI * freq)))
 
         return oscillator
 
-    '''
-    superposition of 2 signals. factor is a number in range [0,1]
-    which balances the 2 signals in the mix. 
-    with 0 value - the mixed signal will be made from signal1 only 
-    with 1 value - the mixed signal will be made from signal2 only
-    with 0.5 - the mixed signal composition is evenly balanced. 
-    '''
-
     def mix_signal(self, signal1, signal2, factor):
-        if len(signal1) == len(signal2):
-            mixed_signal = factor * signal1 + (1 - factor) * signal2
-        else:
-            print("Exception in mix_signal - signals length are not equal")
+        """Signal superposition. factor balances the mix (0 - signal1 only, 1 - signal2 only, 0.5 evenly balanced)."""
+        mixed_signal = factor * signal1 + (1 - factor) * signal2
+        return mixed_signal
 
     '''Ac*sin(2pi*fc*t + amp_mod*sin(2pi*fm*t))   
     Ac, fc, amp_mod, fm must to be float
     '''
-
-    def fm_modulation(self, amp_mod, fm, fc, Ac, waveform):
-        self.modulation = torch.sin(self.modulation_time * self.pi * 2.0 * fm)
-        self.modulation = self.modulation * amp_mod
+    def fm_modulation(self, amp_m, freq_m, freq_c, amp_c, waveform):
+        t = self.time_sample
+        self.modulation = self.oscillator(t, amp_m, freq_m, 0, 'sine')
         if waveform == 'sin':
-            self.data = Ac * torch.sin(self.time_sample * self.pi * 2.0 * fc + self.modulation)
+            self.data = amp_c * torch.sin(TWO_PI * freq_c * t + self.modulation)
         if waveform == 'square':
-            self.data = torch.sign(torch.sin(self.time_sample * self.pi * 2.0 * fc + self.modulation) * Ac) + 1.0
+            self.data = torch.sign(torch.sin(TWO_PI * freq_c * t + self.modulation) * amp_c) + 1.0
         if waveform == 'tri':
-            y = (torch.sign(torch.sin(self.time_sample * self.pi * 2.0 * fc + self.modulation) * Ac))
+            y = (torch.sign(torch.sin(TWO_PI * freq_c * t + self.modulation) * amp_c))
             self.data = pytorch_forecasting.utils.autocorrelation(y, dim=0)
             pass
         if waveform == 'saw':
-            y = (torch.sign(torch.sin(self.time_sample * self.pi * 2.0 * fc + self.modulation) * Ac)) + 1.0
+            y = (torch.sign(torch.sin(TWO_PI * freq_c * t + self.modulation) * amp_c)) + 1.0
             y1 = pytorch_forecasting.utils.autocorrelation(y, dim=0) + 1.0
             y2 = torch.roll(y1, shifts=1, dims=0)
             self.data = torch.where(y2 <= y1, y2, torch.zeros(1))
@@ -110,18 +103,13 @@ class Signal():
     Ac*sin(2pi*fc*t + amp_mod*signal)   
     Ac, fc, amp_mod, fm must to be float
     '''
-
-    def fm_modulation_for_input(self, input_signal, fc, Ac, amp_mod):
-        if len(self.time_sample) == len(input_signal):
-            self.data = modulated_signal = Ac * torch.sin(2 * self.pi * fc * self.time_sample + amp_mod * input_signal)
-        else:
-            print("Signal length inappropriate. Modulation can't be done")
+    def fm_modulation_for_input(self, input_signal, freq_c, amp_c, mod_index):
+        self.data = amp_c * torch.sin(TWO_PI * freq_c * self.time_sample + mod_index * input_signal)
 
     '''
     (Ac + Am*cos(2*pi*fm*t)) * cos(2*pi*fc*t)
     Ac, amp_mod, fm, fc, must to be float
     '''
-
     def am_modulation(self, fm, fc, Ac, Am):
         modulator = Am * torch.cos(2 * self.pi * fm * self.time_sample)
         carrier = torch.cos(2 * self.pi * fc * self.time_sample)
@@ -132,7 +120,6 @@ class Signal():
     (Ac + input_signal) * cos(2*pi*fc*t)
     Ac, amp_mod, fm, fc, must to be float
     '''
-
     def am_modulation_for_input(self, input_signal, fc, Ac, Am):
         modulator = Am * input_signal
         carrier = torch.cos(2 * self.pi * fc * self.time_sample)
@@ -144,7 +131,6 @@ class Signal():
     A+D+S+R = self.sig_duration ()
     Ys is sustain value, amp is the max point in A
     '''
-
     def adsr_envelope(self, amp, A, D, S, Ys, R):
         time_sample = torch.linspace(0, 1, steps=44000)
         time_sample = torch.where(time_sample <= A, time_sample, 0)
@@ -194,11 +180,11 @@ class Signal():
 
 
 a = Signal()
-b = a.oscillator(0.5, 5, 0, 'sawtooth')
+b = a.oscillator(a.time_sample, 0.5, 5, 0, 'triangle')
 plt.plot(b)
 
 # def fm_modulation(self, amp_mod, fm, fc, Ac, waveform):
-a.fm_modulation(0.0, 3.0, 5, 1, 'tri')
+# a.fm_modulation(1, 3, 5, 1, 'tri')
 # print(a.data)
 # plt.plot(a.data)
 
