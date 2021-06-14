@@ -132,24 +132,55 @@ class Signal:
             oscillator = (((oscillator + 1) / 2) + mod_index * input_signal / TWO_PI) % 1
             self.data = amp_c * (oscillator * 2 - 1)
 
-    '''
-    (Ac + Am*cos(2*pi*fm*t)) * cos(2*pi*fc*t)
-    Ac, amp_mod, fm, fc, must to be float
-    '''
-    def am_modulation(self, fm, fc, Ac, Am):
-        modulator = Am * torch.cos(2 * self.pi * fm * self.time_samples)
-        carrier = torch.cos(2 * self.pi * fc * self.time_samples)
-        modulated_amplitude = (Ac + modulator)
-        self.data = modulated_amplitude * carrier
+    def am_modulation(self, amp_c, freq_c, amp_m, freq_m, final_max_amp, waveform):
+        """AM modulation
+
+            Modulates the amplitude of a carrier signal with a modulator
+            see https://en.wikipedia.org/wiki/Amplitude_modulation
+
+            Args:
+                self: Self object
+                amp_c: Amplitude of carrier in range [0, 1]
+                freq_c: Frequency of carrier in range [0, 22000]
+                amp_m: Amplitude of modulator in range [0, 1]
+                freq_m: Frequency of modulator in range [0, 22000]
+                final_max_amp: The final maximum amplitude of the modulated signal
+                waveform: One of [sine, square, triangle, sawtooth]
+
+            Returns:
+                A torch with the constructed AM signal
+
+            Raises:
+                ValueError: Provided variables are out of range
+                ValueError: modulation index > 1. Amplitude values must obey amp_m < amp_c
+                # todo add documentation for sensible frequency values
+            """
+        self.signal_values_sanity_check(amp_m, freq_m, waveform)
+        self.signal_values_sanity_check(amp_c, freq_c, waveform)
+        modulation_index = amp_m / amp_c
+        if modulation_index > 1:
+            raise ValueError("Provided amplitudes results modulation index > 1, and yields over-modulation ")
+        if final_max_amp < 0 or final_max_amp > 1:
+            raise ValueError("Provided final max amplitude is not in range [0, 1]")
+        # todo: add restriction freq_c >> freq_m
+
+        t = self.time_samples
+        dc = 1
+        carrier = Signal()
+        carrier.oscillator(amp=amp_c, freq=freq_c, phase=0, waveform=waveform)
+        modulator = amp_m * torch.cos(TWO_PI * freq_m * t)
+        am_signal = (dc + modulator / amp_c) * carrier.data
+        normalized_am_signal = (final_max_amp / (amp_c + amp_m)) * am_signal
+        self.data = normalized_am_signal
 
     '''
     (Ac + input_signal) * cos(2*pi*fc*t)
     Ac, amp_mod, fm, fc, must to be float
     '''
-    def am_modulation_for_input(self, input_signal, fc, Ac, Am):
-        modulator = Am * input_signal
+    def am_modulation_by_input_signal(self, input_signal, fc, amp_c, amp_m):
+        modulator = amp_m * input_signal
         carrier = torch.cos(2 * self.pi * fc * self.time_samples)
-        modulated_amplitude = (Ac + modulator)
+        modulated_amplitude = (amp_c + modulator)
         self.data = modulated_amplitude * carrier
 
     '''
@@ -219,17 +250,17 @@ class Signal:
 
 a = Signal()
 b = Signal()
-a.oscillator(a.time_samples, amp=0.75, freq=3, phase=0, waveform='sine')
+a.am_modulation(amp_c=0.4, freq_c=440, amp_m=0.3, freq_m=5, final_max_amp=0.1, waveform='sine')
 plt.plot(a.data)
 torch.tensor(0)
 print(torch.sign(torch.tensor(0)))
-b.fm_modulation_by_input_signal(a.data, 440, 1, 10, 'sawtooth')
+# b.fm_modulation_by_input_signal(a.data, 440, 1, 10, 'sawtooth')
 plt.plot(b.data)
 plt.show()
 
 print(a.data.shape)
 print(a.data.dtype)
-play_obj = sa.play_buffer(b.data.numpy(), 1, 4, a.sample_rate)
+play_obj = sa.play_buffer(a.data.numpy(), 1, 4, a.sample_rate)
 play_obj.wait_done()
 # plt.plot(a.data)
 a.low_pass(1000)
