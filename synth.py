@@ -73,14 +73,14 @@ class Signal:
             # Phase shift by normalization to range [0,1] and modulo operation
             oscillator = (((oscillator + 1) / 2) + phase / TWO_PI) % 1
             # re-normalization to range [-amp, amp]
-            oscillator = amp*(oscillator * 2 - 1)
+            oscillator = amp * (oscillator * 2 - 1)
 
         self.data = oscillator
 
-    def mix_signal(self, signal1, signal2, factor):
-        """Signal superposition. factor balances the mix (0 - signal1 only, 1 - signal2 only, 0.5 evenly balanced)."""
-        mixed_signal = factor * signal1 + (1 - factor) * signal2
-        return mixed_signal
+    def mix_signal(self, new_signal, factor):
+        """Signal superposition. factor balances the mix
+        0 - original signal only, 1 - new signal only, 0.5 evenly balanced. """
+        self.data = factor * self.data + (1 - factor) * new_signal
 
     '''Ac*sin(2pi*fc*t + amp_mod*sin(2pi*fm*t))   
     Ac, fc, amp_mod, fm must to be float
@@ -109,6 +109,7 @@ class Signal:
     Ac*sin(2pi*fc*t + amp_mod*signal)   
     Ac, fc, amp_mod, fm must to be float
     '''
+
     def fm_modulation_for_input(self, input_signal, freq_c, amp_c, mod_index, waveform):
         t = self.time_sample
         if waveform == 'sine':
@@ -126,6 +127,7 @@ class Signal:
     (Ac + Am*cos(2*pi*fm*t)) * cos(2*pi*fc*t)
     Ac, amp_mod, fm, fc, must to be float
     '''
+
     def am_modulation(self, fm, fc, Ac, Am):
         modulator = Am * torch.cos(2 * self.pi * fm * self.time_sample)
         carrier = torch.cos(2 * self.pi * fc * self.time_sample)
