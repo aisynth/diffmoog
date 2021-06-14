@@ -24,23 +24,22 @@ class Signal:
     def __init__(self):
         self.sample_rate = 44100
         self.sig_duration = 1.0  # in seconds
-        self.time_sample = torch.linspace(0, 1, steps=44100)
+        self.time_samples = torch.linspace(0, 1, steps=self.sample_rate)
         self.pi = torch.acos(torch.zeros(1).float()) * 2.0
-        self.modulation_time = torch.linspace(0, 1, steps=44100)
+        self.modulation_time = torch.linspace(0, 1, steps=self.sample_rate)
         self.modulation = 0
         self.data = 0
         self.shift = self.sig_duration / (self.sample_rate * 2)
         self.conv = nn.Conv1d(1, 1, 1, 1)
         torch.wave = 0
 
-    def oscillator(self, t, amp, freq, phase, waveform):
+    def oscillator(self, amp, freq, phase, waveform):
         """Creates a basic oscillator.
 
             Retrieves a waveform shape and attributes, and construct the respected signal
 
             Args:
                 self: Self object
-                t: time vector
                 amp: Amplitude in range [0, 1]
                 freq: Frequency in range [0, 22000]
                 phase: Phase in range [0, 2pi]
@@ -52,13 +51,8 @@ class Signal:
             Raises:
                 ValueError: Provided variables are out of range
             """
-        if freq < 0 or freq > 22000:
-            raise ValueError("Provided frequency is not in range [0, 22000]")
-        if amp < 0 or amp > 1:
-            raise ValueError("Provided amplitude is not in range [0, 1]")
-        if not any(x == waveform for x in ['sine', 'square', 'triangle', 'sawtooth']):
-            raise ValueError("Unknown waveform provided")
-
+        self.signal_values_sanity_check(amp, freq, waveform)
+        t = self.time_samples
         phase = phase % TWO_PI
         oscillator = torch.zeros_like(t)
         if waveform == 'sine':
@@ -82,11 +76,12 @@ class Signal:
         0 - original signal only, 1 - new signal only, 0.5 evenly balanced. """
         self.data = factor * self.data + (1 - factor) * new_signal
 
+    # todo: maybe delete this function. Has some inaccuracies. and the fm_modulation_for_input generalizes it
     '''Ac*sin(2pi*fc*t + amp_mod*sin(2pi*fm*t))   
     Ac, fc, amp_mod, fm must to be float
     '''
     def fm_modulation(self, amp_m, freq_m, freq_c, amp_c, waveform):
-        t = self.time_sample
+        t = self.time_samples
         self.modulation = self.oscillator(t, amp_m, freq_m, 0, 'sine')
         if waveform == 'sin':
             self.data = amp_c * torch.sin(TWO_PI * freq_c * t + self.modulation)
@@ -105,13 +100,27 @@ class Signal:
             self.data = torch.cat((self.data, self.data))
             pass
 
-    '''
-    Ac*sin(2pi*fc*t + amp_mod*signal)   
-    Ac, fc, amp_mod, fm must to be float
-    '''
+    def fm_modulation_by_input_signal(self, input_signal, amp_c, freq_c, mod_index, waveform):
+        """FM modulation
 
-    def fm_modulation_for_input(self, input_signal, freq_c, amp_c, mod_index, waveform):
-        t = self.time_sample
+            Modulates the frequency of a signal with the given properties, with an input signal as modulator
+
+            Args:
+                self: Self object
+                input_signal: Modulator signal, to affect carrier frequency
+                amp_c: Amplitude in range [0, 1]
+                freq_c: Frequency in range [0, 22000]
+                mod_index: Modulation index, which affects the amount of modulation
+                waveform: One of [sine, square, triangle, sawtooth]
+
+            Returns:
+                A torch with the constructed FM signal
+
+            Raises:
+                ValueError: Provided variables are out of range
+            """
+        self.signal_values_sanity_check(amp_c, freq_c, waveform)
+        t = self.time_samples
         if waveform == 'sine':
             self.data = amp_c * torch.sin(TWO_PI * freq_c * t + mod_index * input_signal)
         if waveform == 'square':
@@ -127,10 +136,9 @@ class Signal:
     (Ac + Am*cos(2*pi*fm*t)) * cos(2*pi*fc*t)
     Ac, amp_mod, fm, fc, must to be float
     '''
-
     def am_modulation(self, fm, fc, Ac, Am):
-        modulator = Am * torch.cos(2 * self.pi * fm * self.time_sample)
-        carrier = torch.cos(2 * self.pi * fc * self.time_sample)
+        modulator = Am * torch.cos(2 * self.pi * fm * self.time_samples)
+        carrier = torch.cos(2 * self.pi * fc * self.time_samples)
         modulated_amplitude = (Ac + modulator)
         self.data = modulated_amplitude * carrier
 
@@ -138,10 +146,9 @@ class Signal:
     (Ac + input_signal) * cos(2*pi*fc*t)
     Ac, amp_mod, fm, fc, must to be float
     '''
-
     def am_modulation_for_input(self, input_signal, fc, Ac, Am):
         modulator = Am * input_signal
-        carrier = torch.cos(2 * self.pi * fc * self.time_sample)
+        carrier = torch.cos(2 * self.pi * fc * self.time_samples)
         modulated_amplitude = (Ac + modulator)
         self.data = modulated_amplitude * carrier
 
@@ -150,7 +157,6 @@ class Signal:
     A+D+S+R = self.sig_duration ()
     Ys is sustain value, amp is the max point in A
     '''
-
     def adsr_envelope(self, amp, A, D, S, Ys, R):
         time_sample = torch.linspace(0, 1, steps=44000)
         time_sample = torch.where(time_sample <= A, time_sample, 0)
@@ -200,14 +206,24 @@ class Signal:
         # input_signal = reverb_fx(input_signal)
         return input_signal
 
+    @staticmethod
+    def signal_values_sanity_check(amp, freq, waveform):
+        """Check signal properties are reasonable."""
+        if freq < 0 or freq > 22000:
+            raise ValueError("Provided frequency is not in range [0, 22000]")
+        if amp < 0 or amp > 1:
+            raise ValueError("Provided amplitude is not in range [0, 1]")
+        if not any(x == waveform for x in ['sine', 'square', 'triangle', 'sawtooth']):
+            raise ValueError("Unknown waveform provided")
+
 
 a = Signal()
 b = Signal()
-a.oscillator(a.time_sample, amp=0.75, freq=3, phase=0, waveform='sine')
+a.oscillator(a.time_samples, amp=0.75, freq=3, phase=0, waveform='sine')
 plt.plot(a.data)
 torch.tensor(0)
 print(torch.sign(torch.tensor(0)))
-b.fm_modulation_for_input(a.data, 440, 1, 10, 'sawtooth')
+b.fm_modulation_by_input_signal(a.data, 440, 1, 10, 'sawtooth')
 plt.plot(b.data)
 plt.show()
 
