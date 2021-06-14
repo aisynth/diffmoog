@@ -16,13 +16,13 @@ import simpleaudio as sa
 
 PI = 3.141592653589793
 TWO_PI = 2 * PI
-
+SAMPLE_RATE = 44100
 
 # data = torchaudio.functional.compute_kaldi_pitch('sine',sample_rate =2200,frame_length=5000)
 
 class Signal:
     def __init__(self):
-        self.sample_rate = 44100
+        self.sample_rate = SAMPLE_RATE
         self.sig_duration = 1.0  # in seconds
         self.time_samples = torch.linspace(0, 1, steps=self.sample_rate)
         self.pi = torch.acos(torch.zeros(1).float()) * 2.0
@@ -135,7 +135,7 @@ class Signal:
     def am_modulation(self, amp_c, freq_c, amp_m, freq_m, final_max_amp, waveform):
         """AM modulation
 
-            Modulates the amplitude of a carrier signal with a modulator
+            Modulates the amplitude of a carrier signal with a sine modulator
             see https://en.wikipedia.org/wiki/Amplitude_modulation
 
             Args:
@@ -168,20 +168,40 @@ class Signal:
         dc = 1
         carrier = Signal()
         carrier.oscillator(amp=amp_c, freq=freq_c, phase=0, waveform=waveform)
-        modulator = amp_m * torch.cos(TWO_PI * freq_m * t)
+        modulator = amp_m * torch.sin(TWO_PI * freq_m * t)
         am_signal = (dc + modulator / amp_c) * carrier.data
         normalized_am_signal = (final_max_amp / (amp_c + amp_m)) * am_signal
         self.data = normalized_am_signal
 
-    '''
-    (Ac + input_signal) * cos(2*pi*fc*t)
-    Ac, amp_mod, fm, fc, must to be float
-    '''
-    def am_modulation_by_input_signal(self, input_signal, fc, amp_c, amp_m):
-        modulator = amp_m * input_signal
-        carrier = torch.cos(2 * self.pi * fc * self.time_samples)
-        modulated_amplitude = (amp_c + modulator)
-        self.data = modulated_amplitude * carrier
+    def am_modulation_by_input_signal(self, input_signal, modulation_factor, amp_c, freq_c, waveform):
+        """AM modulation by an input signal
+
+            Modulates the amplitude of a carrier signal with a provided input signal
+            see https://en.wikipedia.org/wiki/Amplitude_modulation
+
+            Args:
+                self: Self object
+                input_signal: Input signal to be used as modulator
+                modulation_factor: factor to be multiplied by modulator, in range [0, 1]
+                amp_c: Amplitude of carrier in range [0, 1]
+                freq_c: Frequency of carrier in range [0, 22000]
+                waveform: Waveform of carrier. One of [sine, square, triangle, sawtooth]
+
+            Returns:
+                A torch with the constructed AM signal
+
+            Raises:
+                ValueError: Provided variables are inappropriate
+                ValueError: Resulted Amplitude is out of range [-1, 1]
+            """
+        self.signal_values_sanity_check(amp_c, freq_c, waveform)
+        t = self.time_samples
+        carrier = Signal()
+        carrier.oscillator(amp=1, freq=freq_c, phase=0, waveform=waveform)
+        modulated_amplitude = (amp_c + modulation_factor * input_signal)
+        if torch.max(modulated_amplitude).item() > 1 or torch.min(modulated_amplitude).item() < -1:
+            raise ValueError("AM modulation resulted amplitude out of range [-1, 1].")
+        self.data = modulated_amplitude * carrier.data
 
     '''
     calc A envelope
@@ -250,22 +270,22 @@ class Signal:
 
 a = Signal()
 b = Signal()
-a.am_modulation(amp_c=0.4, freq_c=440, amp_m=0.3, freq_m=5, final_max_amp=0.1, waveform='sine')
+a.am_modulation(amp_c=1, freq_c=100, amp_m=0.3, freq_m=3, final_max_amp=0.5, waveform='sine')
+b.am_modulation_by_input_signal(a.data, modulation_factor=0.5, amp_c=0.5, freq_c=211, waveform='sine')
 plt.plot(a.data)
+plt.plot(b.data)
 torch.tensor(0)
 print(torch.sign(torch.tensor(0)))
 # b.fm_modulation_by_input_signal(a.data, 440, 1, 10, 'sawtooth')
-plt.plot(b.data)
+# plt.plot(b.data)
 plt.show()
 
-print(a.data.shape)
-print(a.data.dtype)
 play_obj = sa.play_buffer(a.data.numpy(), 1, 4, a.sample_rate)
 play_obj.wait_done()
 # plt.plot(a.data)
 a.low_pass(1000)
-# play_obj = sa.play_buffer(a.data.numpy(), 1, 4, a.sample_rate)
-# play_obj.wait_done()
+play_obj = sa.play_buffer(b.data.numpy(), 1, 4, b.sample_rate)
+play_obj.wait_done()
 # plt.plot(a.data)
 #
 # def fm_modulation(self, amp_mod, fm, fc, Ac, waveform):
