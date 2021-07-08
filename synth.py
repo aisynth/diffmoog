@@ -17,16 +17,17 @@ import simpleaudio as sa
 PI = 3.141592653589793
 TWO_PI = 2 * PI
 SAMPLE_RATE = 44100
+SIGNAL_DURATION_SEC = 1.0
 
 # data = torchaudio.functional.compute_kaldi_pitch('sine',sample_rate =2200,frame_length=5000)
 
 class Signal:
     def __init__(self):
         self.sample_rate = SAMPLE_RATE
-        self.sig_duration = 1.0  # in seconds
-        self.time_samples = torch.linspace(0, 1, steps=self.sample_rate)
+        self.sig_duration = SIGNAL_DURATION_SEC
+        self.time_samples = torch.linspace(0, self.sig_duration, steps=self.sample_rate)
         self.pi = torch.acos(torch.zeros(1).float()) * 2.0
-        self.modulation_time = torch.linspace(0, 1, steps=self.sample_rate)
+        self.modulation_time = torch.linspace(0, self.sig_duration, steps=self.sample_rate)
         self.modulation = 0
         self.data = 0
         self.shift = self.sig_duration / (self.sample_rate * 2)
@@ -209,22 +210,22 @@ class Signal:
     Ys is sustain value, amp is the max point in A
     '''
     def adsr_envelope(self, amp, A, D, S, Ys, R):
-        time_sample = torch.linspace(0, 1, steps=44000)
+        time_sample = torch.linspace(0, self.sig_duration, steps=44000)
         time_sample = torch.where(time_sample <= A, time_sample, 0)
         A_env = time_sample * A / amp
 
         '''calc D envleope'''
-        time_sample = torch.linspace(0, 1, steps=44000)
+        time_sample = torch.linspace(0, self.sig_duration, steps=44000)
         time_sample = torch.where(time_sample > A and time_sample <= A + D, time_sample, 0)
         D_env = (A + D - time_sample) * (A - Ys) / D
 
         '''calc S envelope'''
-        time_sample = torch.linspace(0, 1, steps=44000)
+        time_sample = torch.linspace(0, self.sig_duration, steps=44000)
         time_sample = torch.where(time_sample > A + D and time_sample <= self.sig_duration - R, time_sample, 0)
         S_env = time_sample * Ys
 
         '''calc R envelope'''
-        time_sample = torch.linspace(0, 1, steps=44000)
+        time_sample = torch.linspace(0, self.sig_duration, steps=44000)
         time_sample = torch.where(time_sample > self.sig_duration - R and time_sample <= self.sig_duration,
                                   1 - time_sample, 0)
         R_env = time_sample * Ys / (1 - R)
@@ -270,8 +271,8 @@ class Signal:
 
 a = Signal()
 b = Signal()
-a.am_modulation(amp_c=1, freq_c=100, amp_m=0.3, freq_m=3, final_max_amp=0.5, waveform='sine')
-b.am_modulation_by_input_signal(a.data, modulation_factor=0.5, amp_c=0.5, freq_c=211, waveform='sine')
+a.am_modulation(amp_c=1, freq_c=4, amp_m=0.3, freq_m=0, final_max_amp=0.5, waveform='sine')
+b.am_modulation_by_input_signal(a.data, modulation_factor=1, amp_c=0.5, freq_c=40, waveform='triangle')
 plt.plot(a.data)
 plt.plot(b.data)
 torch.tensor(0)
