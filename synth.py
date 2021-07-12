@@ -28,13 +28,10 @@ class Signal:
         self.sample_rate = SAMPLE_RATE
         self.sig_duration = SIGNAL_DURATION_SEC
         self.time_samples = torch.linspace(0, self.sig_duration, steps=self.sample_rate)
-        self.pi = torch.acos(torch.zeros(1).float()) * 2.0
         self.modulation_time = torch.linspace(0, self.sig_duration, steps=self.sample_rate)
         self.modulation = 0
         self.signal = 0
-        self.shift = self.sig_duration / (self.sample_rate * 2)
-        self.conv = nn.Conv1d(1, 1, 1, 1)
-        torch.wave = 0
+        self.room_impulse_responses = torch.load('rir_for_reverb')
 
     def oscillator(self, amp, freq, phase, waveform):
         """Creates a basic oscillator.
@@ -77,6 +74,8 @@ class Signal:
     def mix_signal(self, new_signal, factor):
         """Signal superposition. factor balances the mix
         0 - original signal only, 1 - new signal only, 0.5 evenly balanced. """
+        if factor < 0 or factor > 1:
+            raise ValueError("Provided factor value is out of range [0, 1]")
         self.signal = factor * self.signal + (1 - factor) * new_signal
 
     # todo: maybe delete this function. Has some inaccuracies. and the fm_modulation_for_input generalizes it
@@ -295,10 +294,36 @@ class Signal:
             taF.bandpass_biquad(self.signal, self.sample_rate, central_freq, q, const_skirt_gain)
 
     # todo: Apply reverb, echo and filtering using th DDSP library
-    def reverb(input_signal):
-        # reverb_fx = ddsp.effects.Reverb()
-        # input_signal = reverb_fx(input_signal)
-        return input_signal
+    def reverb(self, size, dry_wet):
+        """Check inputs"""
+        if size not in [1, 2, 3, 4, 5, 6]:
+            raise ValueError("reverb size must be an int in range [1, 6]")
+        if dry_wet < 0 or dry_wet > 1:
+            raise ValueError("Provided dry/wet value is out of range [0, 1]")
+
+        if size == 1:
+            response_name = 'rir0'
+        elif size == 2:
+            response_name = 'rir20'
+        elif size == 3:
+            response_name = 'rir40'
+        elif size == 4:
+            response_name = 'rir60'
+        elif size == 5:
+            response_name = 'rir80'
+        elif size == 6:
+            response_name = 'rir100'
+        else:
+            response_name = 'rir0'
+
+        signal_clean = self.signal
+        room_impulse_response = self.room_impulse_responses[response_name]
+        room_impulse_response = torch.FloatTensor(room_impulse_response.unsqueeze(0).unsqueeze(0))
+        self.signal = self.signal.unsqueeze(0).unsqueeze(0)
+        kernel = nn.Parameter(data=room_impulse_response, requires_grad=False)
+        signal_reverb = F.conv1d(self.signal, kernel, bias=None, stride=1, padding=int(SAMPLE_RATE/2))
+        self.signal = dry_wet * signal_reverb + (1 - dry_wet) * signal_clean
+        self.signal = torch.squeeze(self.signal)
 
     @staticmethod
     def signal_values_sanity_check(amp, freq, waveform):
@@ -313,7 +338,8 @@ class Signal:
 
 a = Signal()
 a.oscillator(amp=1, freq=100, phase=0, waveform='sine')
-a.adsr_envelope(0.241, 0.259, 0.25, 0.5, 0.25)
+a.adsr_envelope(attack_t=0, decay_t=0, sustain_t=0.001, sustain_level=0.5, release_t=0.999)
+a.reverb(6, 1)
 # b = Signal()
 # a.am_modulation(amp_c=1, freq_c=4, amp_m=0.3, freq_m=0, final_max_amp=0.5, waveform='sine')
 # b.am_modulation_by_input_signal(a.data, modulation_factor=1, amp_c=0.5, freq_c=40, waveform='triangle')
@@ -325,7 +351,7 @@ a.adsr_envelope(0.241, 0.259, 0.25, 0.5, 0.25)
 # # plt.plot(b.data)
 # plt.show()
 #
-# play_obj = sa.play_buffer(a.data.numpy(), 1, 4, a.sample_rate)
+play_obj = sa.play_buffer(a.signal.numpy(), 1, 4, a.sample_rate)
 # play_obj.wait_done()
 # # plt.plot(a.data)
 # a.low_pass(1000)
