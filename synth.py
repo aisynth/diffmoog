@@ -14,11 +14,14 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import pytorch_forecasting
 import simpleaudio as sa
+import numpy
+from scipy.io.wavfile import read
+from scipy.io.wavfile import write
 
 PI = 3.141592653589793
 TWO_PI = 2 * PI
 SAMPLE_RATE = 44100
-SIGNAL_DURATION_SEC = 1.0
+SIGNAL_DURATION_SEC = 5.0
 
 
 # data = torchaudio.functional.compute_kaldi_pitch('sine',sample_rate =2200,frame_length=5000)
@@ -27,11 +30,11 @@ class Signal:
     def __init__(self):
         self.sample_rate = SAMPLE_RATE
         self.sig_duration = SIGNAL_DURATION_SEC
-        self.time_samples = torch.linspace(0, self.sig_duration, steps=self.sample_rate)
+        self.time_samples = torch.linspace(0, self.sig_duration, steps=int(self.sample_rate*self.sig_duration))
         self.modulation_time = torch.linspace(0, self.sig_duration, steps=self.sample_rate)
         self.modulation = 0
-        self.signal = 0
-        self.room_impulse_responses = torch.load('rir_for_reverb')
+        self.signal = torch.zeros(self.time_samples.shape, dtype=torch.float32)
+        self.room_impulse_responses = torch.load('rir_for_reverb_no_amp')
 
     def oscillator(self, amp, freq, phase, waveform):
         """Creates a basic oscillator.
@@ -257,25 +260,27 @@ class Signal:
             Raises:
                 ValueError: Provided ADSR timings are not the same as the signal length
             """
-        if attack_t + decay_t + sustain_t + release_t != self.sig_duration:
-            raise ValueError("Provided ADSR durations does not match signal duration")
+        if attack_t + decay_t + sustain_t + release_t > self.sig_duration:
+            raise ValueError("Provided ADSR durations exceeds signal duration")
 
-        attack_num_samp = int(self.sample_rate * attack_t)
-        decay_num_samp = int(self.sample_rate * decay_t)
-        sustain_num_samp = int(self.sample_rate * sustain_t)
-        release_num_samp = int(self.sample_rate * release_t)
+        attack_num_samples = int(self.sample_rate * attack_t)
+        decay_num_samples = int(self.sample_rate * decay_t)
+        sustain_num_samples = int(self.sample_rate * sustain_t)
+        release_num_samples = int(self.sample_rate * release_t)
 
-        attack = torch.linspace(0, 1, attack_num_samp)
-        decay = torch.linspace(1, sustain_level, decay_num_samp)
-        sustain = torch.full((sustain_num_samp,), sustain_level)
-        release = torch.linspace(sustain_level, 0, release_num_samp)
+        attack = torch.linspace(0, 1, attack_num_samples)
+        decay = torch.linspace(1, sustain_level, decay_num_samples)
+        sustain = torch.full((sustain_num_samples,), sustain_level)
+        release = torch.linspace(sustain_level, 0, release_num_samples)
 
         envelope = torch.cat((attack, decay, sustain, release))
         envelope_len = envelope.shape[0]
         signal_len = self.time_samples.shape[0]
-        if envelope_len != signal_len:
+        if envelope_len < signal_len:
             padding = torch.zeros(signal_len - envelope_len)
             envelope = torch.cat((envelope, padding))
+        else:
+            raise ValueError("Envelope length exceeds signal duration")
 
         self.signal = self.signal * envelope
 
@@ -293,7 +298,6 @@ class Signal:
         self.signal = \
             taF.bandpass_biquad(self.signal, self.sample_rate, central_freq, q, const_skirt_gain)
 
-    # todo: Apply reverb, echo and filtering using th DDSP library
     def reverb(self, size, dry_wet):
         """Check inputs"""
         if size not in [1, 2, 3, 4, 5, 6]:
@@ -318,10 +322,50 @@ class Signal:
 
         signal_clean = self.signal
         room_impulse_response = self.room_impulse_responses[response_name]
-        room_impulse_response = torch.FloatTensor(room_impulse_response.unsqueeze(0).unsqueeze(0))
-        self.signal = self.signal.unsqueeze(0).unsqueeze(0)
-        kernel = nn.Parameter(data=room_impulse_response, requires_grad=False)
-        signal_reverb = F.conv1d(self.signal, kernel, bias=None, stride=1, padding=int(SAMPLE_RATE/2))
+
+        # room_response_start_index = 0
+        # room_response_end_index = room_impulse_response.size()[0] - 1
+        # signal_start_index = 0
+        # signal_end_index = signal_clean.size()[0] - 1
+        # while room_impulse_response[room_response_start_index] == 0:
+        #     room_response_start_index = room_response_start_index+1
+        # while room_impulse_response[room_response_end_index] == 0:
+        #     room_response_end_index = room_response_end_index-1
+        # while signal_clean[signal_start_index] == 0:
+        #     signal_start_index = signal_start_index+1
+        # while signal_clean[signal_end_index] == 0:
+        #     signal_end_index = signal_end_index-1
+        # print(room_impulse_response.shape)
+        # print(signal_clean.shape)
+        # signal_clean = signal_clean[signal_start_index:signal_end_index]
+        # room_impulse_response = room_impulse_response[room_response_start_index:room_response_end_index]
+
+        kernel_size = room_impulse_response.shape[0]
+        signal_size = signal_clean.shape[0]
+
+        print("kersize", kernel_size)
+        print("sigsize", signal_size)
+        print(room_impulse_response.shape)
+        print(signal_clean.shape)
+
+        room_impulse_response = room_impulse_response.unsqueeze(0).unsqueeze(0)
+        signal_clean = signal_clean.unsqueeze(0).unsqueeze(0)
+
+        signal_reverb = F.conv1d(signal_clean, room_impulse_response, bias=None, stride=1)
+
+        signal_reverb = torch.squeeze(signal_reverb)
+        signal_clean = torch.squeeze(signal_clean)
+
+        print("sig rev shape", signal_reverb.shape)
+        print(signal_reverb.shape[0])
+
+        if signal_reverb.shape[0] > signal_clean.shape[0]:
+            padding = torch.zeros(signal_reverb.shape[0] - signal_clean.shape[0])
+            signal_clean = torch.cat((signal_clean, padding))
+        else:
+            padding = torch.zeros(signal_clean.shape[0] - signal_reverb.shape[0])
+            signal_reverb = torch.cat((signal_reverb, padding))
+
         self.signal = dry_wet * signal_reverb + (1 - dry_wet) * signal_clean
         self.signal = torch.squeeze(self.signal)
 
@@ -338,8 +382,14 @@ class Signal:
 
 a = Signal()
 a.oscillator(amp=1, freq=100, phase=0, waveform='sine')
-a.adsr_envelope(attack_t=0, decay_t=0, sustain_t=0.001, sustain_level=0.5, release_t=0.999)
-a.reverb(6, 1)
+a.adsr_envelope(attack_t=0, decay_t=0, sustain_t=0.5, sustain_level=0.5, release_t=0)
+# write('preverb', 44100, a.signal.numpy())
+# a.reverb(6, 1)
+# write('wet1', 44100, a.signal.numpy())
+plt.plot(a.signal)
+plt.show
+play_obj = sa.play_buffer(a.signal.numpy(), num_channels=1, bytes_per_sample=4, sample_rate=a.sample_rate)
+play_obj.wait_done()
 # b = Signal()
 # a.am_modulation(amp_c=1, freq_c=4, amp_m=0.3, freq_m=0, final_max_amp=0.5, waveform='sine')
 # b.am_modulation_by_input_signal(a.data, modulation_factor=1, amp_c=0.5, freq_c=40, waveform='triangle')
@@ -351,8 +401,6 @@ a.reverb(6, 1)
 # # plt.plot(b.data)
 # plt.show()
 #
-play_obj = sa.play_buffer(a.signal.numpy(), 1, 4, a.sample_rate)
-# play_obj.wait_done()
 # # plt.plot(a.data)
 # a.low_pass(1000)
 # play_obj = sa.play_buffer(b.data.numpy(), 1, 4, b.sample_rate)
