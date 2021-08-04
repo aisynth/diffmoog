@@ -8,9 +8,18 @@ PI = 3.141592653589793
 
 
 class SynthBasicFlow:
-    def __init__(self):
+    def __init__(self, file_name):
         wave_list = ['sine', 'square', 'triangle', 'sawtooth']
         filter_type_list = ['high_pass', 'low_pass', 'band_pass']
+        parameters_list = ['file_name',
+                           'osc1_amp', 'osc1_freq', 'osc1_waveform', 'osc1_mod_index',
+                           'lfo1_freq', 'lfo1_phase', 'lfo1_waveform',
+                           'osc2_amp', 'osc2_freq', 'osc2_waveform', 'osc2_mod_index',
+                           'lfo2_freq', 'lfo2_phase', 'lfo2_waveform',
+                           'filter_type', 'filter_freq',
+                           'attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']
+        parameters_dict = {}
+
         middle_c_freq = 261.6255653005985
 
         # init synthesizer parameters
@@ -33,7 +42,7 @@ class SynthBasicFlow:
         lfo2_waveform = random.choice(wave_list)
 
         filter_type = random.choice(filter_type_list)
-        filter_frequency = random.uniform(20, 20000)
+        filter_freq = random.uniform(20, 20000)
 
         attack_t = random.random()
         decay_t = random.random()
@@ -74,19 +83,24 @@ class SynthBasicFlow:
         audio.signal = (oscillator1.signal + oscillator2.signal) / 2
 
         if filter_type == 'high_pass':
-            audio.high_pass(filter_frequency)
+            audio.high_pass(filter_freq)
         elif filter_type == 'low_pass':
-            audio.low_pass(filter_frequency)
+            audio.low_pass(filter_freq)
         elif filter_type == "band_pass":
-            audio.band_pass(filter_frequency)
+            audio.band_pass(filter_freq)
 
         audio.adsr_envelope(attack_t, decay_t, sustain_t, sustain_level, release_t)
 
+        for variable in parameters_list:
+            parameters_dict[variable] = eval(variable)
+
+        self.file_name = file_name
+        self.synth_params_dict = parameters_dict
         self.audio = audio.signal
 
 
-a = SynthBasicFlow()
-plt.plot(a.audio)
-plt.show
-play_obj = sa.play_buffer(a.audio.numpy(), num_channels=1, bytes_per_sample=4, sample_rate=44100)
-play_obj.wait_done()
+# a = SynthBasicFlow()
+# plt.plot(a.audio)
+# plt.show
+# play_obj = sa.play_buffer(a.audio.numpy(), num_channels=1, bytes_per_sample=4, sample_rate=44100)
+# play_obj.wait_done()
