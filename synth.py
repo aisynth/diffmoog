@@ -257,7 +257,7 @@ class Signal:
     def low_pass(self, cutoff_freq, q=0.707):
         self.signal = taF.lowpass_biquad(self.signal, self.sample_rate, cutoff_freq, q)
 
-    def high_pass(self, cutoff_freq, q):
+    def high_pass(self, cutoff_freq, q=0.707):
         self.signal = taF.highpass_biquad(self.signal, self.sample_rate, cutoff_freq, q)
 
     def band_pass(self, central_freq, q=0.707, const_skirt_gain=False):
@@ -350,19 +350,19 @@ So it is not used
 """
 
 
-a = Signal()
-b = Signal()
-b.oscillator(1, 5, 0, 'sine')
-a.fm_modulation_by_input_signal(b.signal, 1, 440, 10, 'sine')
+# a = Signal()
+# b = Signal()
+# b.oscillator(1, 5, 0, 'sine')
+# a.fm_modulation_by_input_signal(b.signal, 1, 440, 10, 'sine')
 # a.oscillator(amp=1, freq=100, phase=0, waveform='sine')
-a.adsr_envelope(attack_t=0.5, decay_t=0, sustain_t=0.5, sustain_level=0.5, release_t=0)
+# a.adsr_envelope(attack_t=0.5, decay_t=0, sustain_t=0.5, sustain_level=0.5, release_t=0)
 # write('preverb', 44100, a.signal.numpy())
 # a.reverb(6, 1)
 # write('wet1', 44100, a.signal.numpy())
-plt.plot(a.signal)
-plt.show
-play_obj = sa.play_buffer(a.signal.numpy(), num_channels=1, bytes_per_sample=4, sample_rate=a.sample_rate)
-play_obj.wait_done()
+# plt.plot(a.signal)
+# plt.show
+# play_obj = sa.play_buffer(a.signal.numpy(), num_channels=1, bytes_per_sample=4, sample_rate=a.sample_rate)
+# play_obj.wait_done()
 # b = Signal()
 # a.am_modulation(amp_c=1, freq_c=4, amp_m=0.3, freq_m=0, final_max_amp=0.5, waveform='sine')
 # b.am_modulation_by_input_signal(a.data, modulation_factor=1, amp_c=0.5, freq_c=40, waveform='triangle')
@@ -385,4 +385,4 @@ play_obj.wait_done()
 # print(a.data)
 # plt.plot(a.data)
 
-plt.show()
+# plt.show()
