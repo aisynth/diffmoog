@@ -21,7 +21,7 @@ from scipy.io.wavfile import write
 PI = 3.141592653589793
 TWO_PI = 2 * PI
 SAMPLE_RATE = 44100
-SIGNAL_DURATION_SEC = 5.0
+SIGNAL_DURATION_SEC = 1.0
 
 
 # data = torchaudio.functional.compute_kaldi_pitch('sine',sample_rate =2200,frame_length=5000)
@@ -209,40 +209,6 @@ class Signal:
             raise ValueError("AM modulation resulted amplitude out of range [-1, 1].")
         self.signal = modulated_amplitude * carrier.signal
 
-    # '''
-    # calc A envelope
-    # A+D+S+R = self.sig_duration ()
-    # Ys is sustain value, amp is the max point in A
-    # '''
-    #
-    # def adsr_envelope_moshe(self, amp, A, D, S, Ys, R):
-    #     time_sample = torch.linspace(0, self.sig_duration, steps=self.sample_rate, dtype=torch.float64)
-    #     time_sample = torch.where(time_sample <= A, time_sample, 0.)
-    #     A_env = time_sample * A / amp
-    #
-    #     '''calc D envleope'''
-    #     time_sample = torch.linspace(0, self.sig_duration, steps=self.sample_rate, dtype=torch.float64)
-    #     condition = torch.logical_and(A < time_sample, time_sample <= A + D)
-    #     time_sample = torch.where(condition, time_sample, 0.)
-    #     D_env = (A + D - time_sample) * (A - Ys) / D
-    #
-    #     '''calc S envelope'''
-    #     time_sample = torch.linspace(0, self.sig_duration, steps=self.sample_rate, dtype=torch.float64)
-    #     condition = torch.logical_and(A + D < time_sample, time_sample <= self.sig_duration - R)
-    #     time_sample = torch.where(condition, time_sample, 0.)
-    #     S_env = time_sample * Ys
-    #
-    #     '''calc R envelope'''
-    #     time_sample = torch.linspace(0, self.sig_duration, steps=self.sample_rate, dtype=torch.float64)
-    #     condition = torch.logical_and(self.sig_duration - R < time_sample , time_sample <= self.sig_duration)
-    #     time_sample = torch.where(condition, 1 - time_sample, 0.)
-    #     R_env = time_sample * Ys / (1 - R)
-    #
-    #     '''build envelope'''
-    #     envelope = torch.cat([A_env, D_env, S_env, R_env], axis=0)
-    #     plt.plot(envelope)
-    #     plt.show()
-    #     self.signal = self.signal * envelope
 
     def adsr_envelope(self, attack_t, decay_t, sustain_t, sustain_level, release_t):
         """Apply an ADSR envelope to the signal
@@ -298,8 +264,21 @@ class Signal:
         self.signal = \
             taF.bandpass_biquad(self.signal, self.sample_rate, central_freq, q, const_skirt_gain)
 
+    @staticmethod
+    def signal_values_sanity_check(amp, freq, waveform):
+        """Check signal properties are reasonable."""
+        if freq < 0 or freq > 22000:
+            raise ValueError("Provided frequency is not in range [0, 22000]")
+        if amp < 0 or amp > 1:
+            raise ValueError("Provided amplitude is not in range [0, 1]")
+        if not any(x == waveform for x in ['sine', 'square', 'triangle', 'sawtooth']):
+            raise ValueError("Unknown waveform provided")
+
+"""
+Reverb implementation - Currently not working as expected
+So it is not used
+
     def reverb(self, size, dry_wet):
-        """Check inputs"""
         if size not in [1, 2, 3, 4, 5, 6]:
             raise ValueError("reverb size must be an int in range [1, 6]")
         if dry_wet < 0 or dry_wet > 1:
@@ -368,21 +347,15 @@ class Signal:
 
         self.signal = dry_wet * signal_reverb + (1 - dry_wet) * signal_clean
         self.signal = torch.squeeze(self.signal)
-
-    @staticmethod
-    def signal_values_sanity_check(amp, freq, waveform):
-        """Check signal properties are reasonable."""
-        if freq < 0 or freq > 22000:
-            raise ValueError("Provided frequency is not in range [0, 22000]")
-        if amp < 0 or amp > 1:
-            raise ValueError("Provided amplitude is not in range [0, 1]")
-        if not any(x == waveform for x in ['sine', 'square', 'triangle', 'sawtooth']):
-            raise ValueError("Unknown waveform provided")
+"""
 
 
 a = Signal()
-a.oscillator(amp=1, freq=100, phase=0, waveform='sine')
-a.adsr_envelope(attack_t=0, decay_t=0, sustain_t=0.5, sustain_level=0.5, release_t=0)
+b = Signal()
+b.oscillator(1, 5, 0, 'sine')
+a.fm_modulation_by_input_signal(b.signal, 1, 440, 10, 'sine')
+# a.oscillator(amp=1, freq=100, phase=0, waveform='sine')
+a.adsr_envelope(attack_t=0.5, decay_t=0, sustain_t=0.5, sustain_level=0.5, release_t=0)
 # write('preverb', 44100, a.signal.numpy())
 # a.reverb(6, 1)
 # write('wet1', 44100, a.signal.numpy())
