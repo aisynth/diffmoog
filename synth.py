@@ -242,7 +242,7 @@ class Signal:
         envelope = torch.cat((attack, decay, sustain, release))
         envelope_len = envelope.shape[0]
         signal_len = self.time_samples.shape[0]
-        if envelope_len < signal_len:
+        if envelope_len <= signal_len:
             padding = torch.zeros(signal_len - envelope_len)
             envelope = torch.cat((envelope, padding))
         else:
