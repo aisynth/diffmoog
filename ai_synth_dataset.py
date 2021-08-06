@@ -7,21 +7,23 @@ import os
 
 class AiSynthDataset(Dataset):
 
-    def __init__(self, parameters_csv, audio_dir):
+    def __init__(self, parameters_csv, audio_dir, transformation, target_sample_rate):
         self.parameters = pd.read_csv(parameters_csv)
-        print(self.parameters)
         self.audio_dir = audio_dir
+        self.transformation = transformation
+        self.target_sample_rate = target_sample_rate
 
     def __len__(self):
         return len(self.parameters)
 
     def __getitem__(self, index):
         audio_path = self._get_audio_path(index)
-        parameters = self._get_audio_parameters(index)
-        signal, sr = torchaudio.load(audio_path)
-        return signal, parameters
+        sound_parameters = self._get_audio_parameters(index)
+        sound_signal, sr = torchaudio.load(audio_path)
+        transformed_sound_signal = self.transformation(sound_signal)
+        return transformed_sound_signal, sound_parameters
 
-    def _get_audio_path(self,index):
+    def _get_audio_path(self, index):
         audio_file_name = f"sound_{index}.wav"
         cwd = os.getcwd()
         path = os.path.join(cwd, self.audio_dir, audio_file_name)
@@ -33,6 +35,13 @@ class AiSynthDataset(Dataset):
 
 if __name__ == "__main__":
 
-    ai_synth_dataset = AiSynthDataset(PARAMETERS_FILE, AUDIO_DIR)
+    mel_spectrogram = torchaudio.transforms.MelSpectrogram(
+        sample_rate=SAMPLE_RATE,
+        n_fft=1024,
+        hop_length=512,
+        n_mels=64
+    )
+
+    ai_synth_dataset = AiSynthDataset(PARAMETERS_FILE, AUDIO_DIR, mel_spectrogram, SAMPLE_RATE)
     print(f"there are {len(ai_synth_dataset)} files in the dataset")
     signal, parameters = ai_synth_dataset[0]
