@@ -6,3 +6,7 @@ DATASET_SIZE = 5
 PARAMETERS_FILE = "dataset/dataset.csv"
 AUDIO_DIR = "dataset/wav_files"
 NUM_OF_SYNTH_PARAMS = 21
+
+BATCH_SIZE = 128
+EPOCHS = 10
+LEARNING_RATE = 0.001
