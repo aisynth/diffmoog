@@ -5,3 +5,4 @@ SIGNAL_DURATION_SEC = 1.0
 DATASET_SIZE = 5
 PARAMETERS_FILE = "dataset/dataset.csv"
 AUDIO_DIR = "dataset/wav_files"
+NUM_OF_SYNTH_PARAMS = 21
