@@ -2,8 +2,8 @@ import pandas as pd
 import os
 import scipy.io.wavfile
 from sound_generator import SynthBasicFlow
+from config import DATASET_SIZE
 
-DATASET_SIZE = 5
 dataset = []
 for i in range(DATASET_SIZE):
     file_name = f"sound_{i}.wav"

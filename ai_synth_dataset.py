@@ -1,4 +1,5 @@
 from torch.utils.data import Dataset
+from config import SAMPLE_RATE, PARAMETERS_FILE, AUDIO_DIR
 import pandas as pd
 import torchaudio
 import os
@@ -31,8 +32,6 @@ class AiSynthDataset(Dataset):
 
 
 if __name__ == "__main__":
-    PARAMETERS_FILE = "dataset/dataset.csv"
-    AUDIO_DIR ="dataset/wav_files"
 
     ai_synth_dataset = AiSynthDataset(PARAMETERS_FILE, AUDIO_DIR)
     print(f"there are {len(ai_synth_dataset)} files in the dataset")

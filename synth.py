@@ -17,11 +17,7 @@ import simpleaudio as sa
 import numpy
 from scipy.io.wavfile import read
 from scipy.io.wavfile import write
-
-PI = 3.141592653589793
-TWO_PI = 2 * PI
-SAMPLE_RATE = 44100
-SIGNAL_DURATION_SEC = 1.0
+from config import PI, TWO_PI, SAMPLE_RATE, SIGNAL_DURATION_SEC
 
 
 # data = torchaudio.functional.compute_kaldi_pitch('sine',sample_rate =2200,frame_length=5000)
@@ -85,7 +81,7 @@ class Signal:
     '''Ac*sin(2pi*fc*t + amp_mod*sin(2pi*fm*t))   
     Ac, fc, amp_mod, fm must to be float
     '''
-
+    '''
     def fm_modulation(self, amp_m, freq_m, freq_c, amp_c, waveform):
         t = self.time_samples
         self.modulation = self.oscillator(t, amp_m, freq_m, 0, 'sine')
@@ -105,6 +101,7 @@ class Signal:
             self.signal = self.signal[self.signal != 0.0]
             self.signal = torch.cat((self.signal, self.signal))
             pass
+    '''
 
     def fm_modulation_by_input_signal(self, input_signal, amp_c, freq_c, mod_index, waveform):
         """FM modulation

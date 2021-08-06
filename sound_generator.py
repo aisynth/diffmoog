@@ -1,10 +1,9 @@
-import synth
 from synth import Signal
+from config import PI
+import synth
 import random
 import matplotlib.pyplot as plt
 import simpleaudio as sa
-
-PI = 3.141592653589793
 
 
 class SynthBasicFlow:
@@ -99,8 +98,9 @@ class SynthBasicFlow:
         self.audio = audio.signal
 
 
-# a = SynthBasicFlow()
-# plt.plot(a.audio)
-# plt.show
-# play_obj = sa.play_buffer(a.audio.numpy(), num_channels=1, bytes_per_sample=4, sample_rate=44100)
-# play_obj.wait_done()
+if __name__ == "__main__":
+    a = SynthBasicFlow('audio_example')
+    plt.plot(a.audio)
+    plt.show()
+    play_obj = sa.play_buffer(a.audio.numpy(), num_channels=1, bytes_per_sample=4, sample_rate=44100)
+    play_obj.wait_done()

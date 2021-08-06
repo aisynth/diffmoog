@@ -1,0 +1,7 @@
+PI = 3.141592653589793
+TWO_PI = 2 * PI
+SAMPLE_RATE = 44100
+SIGNAL_DURATION_SEC = 1.0
+DATASET_SIZE = 5
+PARAMETERS_FILE = "dataset/dataset.csv"
+AUDIO_DIR = "dataset/wav_files"
