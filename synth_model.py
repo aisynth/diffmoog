@@ -1,8 +1,11 @@
 from torch import nn
 from config import NUM_OF_SYNTH_PARAMS
 from torchsummary import summary
+import sound_generator
 
-
+# todo: this is value from Valerio Tutorial. has to check
+# LINEAR_IN_CHANNELS = 128 * 5 * 4
+LINEAR_IN_CHANNELS = 4480
 class SynthNetwork(nn.Module):
 
     def __init__(self):
@@ -52,7 +55,17 @@ class SynthNetwork(nn.Module):
             nn.MaxPool2d(kernel_size=2)
         )
         self.flatten = nn.Flatten()
-        self.linear = nn.Linear(128 * 5 * 4, NUM_OF_SYNTH_PARAMS)
+        self.classification_params = nn.ModuleDict([
+            ['osc1_freq', nn.Linear(LINEAR_IN_CHANNELS, 49)],
+            ['osc1_wave', nn.Linear(LINEAR_IN_CHANNELS, 4)],
+            ['lfo1_wave', nn.Linear(LINEAR_IN_CHANNELS, 4)],
+            ['osc2_freq', nn.Linear(LINEAR_IN_CHANNELS, 49)],
+            ['osc2_wave', nn.Linear(LINEAR_IN_CHANNELS, 4)],
+            ['lfo2_wave', nn.Linear(LINEAR_IN_CHANNELS, 4)],
+            ['filter_type', nn.Linear(LINEAR_IN_CHANNELS, 3)],
+        ])
+        self.regression_params = nn.Linear(LINEAR_IN_CHANNELS, 14)
+        # self.softmax = nn.Softmax(dim=1)
 
     def forward(self, input_data):
         x = self.conv1(input_data)
@@ -60,9 +73,14 @@ class SynthNetwork(nn.Module):
         x = self.conv3(x)
         x = self.conv4(x)
         x = self.flatten(x)
-        predictions = self.linear(x)
+        predictions_dic = {}
+        for out_name, lin in self.classification_params.items():
+            # -----> Shall not use softmax since with use CrossEntropyLoss()
+            # predictions_dic[out_name] = self.softmax(lin(x))
+            predictions_dic[out_name] = lin(x)
+        predictions_dic['regression_params'] = self.regression_params(x)
 
-        return predictions
+        return predictions_dic
 
 
 if __name__ == "__main__":

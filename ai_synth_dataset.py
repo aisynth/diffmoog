@@ -1,6 +1,6 @@
 import torch.cuda
 from torch.utils.data import Dataset
-from config import SAMPLE_RATE, PARAMETERS_FILE, AUDIO_DIR
+from config import SAMPLE_RATE, PARAMETERS_FILE, AUDIO_DIR, WAVE_TYPE_DIC, FILTER_TYPE_DIC, OSC_FREQ_DIC
 import pandas as pd
 import torchaudio
 import os
@@ -33,7 +33,25 @@ class AiSynthDataset(Dataset):
         return path
 
     def _get_audio_parameters(self, index):
-        return self.parameters.iloc[index]
+        """
+        Return audio parameters from csv. Classification parameters are translated to integers from mappings.
+
+        :param index: the index of the audio file
+        :return: parameters dictionary, containing values for each parameter
+        """
+        parameters_pd_series = self.parameters.iloc[index]
+        parameters_pd_series.drop(labels=["Unnamed: 0", "file_name"], inplace=True)
+        parameter_dic = parameters_pd_series.to_dict()
+        # map string attributes to numbers
+        for key, val in parameter_dic.items():
+            if "osc1_freq" == key or "osc2_freq" == key:
+                parameter_dic[key] = OSC_FREQ_DIC[round(val, 4)]
+            if isinstance(val, str):
+                if "wave" in key:
+                    parameter_dic[key] = WAVE_TYPE_DIC[val]
+                elif "filter_type" == key:
+                    parameter_dic[key] = FILTER_TYPE_DIC[val]
+        return parameter_dic
 
 
 if __name__ == "__main__":

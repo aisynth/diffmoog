@@ -19,8 +19,9 @@ for i in range(DATASET_SIZE):
     audio = audio.detach().cpu().numpy()
     scipy.io.wavfile.write(audio_path, 44100, audio)
 
-dataframe = pd.DataFrame(dataset)
+if __name__ == "__main__":
+    dataframe = pd.DataFrame(dataset)
 
-cwd = os.getcwd()
-parameters_path = cwd + "/dataset/dataset.csv"
-dataframe.to_csv(parameters_path)
+    cwd = os.getcwd()
+    parameters_path = cwd + "/dataset/dataset.csv"
+    dataframe.to_csv(parameters_path)
