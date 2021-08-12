@@ -1,13 +1,17 @@
 from torch import nn
-from config import NUM_OF_SYNTH_PARAMS
 from torchsummary import summary
-import sound_generator
 
 # todo: this is value from Valerio Tutorial. has to check
 # LINEAR_IN_CHANNELS = 128 * 5 * 4
 LINEAR_IN_CHANNELS = 4480
-class SynthNetwork(nn.Module):
 
+
+class SynthNetwork(nn.Module):
+    """
+    CNN model to extract parameters from a signal mek-spectrogram
+
+    :return: output_dic, that hold the logits for classification parameters and predictions for regression parameters
+    """
     def __init__(self):
         super().__init__()
         self.conv1 = nn.Sequential(
@@ -73,14 +77,14 @@ class SynthNetwork(nn.Module):
         x = self.conv3(x)
         x = self.conv4(x)
         x = self.flatten(x)
-        predictions_dic = {}
+        output_dic = {}
         for out_name, lin in self.classification_params.items():
             # -----> Shall not use softmax since with use CrossEntropyLoss()
             # predictions_dic[out_name] = self.softmax(lin(x))
-            predictions_dic[out_name] = lin(x)
-        predictions_dic['regression_params'] = self.regression_params(x)
+            output_dic[out_name] = lin(x)
+        output_dic['regression_params'] = self.regression_params(x)
 
-        return predictions_dic
+        return output_dic
 
 
 if __name__ == "__main__":

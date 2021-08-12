@@ -5,32 +5,58 @@ Created on Mon May 31 15:41:38 2021
 
 @author: moshelaufer, Noy Uzrad
 """
-import numpy as np
-from numpy import asarray, zeros, place, nan, mod, pi, extract
-import torch.nn as nn
 import torch
 import torchaudio.functional as taF
-import torch.nn.functional as F
+from src.config import PI, TWO_PI, DEBUG_MODE
 import matplotlib.pyplot as plt
-import pytorch_forecasting
 import simpleaudio as sa
-import numpy
-from scipy.io.wavfile import read
-from scipy.io.wavfile import write
-from config import PI, TWO_PI, SAMPLE_RATE, SIGNAL_DURATION_SEC
 
+SAMPLE_RATE = 44100
+SIGNAL_DURATION_SEC = 1.0
 
-# data = torchaudio.functional.compute_kaldi_pitch('sine',sample_rate =2200,frame_length=5000)
+CLASSIFICATION_PARAM_LIST = \
+    ['osc1_freq', 'osc1_wave', 'lfo1_wave', 'osc2_freq', 'osc2_wave', 'lfo2_wave', 'filter_type']
+REGRESSION_PARAM_LIST = \
+    ['osc1_amp', 'osc1_mod_index', 'lfo1_freq', 'lfo1_phase',
+     'osc2_amp', 'osc2_mod_index', 'lfo2_freq', 'lfo2_phase',
+     'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']
+PARAM_LIST = [CLASSIFICATION_PARAM_LIST, REGRESSION_PARAM_LIST]
+
+WAVE_TYPE_DIC = {"sine": 0,
+                 "square": 1,
+                 "triangle": 2,
+                 "sawtooth": 3}
+WAVE_TYPE_DIC_INV = {v: k for k, v in WAVE_TYPE_DIC.items()}
+
+FILTER_TYPE_DIC = {"low_pass": 0,
+                   "high_pass": 1,
+                   "band_pass": 2}
+FILTER_TYPE_DIC_INV = {v: k for k, v in FILTER_TYPE_DIC.items()}
+
+# build a list of possible frequencies
+SEMITONES_MAX_OFFSET = 24
+MIDDLE_C_FREQ = 261.6255653005985
+semitones_list = [*range(-SEMITONES_MAX_OFFSET, SEMITONES_MAX_OFFSET + 1)]
+OSC_FREQ_LIST = [MIDDLE_C_FREQ * (2 ** (1 / 12)) ** x for x in semitones_list]
+OSC_FREQ_DIC = {round(key, 4): value for value, key in enumerate(OSC_FREQ_LIST)}
+OSC_FREQ_DIC_INV = {v: k for k, v in OSC_FREQ_DIC.items()}
+
+MAX_AMP = 1
+MAX_MOD_INDEX = 100
+MAX_LFO_FREQ = 20
+MIN_FILTER_FREQ = 20
+MAX_FILTER_FREQ = 20000
+
 
 class Signal:
     def __init__(self):
         self.sample_rate = SAMPLE_RATE
         self.sig_duration = SIGNAL_DURATION_SEC
-        self.time_samples = torch.linspace(0, self.sig_duration, steps=int(self.sample_rate*self.sig_duration))
+        self.time_samples = torch.linspace(0, self.sig_duration, steps=int(self.sample_rate * self.sig_duration))
         self.modulation_time = torch.linspace(0, self.sig_duration, steps=self.sample_rate)
         self.modulation = 0
         self.signal = torch.zeros(self.time_samples.shape, dtype=torch.float32)
-        self.room_impulse_responses = torch.load('rir_for_reverb_no_amp')
+        # self.room_impulse_responses = torch.load('rir_for_reverb_no_amp')
 
     def oscillator(self, amp, freq, phase, waveform):
         """Creates a basic oscillator.
@@ -76,32 +102,6 @@ class Signal:
         if factor < 0 or factor > 1:
             raise ValueError("Provided factor value is out of range [0, 1]")
         self.signal = factor * self.signal + (1 - factor) * new_signal
-
-    # todo: maybe delete this function. Has some inaccuracies. and the fm_modulation_for_input generalizes it
-    '''Ac*sin(2pi*fc*t + amp_mod*sin(2pi*fm*t))   
-    Ac, fc, amp_mod, fm must to be float
-    '''
-    '''
-    def fm_modulation(self, amp_m, freq_m, freq_c, amp_c, waveform):
-        t = self.time_samples
-        self.modulation = self.oscillator(t, amp_m, freq_m, 0, 'sine')
-        if waveform == 'sin':
-            self.signal = amp_c * torch.sin(TWO_PI * freq_c * t + self.modulation)
-        if waveform == 'square':
-            self.signal = torch.sign(torch.sin(TWO_PI * freq_c * t + self.modulation) * amp_c) + 1.0
-        if waveform == 'tri':
-            y = (torch.sign(torch.sin(TWO_PI * freq_c * t + self.modulation) * amp_c))
-            self.signal = pytorch_forecasting.utils.autocorrelation(y, dim=0)
-            pass
-        if waveform == 'saw':
-            y = (torch.sign(torch.sin(TWO_PI * freq_c * t + self.modulation) * amp_c)) + 1.0
-            y1 = pytorch_forecasting.utils.autocorrelation(y, dim=0) + 1.0
-            y2 = torch.roll(y1, shifts=1, dims=0)
-            self.signal = torch.where(y2 <= y1, y2, torch.zeros(1))
-            self.signal = self.signal[self.signal != 0.0]
-            self.signal = torch.cat((self.signal, self.signal))
-            pass
-    '''
 
     def fm_modulation_by_input_signal(self, input_signal, amp_c, freq_c, mod_index, waveform):
         """FM modulation
@@ -206,7 +206,6 @@ class Signal:
             raise ValueError("AM modulation resulted amplitude out of range [-1, 1].")
         self.signal = modulated_amplitude * carrier.signal
 
-
     def adsr_envelope(self, attack_t, decay_t, sustain_t, sustain_level, release_t):
         """Apply an ADSR envelope to the signal
 
@@ -247,9 +246,10 @@ class Signal:
 
         self.signal = self.signal * envelope
 
-        # plt.plot(envelope)
-        # plt.plot(self.signal)
-        # plt.show()
+        if DEBUG_MODE:
+            plt.plot(envelope)
+            plt.plot(self.signal)
+            plt.show()
 
     def low_pass(self, cutoff_freq, q=0.707):
         self.signal = taF.lowpass_biquad(self.signal, self.sample_rate, cutoff_freq, q)
@@ -270,6 +270,7 @@ class Signal:
             raise ValueError("Provided amplitude is not in range [0, 1]")
         if not any(x == waveform for x in ['sine', 'square', 'triangle', 'sawtooth']):
             raise ValueError("Unknown waveform provided")
+
 
 """
 Reverb implementation - Currently not working as expected
@@ -346,40 +347,37 @@ So it is not used
         self.signal = torch.squeeze(self.signal)
 """
 
-
-# a = Signal()
-# b = Signal()
-# b.oscillator(1, 5, 0, 'sine')
-# a.fm_modulation_by_input_signal(b.signal, 1, 440, 10, 'sine')
-# a.oscillator(amp=1, freq=100, phase=0, waveform='sine')
-# a.adsr_envelope(attack_t=0.5, decay_t=0, sustain_t=0.5, sustain_level=0.5, release_t=0)
-# write('preverb', 44100, a.signal.numpy())
-# a.reverb(6, 1)
-# write('wet1', 44100, a.signal.numpy())
-# plt.plot(a.signal)
-# plt.show
-# play_obj = sa.play_buffer(a.signal.numpy(), num_channels=1, bytes_per_sample=4, sample_rate=a.sample_rate)
-# play_obj.wait_done()
-# b = Signal()
-# a.am_modulation(amp_c=1, freq_c=4, amp_m=0.3, freq_m=0, final_max_amp=0.5, waveform='sine')
-# b.am_modulation_by_input_signal(a.data, modulation_factor=1, amp_c=0.5, freq_c=40, waveform='triangle')
-# plt.plot(a.data)
-# plt.plot(b.data)
-# torch.tensor(0)
-# print(torch.sign(torch.tensor(0)))
-# # b.fm_modulation_by_input_signal(a.data, 440, 1, 10, 'sawtooth')
-# # plt.plot(b.data)
-# plt.show()
-#
-# # plt.plot(a.data)
-# a.low_pass(1000)
-# play_obj = sa.play_buffer(b.data.numpy(), 1, 4, b.sample_rate)
-# play_obj.wait_done()
-# plt.plot(a.data)
-#
-# def fm_modulation(self, amp_mod, fm, fc, Ac, waveform):
-# a.fm_modulation(1, 3, 5, 1, 'tri')
-# print(a.data)
-# plt.plot(a.data)
-
-# plt.show()
+if __name__ == "__main__":
+    a = Signal()
+    b = Signal()
+    b.oscillator(1, 5, 0, 'sine')
+    a.fm_modulation_by_input_signal(b.signal, 1, 440, 10, 'sine')
+    # a.oscillator(amp=1, freq=100, phase=0, waveform='sine')
+    # a.adsr_envelope(attack_t=0.5, decay_t=0, sustain_t=0.5, sustain_level=0.5, release_t=0)
+    # plt.plot(a.signal)
+    # plt.show
+    play_obj = sa.play_buffer(a.signal.numpy(), num_channels=1, bytes_per_sample=4, sample_rate=a.sample_rate)
+    # play_obj.wait_done()
+    # b = Signal()
+    # a.am_modulation(amp_c=1, freq_c=4, amp_m=0.3, freq_m=0, final_max_amp=0.5, waveform='sine')
+    # b.am_modulation_by_input_signal(a.data, modulation_factor=1, amp_c=0.5, freq_c=40, waveform='triangle')
+    plt.plot(a.signal)
+    # plt.plot(b.data)
+    # torch.tensor(0)
+    # print(torch.sign(torch.tensor(0)))
+    # # b.fm_modulation_by_input_signal(a.data, 440, 1, 10, 'sawtooth')
+    # # plt.plot(b.data)
+    # plt.show()
+    #
+    # # plt.plot(a.data)
+    # a.low_pass(1000)
+    # play_obj = sa.play_buffer(b.data.numpy(), 1, 4, b.sample_rate)
+    # play_obj.wait_done()
+    # plt.plot(a.data)
+    #
+    # def fm_modulation(self, amp_mod, fm, fc, Ac, waveform):
+    # a.fm_modulation(1, 3, 5, 1, 'tri')
+    # print(a.data)
+    # plt.plot(a.data)
+    #
+    # plt.show()
