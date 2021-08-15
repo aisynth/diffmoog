@@ -9,14 +9,14 @@ import simpleaudio as sa
 # todo: refactor code. use general dictionaries. rearrange self variables.
 #  use loops and prevent code duplication
 class SynthBasicFlow:
-    def __init__(self, file_name, parameters_dict=None):
+    def __init__(self, file_name='unnamed_sound', parameters_dict=None):
         self.file_name = file_name
         self.params_dict = {}
-
+        print(type(parameters_dict))
         # init parameters_dict
         if parameters_dict is None:
             self.init_random_synth_params()
-        elif parameters_dict is dict:
+        elif type(parameters_dict) is dict:
             self.params_dict = parameters_dict
         else:
             ValueError("Provided parameters are not provided as dictionary")

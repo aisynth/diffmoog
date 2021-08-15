@@ -9,10 +9,10 @@ import synth
 
 class AiSynthDataset(Dataset):
 
-    def __init__(self, parameters_csv, audio_dir, transformation, target_sample_rate, device_to_use):
+    def __init__(self, parameters_csv, audio_dir, transformation, target_sample_rate, device_arg):
         self.params = pd.read_csv(parameters_csv)
         self.audio_dir = audio_dir
-        self.device = device_to_use
+        self.device = device_arg
         self.transformation = transformation.to(self.device)
         self.target_sample_rate = target_sample_rate
 
@@ -48,9 +48,6 @@ class AiSynthDataset(Dataset):
 
         classification_params_pd_series = params_pd_series.loc[synth.CLASSIFICATION_PARAM_LIST]
         classification_params_dic = classification_params_pd_series.to_dict()
-
-        # get all classification params as ints
-        # self.map_classification_params_to_ints(classification_params_dic)
 
         params_dic = {
             'classification_params': classification_params_dic,

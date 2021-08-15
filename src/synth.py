@@ -10,6 +10,7 @@ import torchaudio.functional as taF
 from src.config import PI, TWO_PI, DEBUG_MODE
 import matplotlib.pyplot as plt
 import simpleaudio as sa
+import helper
 
 SAMPLE_RATE = 44100
 SIGNAL_DURATION_SEC = 1.0
@@ -56,6 +57,11 @@ class Signal:
         self.modulation_time = torch.linspace(0, self.sig_duration, steps=self.sample_rate)
         self.modulation = 0
         self.signal = torch.zeros(self.time_samples.shape, dtype=torch.float32)
+
+        self.device = helper.get_device()
+        self.time_samples = helper.move_to(self.time_samples, self.device)
+        self.modulation_time = helper.move_to(self.modulation_time, self.device)
+        self.signal = helper.move_to(self.signal, self.device)
         # self.room_impulse_responses = torch.load('rir_for_reverb_no_amp')
 
     def oscillator(self, amp, freq, phase, waveform):
@@ -264,8 +270,8 @@ class Signal:
     @staticmethod
     def signal_values_sanity_check(amp, freq, waveform):
         """Check signal properties are reasonable."""
-        if freq < 0 or freq > 22000:
-            raise ValueError("Provided frequency is not in range [0, 22000]")
+        if freq < 0 or freq > 20000:
+            raise ValueError("Provided frequency is not in range [0, 20000]")
         if amp < 0 or amp > 1:
             raise ValueError("Provided amplitude is not in range [0, 1]")
         if not any(x == waveform for x in ['sine', 'square', 'triangle', 'sawtooth']):
