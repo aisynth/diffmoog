@@ -250,6 +250,8 @@ class Signal:
         else:
             raise ValueError("Envelope length exceeds signal duration")
 
+        envelope = helper.move_to(envelope, self.device)
+
         self.signal = self.signal * envelope
 
         if DEBUG_MODE:

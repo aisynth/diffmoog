@@ -20,14 +20,15 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
     for signal_mel_spectrogram, target_params_dic in data_loader:
 
         batch_size = signal_mel_spectrogram.shape[0]
-        regression_target_parameters = target_params_dic['regression_params']
         classification_target_params = target_params_dic['classification_params']
+        regression_target_parameters = target_params_dic['regression_params']
         helper.map_classification_params_to_ints(classification_target_params)
+
         classification_target_params = helper.move_to(classification_target_params, device_arg)
         regression_target_parameters = helper.move_to(regression_target_parameters, device_arg)
         signal_mel_spectrogram = helper.move_to(signal_mel_spectrogram, device_arg)
 
-        # todo: force the model to predict values from defined ranges
+        # todo: normalize/standardize/rescale target parameters from 0 to 1. use log scale for frequencies
         output_dic = model(signal_mel_spectrogram)
 
         # Infer predictions
@@ -38,6 +39,7 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
             predicted_dic[param] = output_dic['regression_params'][:, index]
 
         helper.map_classification_params_from_ints(predicted_dic)
+        # todo: force the model to predict values from defined ranges - check below line if correct
         helper.clamp_regression_params(predicted_dic)
 
         # Init criteria
@@ -53,7 +55,10 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
         #  compute all spectrogram loss all at once using mean function
         for i in range(batch_size):
             for key, value in predicted_dic.items():
-                current_predicted_dic[key] = predicted_dic[key][i]
+                if torch.is_tensor(predicted_dic[key][i]):
+                    current_predicted_dic[key] = predicted_dic[key][i].item()
+                else:
+                    current_predicted_dic[key] = predicted_dic[key][i]
 
             synth_obj = SynthBasicFlow(parameters_dict=current_predicted_dic)
 
@@ -64,7 +69,7 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                                                              signal_mel_spectrogram[i][0])
             loss_spectrogram_total = loss_spectrogram_total + current_loss_spectrogram
 
-        loss_spectrogram_total = loss_spectrogram_total / output_dic['osc1_freq'].shape[0]
+        loss_spectrogram_total = loss_spectrogram_total / batch_size
 
         loss_osc1_freq = criterion_osc1_freq(output_dic['osc1_freq'], classification_target_params['osc1_freq'])
         loss_osc1_wave = criterion_osc1_wave(output_dic['osc1_wave'], classification_target_params['osc1_wave'])
