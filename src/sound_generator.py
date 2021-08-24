@@ -12,7 +12,6 @@ class SynthBasicFlow:
     def __init__(self, file_name='unnamed_sound', parameters_dict=None):
         self.file_name = file_name
         self.params_dict = {}
-        print(type(parameters_dict))
         # init parameters_dict
         if parameters_dict is None:
             self.init_random_synth_params()

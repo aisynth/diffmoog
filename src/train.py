@@ -29,6 +29,8 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
         signal_mel_spectrogram = helper.move_to(signal_mel_spectrogram, device_arg)
 
         # todo: normalize/standardize/rescale target parameters from 0 to 1. use log scale for frequencies
+        if DEBUG_MODE:
+            helper.plot_spectrogram(signal_mel_spectrogram[0][0].cpu(), title="MelSpectrogram - torchaudio", ylabel='mel freq')
         output_dic = model(signal_mel_spectrogram)
 
         # Infer predictions

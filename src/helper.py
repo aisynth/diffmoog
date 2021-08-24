@@ -1,7 +1,9 @@
 import torch
 import torchaudio
 import synth
-from config import TWO_PI
+import matplotlib.pyplot as plt
+import librosa
+from config import TWO_PI, DEBUG_MODE
 
 
 def get_device():
@@ -9,7 +11,8 @@ def get_device():
         device = "cuda"
     else:
         device = "cpu"
-    print(f"Using device {device}")
+    if DEBUG_MODE:
+        print(f"Using device {device}")
     return device
 
 
@@ -28,6 +31,7 @@ def move_to(obj, device):
         return res
     else:
         raise TypeError("Invalid type for move_to")
+
 
 # class TwoWayDict(dict):
 #     def __len__(self):
@@ -101,3 +105,14 @@ def clamp_regression_params(parameters_dict: dict):
 
     parameters_dict['sustain_level'] = torch.clamp(parameters_dict['sustain_level'], min=0, max=synth.MAX_AMP)
 
+
+def plot_spectrogram(spec, title=None, ylabel='freq_bin', aspect='auto', xmax=None):
+    fig, axs = plt.subplots(1, 1)
+    axs.set_title(title or 'Spectrogram (db)')
+    axs.set_ylabel(ylabel)
+    axs.set_xlabel('frame')
+    im = axs.imshow(librosa.power_to_db(spec), origin='lower', aspect=aspect)
+    if xmax:
+        axs.set_xlim((0, xmax))
+    fig.colorbar(im, ax=axs)
+    plt.show(block=False)
