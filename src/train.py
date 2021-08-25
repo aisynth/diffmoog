@@ -35,7 +35,7 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
         if DEBUG_MODE:
             helper.plot_spectrogram(signal_log_mel_spec[0][0].cpu(), title="MelSpectrogram (dB)", ylabel='mel freq')
 
-        output_dic = model(signal_mel_spec)
+        output_dic = model(signal_log_mel_spec)
 
         # Infer predictions
         predicted_dic = {}
@@ -70,10 +70,13 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
             synth_obj = SynthBasicFlow(parameters_dict=current_predicted_dic)
 
             predicted_mel_spec_sound_signal = helper.mel_spectrogram_transform(synth_obj.signal)
-            predicted_mel_spec_sound_signal = helper.move_to(predicted_mel_spec_sound_signal, device_arg)
-            signal_mel_spec = torch.squeeze(signal_mel_spec)
-            current_loss_spectrogram = criterion_spectrogram(predicted_mel_spec_sound_signal,
-                                                             signal_mel_spec[i])
+            predicted_log_mel_spec_sound_signal = helper.amplitude_to_db_transform(predicted_mel_spec_sound_signal)
+
+            predicted_log_mel_spec_sound_signal = helper.move_to(predicted_log_mel_spec_sound_signal, device_arg)
+            signal_log_mel_spec = torch.squeeze(signal_log_mel_spec)
+
+            current_loss_spectrogram = criterion_spectrogram(predicted_log_mel_spec_sound_signal,
+                                                             signal_log_mel_spec[i])
             loss_spectrogram_total = loss_spectrogram_total + current_loss_spectrogram
 
         loss_spectrogram_total = loss_spectrogram_total / batch_size
@@ -104,8 +107,6 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
 
         loss_regression_params = \
             criterion_regression_params(output_dic['regression_params'], regression_target_parameters_tensor)
-
-
 
         loss = \
             loss_classification_params \
