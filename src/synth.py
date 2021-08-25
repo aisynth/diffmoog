@@ -255,8 +255,8 @@ class Signal:
         self.signal = self.signal * envelope
 
         if DEBUG_MODE:
-            plt.plot(envelope)
-            plt.plot(self.signal)
+            plt.plot(envelope.cpu())
+            plt.plot(self.signal.cpu())
             plt.show()
 
     def low_pass(self, cutoff_freq, q=0.707):

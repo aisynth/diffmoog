@@ -8,8 +8,12 @@ PARAMETERS_FILE = "dataset/dataset.csv"
 AUDIO_DIR = "dataset/wav_files"
 
 # Model configs
-BATCH_SIZE = 128
+BATCH_SIZE = 4
 EPOCHS = 1000
 LEARNING_RATE = 0.001
 
+REGRESSION_LOSS_FACTOR = 1e-1
+SPECTROGRAM_LOSS_FACTOR = 1e-3
+
 DEBUG_MODE = False
+PRINT_TRAIN_STATS = True

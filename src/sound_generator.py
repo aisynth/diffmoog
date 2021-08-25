@@ -58,7 +58,10 @@ class SynthBasicFlow:
         # fixing a numerical issue in case the ADSR times exceeds signal length
         adsr_aggregated_time = attack_t + decay_t + sustain_t + release_t
         if adsr_aggregated_time > synth.SIGNAL_DURATION_SEC:
-            sustain_t = sustain_t - 0.001
+            attack_t = attack_t - 1e-6
+            decay_t = decay_t - 1e-6
+            sustain_t = sustain_t - 1e-6
+            release_t = release_t - 1e-6
 
         self.params_dict['attack_t'] = attack_t
         self.params_dict['decay_t'] = decay_t
