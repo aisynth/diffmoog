@@ -1,5 +1,4 @@
 import torch
-import torchaudio
 from torch import nn
 from torch.utils.data import DataLoader
 from src.config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOSS_FACTOR,\
