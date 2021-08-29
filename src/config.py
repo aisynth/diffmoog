@@ -1,12 +1,23 @@
+import os
+
+# change this to either WINDOWS or LINUX
+OS = 'WINDOWS'
+
 # Definitions
 PI = 3.141592653589793
 TWO_PI = 2 * PI
 
 # Dataset configs
-DATASET_SIZE = 1000
+DATASET_SIZE = 100
+path_parent = os.path.dirname(os.getcwd())
+if OS == 'WINDOWS':
+    PARAMETERS_FILE = path_parent + "\\dataset\\dataset.csv"
+    AUDIO_DIR = path_parent + "\\dataset\\wav_files"
+elif OS == 'LINUX':
+    PARAMETERS_FILE = "dataset/dataset.csv"
+    
 # DATASET_MODE = 'MEL_SPEC'  # WAV or MEL_SPEC
 DATASET_MODE = 'WAV'  # WAV or MEL_SPEC
-PARAMETERS_FILE = "dataset/dataset.csv"
 
 # Model configs
 BATCH_SIZE = 128
@@ -26,5 +37,3 @@ SIGNAL_DURATION_SEC = 1.0
 DEBUG_MODE = False
 PRINT_TRAIN_STATS = True
 
-# change this to either WINDOWS or LINUX
-OS = 'WINDOWS'
