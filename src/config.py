@@ -14,8 +14,8 @@ if OS == 'WINDOWS':
     PARAMETERS_FILE = path_parent + "\\dataset\\dataset.csv"
     AUDIO_DIR = path_parent + "\\dataset\\wav_files"
 elif OS == 'LINUX':
-    PARAMETERS_FILE = "dataset/dataset.csv"
-    
+    PARAMETERS_FILE = path_parent + "dataset/dataset.csv"
+    AUDIO_DIR = path_parent + "dataset/wav_files"
 # DATASET_MODE = 'MEL_SPEC'  # WAV or MEL_SPEC
 DATASET_MODE = 'WAV'  # WAV or MEL_SPEC
 
