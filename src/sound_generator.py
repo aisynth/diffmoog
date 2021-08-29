@@ -1,5 +1,5 @@
 import numpy
-from synth import Synth
+from config import PI
 from src.config import SIGNAL_DURATION_SEC
 import synth
 import random

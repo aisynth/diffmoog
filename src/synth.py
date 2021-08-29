@@ -7,7 +7,7 @@ Created on Mon May 31 15:41:38 2021
 """
 import torch
 import torchaudio.functional as taF
-from src.config import PI, TWO_PI, DEBUG_MODE, SAMPLE_RATE, SIGNAL_DURATION_SEC
+from config import PI, TWO_PI, DEBUG_MODE
 import matplotlib.pyplot as plt
 import simpleaudio as sa
 import helper

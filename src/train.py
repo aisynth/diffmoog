@@ -1,10 +1,10 @@
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-from src.config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOSS_FACTOR, \
+from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOSS_FACTOR,\
     SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, DATASET_MODE, LOSS_MODE
-from src.ai_synth_dataset import AiSynthDataset
-from src.config import PARAMETERS_FILE
+from ai_synth_dataset import AiSynthDataset
+from config import PARAMETERS_FILE, AUDIO_DIR
 from synth_model import SynthNetwork
 from sound_generator import SynthBasicFlow
 import synth
