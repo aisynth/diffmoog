@@ -4,6 +4,7 @@ import synth
 import matplotlib.pyplot as plt
 import librosa
 from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE
+from synth_config import *
 
 
 def get_device():

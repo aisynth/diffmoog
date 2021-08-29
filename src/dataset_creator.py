@@ -5,7 +5,7 @@ import torch
 
 import helper
 from sound_generator import SynthBasicFlow
-from config import DATASET_SIZE, DATASET_MODE
+from config import DATASET_SIZE, DATASET_MODE, OS
 
 """
 Create a dataset by randomizing synthesizer parameters and generating sound.
@@ -29,22 +29,33 @@ if __name__ == "__main__":
 
         dataset.append(parameters)
 
-        cwd = os.getcwd()
-        if DATASET_MODE == 'WAV':
-            audio_path = cwd + f"/dataset/wav_files/{file_name}.wav"
-            audio = audio.detach().cpu().numpy()
-            scipy.io.wavfile.write(audio_path, 44100, audio[0][0][0])
-            print(f"Generated {file_name}")
+    path_parent = os.path.dirname(os.getcwd())
+    if OS == 'WINDOWS':
+        audio_path = path_parent + f"\\dataset\\wav_files\\{file_name}"
+    elif OS == 'LINUX':
+        audio_path = path_parent + f"/dataset/wav_files/{file_name}"
+        
+    if DATASET_MODE == 'WAV':
+        audio_path = cwd + f"/dataset/wav_files/{file_name}.wav"
+        audio = audio.detach().cpu().numpy()
+        scipy.io.wavfile.write(audio_path, 44100, audio[0][0][0])
+        print(f"Generated {file_name}")
+    elif DATASET_MODE == 'MEL_SPEC':
+        audio_mel_spec = helper.mel_spectrogram_transform(audio)
+        audio_log_mel_spec = helper.amplitude_to_db_transform(audio_mel_spec)
+        audio_log_mel_spec = torch.unsqueeze(audio_log_mel_spec, dim=0)
+        audio_mel_spec_path = cwd + f"/dataset/audio_mel_spec_files/{file_name}.pt"
+        torch.save(audio_log_mel_spec, audio_mel_spec_path)
+        print(f"Generated {file_name}")        
+    
+    
 
-        elif DATASET_MODE == 'MEL_SPEC':
-            audio_mel_spec = helper.mel_spectrogram_transform(audio)
-            audio_log_mel_spec = helper.amplitude_to_db_transform(audio_mel_spec)
-            audio_log_mel_spec = torch.unsqueeze(audio_log_mel_spec, dim=0)
-            audio_mel_spec_path = cwd + f"/dataset/audio_mel_spec_files/{file_name}.pt"
-            torch.save(audio_log_mel_spec, audio_mel_spec_path)
-            print(f"Generated {file_name}")
-
+if __name__ == "__main__":
     dataframe = pd.DataFrame(dataset)
 
-    parameters_path = cwd + "/dataset/dataset.csv"
+    path_parent = os.path.dirname(os.getcwd())
+    if OS == 'WINDOWS':
+        parameters_path = path_parent + "\\dataset\\dataset.csv"
+    elif OS == 'LINUX':
+        parameters_path = path_parent + "/dataset/dataset.csv"
     dataframe.to_csv(parameters_path)

@@ -25,3 +25,6 @@ SIGNAL_DURATION_SEC = 1.0
 # Debug
 DEBUG_MODE = False
 PRINT_TRAIN_STATS = True
+
+# change this to either WINDOWS or LINUX
+OS = 'WINDOWS'
