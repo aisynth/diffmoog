@@ -8,7 +8,7 @@ PI = 3.141592653589793
 TWO_PI = 2 * PI
 
 # Dataset configs
-DATASET_SIZE = 100
+DATASET_SIZE = 10000
 path_parent = os.path.dirname(os.getcwd())
 if OS == 'WINDOWS':
     PARAMETERS_FILE = path_parent + "\\dataset\\dataset.csv"
@@ -21,7 +21,7 @@ DATASET_MODE = 'WAV'  # WAV or MEL_SPEC
 
 # Model configs
 BATCH_SIZE = 128
-EPOCHS = 1000
+EPOCHS = 10
 LEARNING_RATE = 0.001
 
 LOSS_MODE = 'SPECTROGRAM_ONLY'  # SPECTROGRAM_ONLY or FULL (Spectrogram + parameters)

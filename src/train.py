@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOSS_FACTOR,\
     SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, DATASET_MODE, LOSS_MODE
 from ai_synth_dataset import AiSynthDataset
-from config import PARAMETERS_FILE, AUDIO_DIR
+from config import PARAMETERS_FILE, AUDIO_DIR, OS
 from synth_model import SynthNetwork
 from sound_generator import SynthBasicFlow
 import synth
@@ -191,14 +191,30 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
 
         end = time.time()
         print("batch processing time:", end - start)
+    return loss
+
 
 
 def train(model, data_loader, optimiser_arg, device_arg, epochs):
     model.train()
     for i in range(epochs):
         print(f"Epoch {i + 1}")
-        train_single_epoch(model, data_loader, optimiser_arg, device_arg)
+        loss = train_single_epoch(model, data_loader, optimiser_arg, device_arg)
         print("--------------------------------------\n")
+
+        # save model checkpoint
+        if OS == 'WINDOWS':
+            model_checkpoint = f"..\\trained_models\\synth_net_epoch{i}.pth"
+        elif OS == 'LINUX':
+            model_checkpoint = f"../trained_models/synth_net_epoch{i}.pth"
+
+        torch.save({
+            'epoch': i,
+            'model_state_dict': synth_net.state_dict(),
+            'optimizer_state_dict': optimiser_arg.state_dict(),
+            'loss': loss
+        }, model_checkpoint)
+
     print("Finished training")
 
 
@@ -209,6 +225,7 @@ if __name__ == "__main__":
                                       device_arg=device,
                                       dataset_mode=DATASET_MODE,
                                       )
+
 
     train_dataloader = create_data_loader(ai_synth_dataset, BATCH_SIZE)
 
@@ -223,5 +240,10 @@ if __name__ == "__main__":
     train(synth_net, train_dataloader, optimizer, device, EPOCHS)
 
     # save model
-    torch.save(synth_net.state_dict(), "../trained_models/synth_net.pth")
+    if OS == 'WINDOWS':
+        saved_model_path = "..\\trained_models\\trained_synth_net.pth"
+    elif OS == 'LINUX':
+        saved_model_path = "../trained_models/trained_synth_net.pth"
+
+    torch.save(synth_net.state_dict(), saved_model_path)
     print("Trained synth net saved at synth_net.pth")
