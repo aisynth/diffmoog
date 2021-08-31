@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import librosa
 from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE
 from synth_config import *
+from torch.utils.data import DataLoader
 
 
 def get_device():
@@ -267,3 +268,7 @@ class LogNormaliser:
     def denormalise(self, norm_array):
         array = torch.exp(norm_array) - 1e-10
         return array
+
+def create_data_loader(train_data, batch_size):
+    train_dataloader = DataLoader(train_data, batch_size=batch_size)
+    return train_dataloader

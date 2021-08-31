@@ -1,4 +1,5 @@
 import torch
+from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR
 import pandas as pd
 import torchaudio
 import os
@@ -102,8 +103,8 @@ if __name__ == "__main__":
     device = helper.get_device()
 
     # init dataset
-    ai_synth_dataset = AiSynthDataset(csv_file=PARAMETERS_FILE,
-                                      device_arg=device,
+    ai_synth_dataset = AiSynthDataset(TRAIN_PARAMETERS_FILE,
+                                      TRAIN_AUDIO_DIR,
                                       dataset_mode=DATASET_MODE,
                                       transformation=helper.mel_spectrogram_transform,
                                       )

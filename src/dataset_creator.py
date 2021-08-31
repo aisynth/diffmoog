@@ -29,12 +29,18 @@ if __name__ == "__main__":
 
         dataset.append(parameters)
 
-    path_parent = os.path.dirname(os.getcwd())
-    if OS == 'WINDOWS':
-        audio_path = path_parent + f"\\dataset\\wav_files\\{file_name}"
-    elif OS == 'LINUX':
-        audio_path = path_parent + f"/dataset/wav_files/{file_name}"
-        
+        path_parent = os.path.dirname(os.getcwd())
+        if dataset_type == 'TRAIN':
+            if OS == 'WINDOWS':
+                audio_path = path_parent + f"\\dataset\\train\\wav_files\\{file_name}"
+            elif OS == 'LINUX':
+                audio_path = path_parent + f"/dataset/train/wav_files/{file_name}"
+        if dataset_type == 'TEST':
+            if OS == 'WINDOWS':
+                audio_path = path_parent + f"\\dataset\\test\\wav_files\\{file_name}"
+            elif OS == 'LINUX':
+                audio_path = path_parent + f"/dataset/test/wav_files/{file_name}"
+                
     if DATASET_MODE == 'WAV':
         audio_path = cwd + f"/dataset/wav_files/{file_name}.wav"
         audio = audio.detach().cpu().numpy()
@@ -50,12 +56,22 @@ if __name__ == "__main__":
     
     
 
-if __name__ == "__main__":
     dataframe = pd.DataFrame(dataset)
 
     path_parent = os.path.dirname(os.getcwd())
-    if OS == 'WINDOWS':
-        parameters_path = path_parent + "\\dataset\\dataset.csv"
-    elif OS == 'LINUX':
-        parameters_path = path_parent + "/dataset/dataset.csv"
+    if dataset_type == 'TRAIN':
+        if OS == 'WINDOWS':
+            parameters_path = path_parent + "\\dataset\\train\\dataset.csv"
+        elif OS == 'LINUX':
+            parameters_path = path_parent + "/dataset/train/dataset.csv"
+    elif dataset_type == 'TEST':
+        if OS == 'WINDOWS':
+            parameters_path = path_parent + "\\dataset\\test\\dataset.csv"
+        elif OS == 'LINUX':
+            parameters_path = path_parent + "/dataset/test/dataset.csv"
+
     dataframe.to_csv(parameters_path)
+
+
+if __name__ == "__main__":
+    create_dataset(DATASET_TYPE, DATASET_SIZE)

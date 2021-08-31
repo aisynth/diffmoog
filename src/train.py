@@ -1,10 +1,9 @@
 import torch
 from torch import nn
-from torch.utils.data import DataLoader
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOSS_FACTOR,\
-    SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, DATASET_MODE, LOSS_MODE
+    SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, DATASET_MODE, LOSS_MODE, SAVE_MODEL_PATH
 from ai_synth_dataset import AiSynthDataset
-from config import PARAMETERS_FILE, AUDIO_DIR, OS
+from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, OS
 from synth_model import SynthNetwork
 from sound_generator import SynthBasicFlow
 import synth
@@ -221,13 +220,13 @@ def train(model, data_loader, optimiser_arg, device_arg, epochs):
 if __name__ == "__main__":
     device = helper.get_device()
 
-    ai_synth_dataset = AiSynthDataset(csv_file=PARAMETERS_FILE,
-                                      device_arg=device,
+    ai_synth_dataset = AiSynthDataset(TRAIN_PARAMETERS_FILE,
+                                      TRAIN_AUDIO_DIR,
                                       dataset_mode=DATASET_MODE,
                                       )
 
 
-    train_dataloader = create_data_loader(ai_synth_dataset, BATCH_SIZE)
+    train_dataloader = helper.create_data_loader(ai_synth_dataset, BATCH_SIZE)
 
     # construct model and assign it to device
     synth_net = SynthNetwork().to(device)
