@@ -26,10 +26,10 @@ EPOCHS = 10
 LEARNING_RATE = 0.001
 if OS == 'WINDOWS':
     SAVE_MODEL_PATH = "..\\trained_models\\trained_synth_net.pth"
-    LOAD_MODEL_PATH = "..\\trained_models\\synth_net_epoch0.pth"
+    LOAD_MODEL_PATH = "..\\trained_models\\synth_net_epoch2.pth"
 elif OS == 'LINUX':
     SAVE_MODEL_PATH = "../trained_models/trained_synth_net.pth"
-    LOAD_MODEL_PATH = "../trained_models/synth_net_epoch0.pth"
+    LOAD_MODEL_PATH = "../trained_models/synth_net_epoch2.pth"
 
 LOSS_MODE = 'SPECTROGRAM_ONLY'  # SPECTROGRAM_ONLY or FULL (Spectrogram + parameters)
 # LOSS_MODE = 'FULL'  # SPECTROGRAM_ONLY or FULL (Spectrogram + parameters)

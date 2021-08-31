@@ -7,6 +7,8 @@ import helper
 from sound_generator import SynthBasicFlow
 from config import DATASET_SIZE, DATASET_MODE, OS
 
+DATASET_TYPE = 'TEST'
+DATASET_SIZE = 20 
 """
 Create a dataset by randomizing synthesizer parameters and generating sound.
 
@@ -21,7 +23,7 @@ if __name__ == "__main__":
     dataset = []
     print(f"Creating dataset \n mode = {DATASET_MODE}, size = {DATASET_SIZE} \n")
     for i in range(DATASET_SIZE):
-        file_name = f"sound_{i}"
+        generated_audio_and_params = SynthBasicFlow(file_name=file_name)
         synth_obj = SynthBasicFlow(file_name)
 
         audio = synth_obj.signal

@@ -36,7 +36,7 @@ class SynthBasicFlow:
         if parameters_dict is None:
             self.init_random_synth_params(num_sounds)
         elif type(parameters_dict) is dict:
-            self.params_dict = parameters_dict
+            self.params_dict = parameters_dict.copy()
         else:
             ValueError("Provided parameters are not provided as dictionary")
 
