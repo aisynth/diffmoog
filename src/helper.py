@@ -55,31 +55,33 @@ amplitude_to_db_transform = torchaudio.transforms.AmplitudeToDB().to(get_device(
 log_mel_spec_transform = torch.nn.Sequential(mel_spectrogram_transform, amplitude_to_db_transform).to(get_device())
 
 
-def map_classification_params_to_ints(classification_params_dic: dict):
+def map_classification_params_to_ints(params_dic: dict):
     """ map classification params to ints, to input them for a neural network """
 
-    for key, val in classification_params_dic.items():
-        if key == "osc1_freq" or key == "osc2_freq":
-            classification_params_dic[key] = torch.tensor([synth.OSC_FREQ_DIC[round(x.item(), 4)] for x in val])
-        if isinstance(val, list):
-            if "wave" in key:
-                classification_params_dic[key] = torch.tensor([synth.WAVE_TYPE_DIC[x] for x in val])
-            elif "filter_type" == key:
-                classification_params_dic[key] = torch.tensor([synth.FILTER_TYPE_DIC[x] for x in val])
+    for key, val in params_dic.items():
+        if key in synth.CLASSIFICATION_PARAM_LIST:
+            if key == "osc1_freq" or key == "osc2_freq":
+                params_dic[key] = torch.tensor([synth.OSC_FREQ_DIC[round(x.item(), 4)] for x in val])
+            if isinstance(val, list):
+                if "wave" in key:
+                    params_dic[key] = torch.tensor([synth.WAVE_TYPE_DIC[x] for x in val])
+                elif "filter_type" == key:
+                    params_dic[key] = torch.tensor([synth.FILTER_TYPE_DIC[x] for x in val])
 
 
-def map_classification_params_from_ints(classification_params_dic: dict):
+def map_classification_params_from_ints(params_dic: dict):
     """ map classification params from ints (inverse operation of map_classification_params_to_ints),
      to input them for a neural network """
 
-    for key, val in classification_params_dic.items():
-        if key == "osc1_freq" or key == "osc2_freq":
-            # classification_params_dic[key] = synth.OSC_FREQ_DIC[round(val, 4)]
-            classification_params_dic[key] = torch.tensor([synth.OSC_FREQ_DIC_INV[x.item()] for x in val])
-        if "wave" in key:
-            classification_params_dic[key] = [synth.WAVE_TYPE_DIC_INV[x.item()] for x in val]
-        elif "filter_type" == key:
-            classification_params_dic[key] = [synth.FILTER_TYPE_DIC_INV[x.item()] for x in val]
+    for key, val in params_dic.items():
+        if key in synth.CLASSIFICATION_PARAM_LIST:
+            if key == "osc1_freq" or key == "osc2_freq":
+                # classification_params_dic[key] = synth.OSC_FREQ_DIC[round(val, 4)]
+                params_dic[key] = torch.tensor([synth.OSC_FREQ_DIC_INV[x.item()] for x in val])
+            if "wave" in key:
+                params_dic[key] = [synth.WAVE_TYPE_DIC_INV[x.item()] for x in val]
+            elif "filter_type" == key:
+                params_dic[key] = [synth.FILTER_TYPE_DIC_INV[x.item()] for x in val]
 
 
 def clamp_regression_params(parameters_dict: dict):
