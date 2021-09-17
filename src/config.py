@@ -3,13 +3,13 @@ PI = 3.141592653589793
 TWO_PI = 2 * PI
 
 # Dataset configs
-DATASET_SIZE = 5
-DATASET_MODE = 'MEL_SPEC'  # WAV or MEL_SPEC
+DATASET_SIZE = 8
+# DATASET_MODE = 'MEL_SPEC'  # WAV or MEL_SPEC
+DATASET_MODE = 'WAV'  # WAV or MEL_SPEC
 PARAMETERS_FILE = "dataset/dataset.csv"
-AUDIO_DIR = "dataset/wav_files"
 
 # Model configs
-BATCH_SIZE = 4
+BATCH_SIZE = 8
 EPOCHS = 1000
 LEARNING_RATE = 0.001
 

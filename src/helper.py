@@ -52,6 +52,8 @@ mel_spectrogram_transform = torchaudio.transforms.MelSpectrogram(
 
 amplitude_to_db_transform = torchaudio.transforms.AmplitudeToDB().to(get_device())
 
+log_mel_spec_transform = torch.nn.Sequential(mel_spectrogram_transform, amplitude_to_db_transform).to(get_device())
+
 
 def map_classification_params_to_ints(classification_params_dic: dict):
     """ map classification params to ints, to input them for a neural network """

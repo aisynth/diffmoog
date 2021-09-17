@@ -19,6 +19,7 @@ Configurations settings are inside config file.
 """
 if __name__ == "__main__":
     dataset = []
+    print(f"Creating dataset \n mode = {DATASET_MODE}, size = {DATASET_SIZE} \n")
     for i in range(DATASET_SIZE):
         file_name = f"sound_{i}"
         synth_obj = SynthBasicFlow(file_name)
@@ -38,9 +39,10 @@ if __name__ == "__main__":
         elif DATASET_MODE == 'MEL_SPEC':
             audio_mel_spec = helper.mel_spectrogram_transform(audio)
             audio_log_mel_spec = helper.amplitude_to_db_transform(audio_mel_spec)
-            audio_log_mel_spec = audio_log_mel_spec.detach().cpu().numpy()
+            audio_log_mel_spec = torch.unsqueeze(audio_log_mel_spec, dim=0)
             audio_mel_spec_path = cwd + f"/dataset/audio_mel_spec_files/{file_name}.pt"
             torch.save(audio_log_mel_spec, audio_mel_spec_path)
+            print(f"Generated {file_name}")
 
     dataframe = pd.DataFrame(dataset)
 

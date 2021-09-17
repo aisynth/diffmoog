@@ -1,47 +1,66 @@
-from torch.utils.data import Dataset
-from config import PARAMETERS_FILE, AUDIO_DIR
+import torch
 import pandas as pd
 import torchaudio
 import os
 import helper
 import synth
+from torch.utils.data import Dataset
+from config import PARAMETERS_FILE, DATASET_MODE
+import time
 
 
 class AiSynthDataset(Dataset):
 
-    def __init__(self, parameters_csv, audio_dir, transformation, target_sample_rate, device_arg):
-        self.params = pd.read_csv(parameters_csv)
-        self.audio_dir = audio_dir
+    def __init__(self, csv_file, device_arg, dataset_mode):
+
         self.device = device_arg
-        self.transformation = transformation.to(self.device)
-        self.target_sample_rate = target_sample_rate
+        self.dataset_mode = dataset_mode
+        self.params = pd.read_csv(csv_file)
+
+        if dataset_mode == 'WAV':
+            self.audio_dir = "dataset/wav_files"
+            self.transformation = helper.log_mel_spec_transform.to(self.device)
+
+        elif dataset_mode == 'MEL_SPEC':
+            self.audio_dir = "dataset/audio_mel_spec_files"
 
     def __len__(self):
         return len(self.params)
 
     def __getitem__(self, index):
-        audio_path = self._get_audio_path(index)
+
         params_dic = self._get_audio_params(index)
-        signal, sr = torchaudio.load(audio_path)
-        signal = signal.to(self.device)
-        transformed_signal = self.transformation(signal)
+        audio_path = self._get_audio_path(index)
+
+        if self.dataset_mode == 'WAV':
+            signal, _ = torchaudio.load(audio_path)
+            signal = signal.to(self.device)
+            transformed_signal = self.transformation(signal)
+
+        elif self.dataset_mode == 'MEL_SPEC':
+            transformed_signal = torch.load(audio_path)
+
         return transformed_signal, params_dic
 
     def _get_audio_path(self, index):
-        audio_file_name = f"sound_{index}.wav"
+        if self.dataset_mode == 'WAV':
+            audio_file_name = f"sound_{index}.wav"
+        elif self.dataset_mode == 'MEL_SPEC':
+            audio_file_name = f"sound_{index}.pt"
+
         cwd = os.getcwd()
         path = os.path.join(cwd, self.audio_dir, audio_file_name)
         return path
 
     def _get_audio_params(self, index):
         """
-        Return audio parameters from csv. Classification parameters are translated to integers from mappings.
+        Return audio parameters from csv.
 
         :param index: the index of the audio file
         :return: parameters dictionary, containing values for each parameter
         """
         params_pd_series = self.params.iloc[index]
-        params_pd_series = params_pd_series.drop(labels=["Unnamed: 0", "file_name"])
+        params_pd_series = params_pd_series.drop(labels=["Unnamed: 0"])
 
         regression_params_pd_series = params_pd_series.loc[synth.REGRESSION_PARAM_LIST]
         regression_params_dic = regression_params_pd_series.to_dict()
@@ -60,10 +79,10 @@ if __name__ == "__main__":
     device = helper.get_device()
 
     # init dataset
-    ai_synth_dataset = AiSynthDataset(PARAMETERS_FILE,
-                                      AUDIO_DIR,
-                                      helper.mel_spectrogram_transform,
-                                      synth.SAMPLE_RATE,
-                                      device)
+    ai_synth_dataset = AiSynthDataset(csv_file=PARAMETERS_FILE,
+                                      device_arg=device,
+                                      dataset_mode=DATASET_MODE,
+                                      transformation=helper.mel_spectrogram_transform,
+                                      )
 
     print(f"there are {len(ai_synth_dataset)} files in the dataset")
