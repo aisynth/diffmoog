@@ -9,6 +9,7 @@ from synth_model import SynthNetwork
 from sound_generator import SynthBasicFlow
 import synth
 import helper
+import time
 
 
 def create_data_loader(train_data, batch_size):
@@ -18,6 +19,7 @@ def create_data_loader(train_data, batch_size):
 
 def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
     for signal_mel_spec, target_params_dic in data_loader:
+        start = time.time()
 
         batch_size = signal_mel_spec.shape[0]
         signal_log_mel_spec = helper.amplitude_to_db_transform(signal_mel_spec)
@@ -123,6 +125,8 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
             print("regression_params",
                   output_dic['regression_params'], regression_target_parameters_tensor)
 
+        end = time.time()
+        print("batch processing time:", end - start)
 
 def train(model, data_loader, optimiser_arg, device_arg, epochs):
     for i in range(epochs):
