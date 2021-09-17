@@ -1,5 +1,5 @@
 from synth import Signal
-from src.config import PI
+from src.config import PI, SIGNAL_DURATION_SEC
 import synth
 import random
 import matplotlib.pyplot as plt
@@ -57,7 +57,7 @@ class SynthBasicFlow:
 
         # fixing a numerical issue in case the ADSR times exceeds signal length
         adsr_aggregated_time = attack_t + decay_t + sustain_t + release_t
-        if adsr_aggregated_time > synth.SIGNAL_DURATION_SEC:
+        if adsr_aggregated_time > SIGNAL_DURATION_SEC:
             attack_t = attack_t - 1e-6
             decay_t = decay_t - 1e-6
             sustain_t = sustain_t - 1e-6
@@ -137,7 +137,7 @@ class SynthBasicFlow:
 if __name__ == "__main__":
     a = SynthBasicFlow('audio_example')
     plt.plot(a.signal)
-    plt.ylim([-1,1])
+    plt.ylim([-1, 1])
     plt.show()
     play_obj = sa.play_buffer(a.signal.numpy(),
                               num_channels=1,

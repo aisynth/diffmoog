@@ -7,13 +7,10 @@ Created on Mon May 31 15:41:38 2021
 """
 import torch
 import torchaudio.functional as taF
-from src.config import PI, TWO_PI, DEBUG_MODE
+from src.config import PI, TWO_PI, DEBUG_MODE, SAMPLE_RATE, SIGNAL_DURATION_SEC
 import matplotlib.pyplot as plt
 import simpleaudio as sa
 import helper
-
-SAMPLE_RATE = 44100
-SIGNAL_DURATION_SEC = 1.0
 
 CLASSIFICATION_PARAM_LIST = \
     ['osc1_freq', 'osc1_wave', 'lfo1_wave', 'osc2_freq', 'osc2_wave', 'lfo2_wave', 'filter_type']

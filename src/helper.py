@@ -3,7 +3,7 @@ import torchaudio
 import synth
 import matplotlib.pyplot as plt
 import librosa
-from config import TWO_PI, DEBUG_MODE
+from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE
 
 
 def get_device():
@@ -43,14 +43,14 @@ def move_to(obj, device):
 
 
 mel_spectrogram_transform = torchaudio.transforms.MelSpectrogram(
-    sample_rate=synth.SAMPLE_RATE,
+    sample_rate=SAMPLE_RATE,
     n_fft=1024,
     hop_length=512,
     n_mels=64,
     power=2.0
-)
+).to(get_device())
 
-amplitude_to_db_transform = torchaudio.transforms.AmplitudeToDB()
+amplitude_to_db_transform = torchaudio.transforms.AmplitudeToDB().to(get_device())
 
 
 def map_classification_params_to_ints(classification_params_dic: dict):
