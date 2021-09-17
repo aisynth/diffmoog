@@ -80,15 +80,6 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
 
         loss_spectrogram_total = loss_spectrogram_total / batch_size
 
-        loss_osc1_freq = criterion_osc1_freq(output_dic['osc1_freq'], classification_target_params['osc1_freq'])
-        loss_osc1_wave = criterion_osc1_wave(output_dic['osc1_wave'], classification_target_params['osc1_wave'])
-        loss_lfo1_wave = criterion_lfo1_wave(output_dic['lfo1_wave'], classification_target_params['lfo1_wave'])
-        loss_osc2_freq = criterion_osc2_freq(output_dic['osc2_freq'], classification_target_params['osc2_freq'])
-        loss_osc2_wave = criterion_osc2_wave(output_dic['osc2_wave'], classification_target_params['osc2_wave'])
-        loss_lfo2_wave = criterion_lfo2_wave(output_dic['lfo2_wave'], classification_target_params['lfo2_wave'])
-        loss_filter_type = \
-            criterion_filter_type(output_dic['filter_type'], classification_target_params['filter_type'])
-
         # todo: refactor code. the code gets dictionary of tensors (regression_target_parameters) and return 2d tensor
         regression_target_parameters_tensor = torch.empty((len(regression_target_parameters['osc1_amp']), 1))
         regression_target_parameters_tensor = helper.move_to(regression_target_parameters_tensor, device_arg)
@@ -99,18 +90,8 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
         regression_target_parameters_tensor = regression_target_parameters_tensor[:, 1:]
         regression_target_parameters_tensor = regression_target_parameters_tensor.float()
 
-        loss_classification_params = \
-            loss_osc1_freq + loss_osc1_wave + loss_lfo1_wave + \
-            loss_osc2_freq + loss_osc2_wave + loss_lfo2_wave + \
-            loss_filter_type
-
-        loss_regression_params = \
-            criterion_regression_params(output_dic['regression_params'], regression_target_parameters_tensor)
-
-        loss = \
-            loss_classification_params \
-            + REGRESSION_LOSS_FACTOR * loss_regression_params\
-            + SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total
+        loss = loss_spectrogram_total
+        loss.requires_grad = True
 
         # backpropogate error and update wights
         optimizer_arg.zero_grad()
@@ -118,17 +99,7 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
         optimizer_arg.step()
 
         if PRINT_TRAIN_STATS:
-            print("-----Classification params-----")
-            print('loss_osc1_freq', loss_osc1_freq)
-            print('loss_osc1_wave', loss_osc1_wave)
-            print('loss_lfo1_wave', loss_lfo1_wave)
-            print('loss_osc2_freq', loss_osc2_freq)
-            print('loss_osc2_wave', loss_osc2_wave)
-            print('loss_lfo2_wave', loss_lfo2_wave)
-            print('loss_filter_type', loss_filter_type)
-            print("-----Regression params-----")
-            print('loss_regression_params', REGRESSION_LOSS_FACTOR * loss_regression_params)
-            print('loss_spectrogram_total', SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total)
+            print('loss_spectrogram_total', loss_spectrogram_total)
             print('\n')
             print("-----Total Loss-----")
             print(f"loss: {loss.item()}")
