@@ -5,6 +5,7 @@ Created on Mon May 31 15:41:38 2021
 
 @author: moshelaufer, Noy Uzrad
 """
+import numpy
 import torch
 import torchaudio.functional as taF
 from src.config import PI, TWO_PI, DEBUG_MODE, SAMPLE_RATE, SIGNAL_DURATION_SEC
@@ -80,22 +81,30 @@ class Signal:
             Raises:
                 ValueError: Provided variables are out of range
             """
+
         self.signal_values_sanity_check(amp, freq, waveform)
         t = self.time_samples
-        phase = phase % TWO_PI
+        # todo: delete if not needed
+        # if num_sounds == 1:
+        #     phase = [phase[0] % TWO_PI][0]
+        # else:
+        phase = [element % TWO_PI for element in phase]
         oscillator = torch.zeros_like(t)
         for i in range(num_sounds):
-            if waveform[i] == 'sine':
-                oscillator = amp * torch.sin(TWO_PI * freq[i] * t + phase[i])
-            elif waveform[i] == 'square':
-                oscillator = amp * torch.sign(torch.sin(TWO_PI * freq[i] * t + phase[i]))
-            elif waveform[i] == 'triangle':
-                oscillator = (2 * amp / PI) * torch.arcsin(torch.sin((TWO_PI * freq[i] * t + phase[i])))
-            elif waveform[i] == 'sawtooth':
+            waveform_str = waveform[i]
+            freq_float = freq[i]
+            phase_float = phase[i]
+            if waveform_str == 'sine':
+                oscillator = amp * torch.sin(TWO_PI * freq_float * t + phase_float)
+            elif waveform_str == 'square':
+                oscillator = amp * torch.sign(torch.sin(TWO_PI * freq_float * t + phase_float))
+            elif waveform_str == 'triangle':
+                oscillator = (2 * amp / PI) * torch.arcsin(torch.sin((TWO_PI * freq_float * t + phase_float)))
+            elif waveform_str == 'sawtooth':
                 # Sawtooth closed form
-                oscillator = 2 * (t * freq[i] - torch.floor(0.5 + t * freq[i]))
+                oscillator = 2 * (t * freq_float - torch.floor(0.5 + t * freq_float))
                 # Phase shift by normalization to range [0,1] and modulo operation
-                oscillator = (((oscillator + 1) / 2) + phase[i] / TWO_PI) % 1
+                oscillator = (((oscillator + 1) / 2) + phase_float / TWO_PI) % 1
                 # re-normalization to range [-amp, amp]
                 oscillator = amp * (oscillator * 2 - 1)
 
@@ -128,22 +137,29 @@ class Signal:
             Raises:
                 ValueError: Provided variables are out of range
             """
+
         self.signal_values_sanity_check(amp_c, freq_c, waveform)
         t = self.time_samples
         for i in range(num_sounds):
-            if waveform[i] == 'sine':
-                self.signal[i] = amp_c[i] * torch.sin(TWO_PI * freq_c[i] * t + mod_index[i] * input_signal[i])
-            if waveform[i] == 'square':
-                self.signal[i] = amp_c[i] \
-                                 * torch.sign(torch.sin(TWO_PI * freq_c[i] * t + mod_index[i] * input_signal[i]))
-            if waveform[i] == 'triangle':
+            waveform_str = waveform[i]
+            amp_float = amp_c[i]
+            mod_index_float = mod_index[i]
+            freq_float = freq_c[i]
+            input_signal_cur = input_signal[i]
+
+            if waveform_str == 'sine':
+                self.signal[i] = amp_float * torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur)
+            if waveform_str == 'square':
+                self.signal[i] = amp_float \
+                                 * torch.sign(torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur))
+            if waveform_str == 'triangle':
                 self.signal[i] = \
-                    (2 * amp_c[i] / PI) * torch.arcsin(
-                        torch.sin((TWO_PI * freq_c[i] * t + mod_index[i] * input_signal[i])))
-            if waveform[i] == 'sawtooth':
-                oscillator = 2 * (t * freq_c[i] - torch.floor(0.5 + t * freq_c[i]))
-                oscillator = (((oscillator + 1) / 2) + mod_index[i] * input_signal[i] / TWO_PI) % 1
-                self.signal[i] = amp_c[i] * (oscillator * 2 - 1)
+                    (2 * amp_float / PI) * torch.arcsin(
+                        torch.sin((TWO_PI * freq_float * t + mod_index_float * input_signal_cur)))
+            if waveform_str == 'sawtooth':
+                oscillator = 2 * (t * freq_float - torch.floor(0.5 + t * freq_float))
+                oscillator = (((oscillator + 1) / 2) + mod_index_float * input_signal_cur / TWO_PI) % 1
+                self.signal[i] = amp_float * (oscillator * 2 - 1)
 
     def am_modulation(self, amp_c, freq_c, amp_m, freq_m, final_max_amp, waveform):
         """AM modulation
@@ -233,23 +249,27 @@ class Signal:
                 ValueError: Provided ADSR timings are not the same as the signal length
             """
         if num_sounds == 1:
-            if attack_t + decay_t + sustain_t + release_t > self.sig_duration:
+            if attack_t[0] + decay_t[0] + sustain_t[0] + release_t[0] > self.sig_duration:
                 raise ValueError("Provided ADSR durations exceeds signal duration")
 
-            # make as lists to comply with multiple sound processing procedures
-            attack_t = [attack_t]
-            decay_t = [decay_t]
-            sustain_t = [sustain_t]
-            release_t = [release_t]
-            sustain_level = [sustain_level]
         else:
-            if any(attack_t + decay_t + sustain_t + release_t > self.sig_duration):
-                raise ValueError("Provided ADSR durations exceeds signal duration")
+            for i in range(num_sounds):
+                if attack_t[i] + decay_t[i] + sustain_t[i] + release_t[i] > self.sig_duration:
+                    raise ValueError("Provided ADSR durations exceeds signal duration")
 
         attack_num_samples = [int(self.sample_rate * attack_t[i]) for i in range(num_sounds)]
         decay_num_samples = [int(self.sample_rate * decay_t[i]) for i in range(num_sounds)]
         sustain_num_samples = [int(self.sample_rate * sustain_t[i]) for i in range(num_sounds)]
         release_num_samples = [int(self.sample_rate * release_t[i]) for i in range(num_sounds)]
+
+        if num_sounds == 1:
+            sustain_level = [sustain_level[i] for i in range(num_sounds)]
+        else:
+            # todo: change the check with sustain_level[0]
+            if torch.is_tensor(sustain_level[0]):
+                sustain_level = [sustain_level[i].item() for i in range(num_sounds)]
+            else:
+                sustain_level = [sustain_level[i] for i in range(num_sounds)]
 
         for i in range(num_sounds):
             attack = torch.linspace(0, 1, attack_num_samples[i])
@@ -267,7 +287,7 @@ class Signal:
             else:
                 raise ValueError("Envelope length exceeds signal duration")
 
-            envelope = helper.move_to(envelope, self.device)
+            # envelope = helper.move_to(envelope, self.device)
 
             self.signal[i] = self.signal[i] * envelope
 
@@ -277,30 +297,38 @@ class Signal:
                 plt.show()
 
     def low_pass(self, cutoff_freq, q=0.707, index=0):
-        self.signal[index] = taF.lowpass_biquad(self.signal[index], self.sample_rate, cutoff_freq, q)
+        waveform = torch.clone(self.signal[index])
+        self.signal[index] = taF.lowpass_biquad(waveform, self.sample_rate, cutoff_freq, q)
 
     def high_pass(self, cutoff_freq, q=0.707, index=0):
-        self.signal[index] = taF.highpass_biquad(self.signal[index], self.sample_rate, cutoff_freq, q)
+        waveform = torch.clone(self.signal[index])
+        self.signal[index] = taF.highpass_biquad(waveform, self.sample_rate, cutoff_freq, q)
 
     def band_pass(self, central_freq, q=0.707, const_skirt_gain=False, index=0):
+        waveform = torch.clone(self.signal[index])
         self.signal[index] = \
-            taF.bandpass_biquad(self.signal[index], self.sample_rate, central_freq, q, const_skirt_gain)
+            taF.bandpass_biquad(waveform, self.sample_rate, central_freq, q, const_skirt_gain)
 
     @staticmethod
+    # todo: remove all except list instances
     def signal_values_sanity_check(amp, freq, waveform):
         """Check signal properties are reasonable."""
-        if freq is float:
+        if isinstance(freq, float):
             if freq < 0 or freq > 2000:
                 raise ValueError("Provided frequency is not in range [0, 20000]")
-        elif freq is list:
+        elif isinstance(freq, list):
             if any(element < 0 or element > 2000 for element in freq):
                 raise ValueError("Provided frequency is not in range [0, 20000]")
-        if amp is int:
+        if isinstance(amp, int):
             if amp < 0 or amp > 1:
                 raise ValueError("Provided amplitude is not in range [0, 1]")
-        elif amp is list:
+        elif isinstance(amp, list):
             if any(element < 0 or element > 1 for element in amp):
                 raise ValueError("Provided amplitude is not in range [0, 1]")
+        # if len(waveform) == 1:
+        #     if waveform[0][0] not in ['sine', 'square', 'triangle', 'sawtooth']:
+        #         raise ValueError("Unknown waveform provided")
+        # else:
         if not any(x in waveform for x in ['sine', 'square', 'triangle', 'sawtooth']):
             raise ValueError("Unknown waveform provided")
 

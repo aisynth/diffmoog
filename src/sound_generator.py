@@ -1,3 +1,4 @@
+import numpy
 from synth import Signal
 from src.config import PI, SIGNAL_DURATION_SEC
 import synth
@@ -5,6 +6,7 @@ import random
 import matplotlib.pyplot as plt
 import simpleaudio as sa
 import numpy as np
+import torch
 
 
 class SynthBasicFlow:
@@ -41,6 +43,8 @@ class SynthBasicFlow:
         self.signal = self.generate_signal(num_sounds)
 
     def init_random_synth_params(self, num_sounds):
+        """init params_dict with lists of parameters"""
+
         # osc1_freq_index = random.randrange(0, 2 * synth.SEMITONES_MAX_OFFSET + 1)
         self.params_dict['osc1_amp'] = np.random.random_sample(size=num_sounds)
         # self.params_dict['osc1_freq'] = synth.OSC_FREQ_LIST[osc1_freq_index]
@@ -86,6 +90,10 @@ class SynthBasicFlow:
         self.params_dict['sustain_t'] = sustain_t
         self.params_dict['release_t'] = release_t
         self.params_dict['sustain_level'] = np.random.random_sample(size=num_sounds)
+
+        for key, val in self.params_dict.items():
+            if isinstance(val, numpy.ndarray):
+                self.params_dict[key] = val.tolist()
 
     def generate_signal(self, num_sounds):
         osc1_amp = self.params_dict['osc1_amp']
@@ -143,14 +151,22 @@ class SynthBasicFlow:
 
         audio = Signal(num_sounds)
         audio.signal = (oscillator1.signal + oscillator2.signal) / 2
+        audio.signal = audio.signal.cpu()
 
         for i in range(num_sounds):
-            if filter_type == 'high_pass':
-                audio.high_pass(filter_freq, index=i)
-            elif filter_type == 'low_pass':
-                audio.low_pass(filter_freq, index=i)
-            elif filter_type == "band_pass":
-                audio.band_pass(filter_freq, index=i)
+            if num_sounds == 1:
+                filter_frequency = filter_freq[0]
+            elif num_sounds > 1:
+                if torch.is_tensor(filter_freq[i]):
+                    filter_frequency = filter_freq[i].item()
+                else:
+                    filter_frequency = filter_freq[i]
+            if filter_type[i] == 'high_pass':
+                audio.high_pass(cutoff_freq=filter_frequency, index=i)
+            elif filter_type[i] == 'low_pass':
+                audio.low_pass(cutoff_freq=filter_frequency, index=i)
+            elif filter_type[i] == "band_pass":
+                audio.band_pass(central_freq=filter_frequency, index=i)
 
         audio.adsr_envelope(attack_t, decay_t, sustain_t, sustain_level, release_t, num_sounds)
 

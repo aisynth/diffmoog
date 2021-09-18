@@ -33,7 +33,7 @@ if __name__ == "__main__":
         if DATASET_MODE == 'WAV':
             audio_path = cwd + f"/dataset/wav_files/{file_name}.wav"
             audio = audio.detach().cpu().numpy()
-            scipy.io.wavfile.write(audio_path, 44100, audio)
+            scipy.io.wavfile.write(audio_path, 44100, audio[0])
             print(f"Generated {file_name}")
 
         elif DATASET_MODE == 'MEL_SPEC':
