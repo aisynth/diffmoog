@@ -60,7 +60,9 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
             predicted_log_mel_spec_sound_signal = helper.log_mel_spec_transform(synth_obj.signal)
 
             predicted_log_mel_spec_sound_signal = helper.move_to(predicted_log_mel_spec_sound_signal, device_arg)
+
             signal_log_mel_spec = torch.squeeze(signal_log_mel_spec)
+            predicted_log_mel_spec_sound_signal = torch.squeeze(predicted_log_mel_spec_sound_signal)
 
             current_loss_spectrogram = criterion_spectrogram(predicted_log_mel_spec_sound_signal,
                                                              signal_log_mel_spec[i])
