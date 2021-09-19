@@ -1,6 +1,7 @@
 from torch import nn
 from torchsummary import summary
 
+
 # todo: this is value from Valerio Tutorial. has to check
 # LINEAR_IN_CHANNELS = 128 * 5 * 4
 LINEAR_IN_CHANNELS = 4480
@@ -62,13 +63,11 @@ class SynthNetwork(nn.Module):
         self.classification_params = nn.ModuleDict([
             ['osc1_freq', nn.Linear(LINEAR_IN_CHANNELS, 49)],
             ['osc1_wave', nn.Linear(LINEAR_IN_CHANNELS, 4)],
-            ['lfo1_wave', nn.Linear(LINEAR_IN_CHANNELS, 4)],
             ['osc2_freq', nn.Linear(LINEAR_IN_CHANNELS, 49)],
             ['osc2_wave', nn.Linear(LINEAR_IN_CHANNELS, 4)],
-            ['lfo2_wave', nn.Linear(LINEAR_IN_CHANNELS, 4)],
             ['filter_type', nn.Linear(LINEAR_IN_CHANNELS, 3)],
         ])
-        self.regression_params = nn.Linear(LINEAR_IN_CHANNELS, 14)
+        self.regression_params = nn.Linear(LINEAR_IN_CHANNELS, 12)
         # self.softmax = nn.Softmax(dim=1)
 
     def forward(self, input_data):

@@ -59,7 +59,7 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
         signal_log_mel_spec = torch.squeeze(signal_log_mel_spec)
 
         loss_spectrogram_total2 = criterion_spectrogram(predicted_log_mel_spec_sound_signal,
-                                                       signal_log_mel_spec)
+                                                        signal_log_mel_spec)
 
         # todo: remove the individual synth inference code
         # -----------------------------------------------
@@ -119,7 +119,8 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
             loss_filter_type = \
                 criterion_filter_type(output_dic['filter_type'], classification_target_params['filter_type'])
 
-            # todo: refactor code. the code gets dictionary of tensors (regression_target_parameters) and return 2d tensor
+            # todo: refactor code. the code gets dictionary of tensors
+            #  (regression_target_parameters) and return 2d tensor
             regression_target_parameters_tensor = torch.empty((len(regression_target_parameters['osc1_amp']), 1))
             regression_target_parameters_tensor = helper.move_to(regression_target_parameters_tensor, device_arg)
             for key, value in regression_target_parameters.items():

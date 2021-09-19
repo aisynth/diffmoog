@@ -14,10 +14,10 @@ import simpleaudio as sa
 import helper
 
 CLASSIFICATION_PARAM_LIST = \
-    ['osc1_freq', 'osc1_wave', 'lfo1_wave', 'osc2_freq', 'osc2_wave', 'lfo2_wave', 'filter_type']
+    ['osc1_freq', 'osc1_wave', 'osc2_freq', 'osc2_wave', 'filter_type']
 REGRESSION_PARAM_LIST = \
-    ['osc1_amp', 'osc1_mod_index', 'lfo1_freq', 'lfo1_phase',
-     'osc2_amp', 'osc2_mod_index', 'lfo2_freq', 'lfo2_phase',
+    ['osc1_amp', 'osc1_mod_index', 'lfo1_freq',
+     'osc2_amp', 'osc2_mod_index', 'lfo2_freq',
      'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']
 PARAM_LIST = [CLASSIFICATION_PARAM_LIST, REGRESSION_PARAM_LIST]
 
@@ -62,7 +62,7 @@ class Signal:
         self.signal = helper.move_to(self.signal, self.device)
         # self.room_impulse_responses = torch.load('rir_for_reverb_no_amp')
 
-    def oscillator(self, amp, freq, phase, waveform, num_sounds=1):
+    def oscillator(self, amp, freq, waveform, phase=0, num_sounds=1):
         """Creates a basic oscillator.
 
             Retrieves a waveform shape and attributes, and construct the respected signal
@@ -71,8 +71,8 @@ class Signal:
                 self: Self object
                 amp: Amplitude in range [0, 1]
                 freq: Frequency in range [0, 22000]
-                phase: Phase in range [0, 2pi]
-                waveform: one of [sine, square, triangle, sawtooth]
+                phase: Phase in range [0, 2pi], default is 0
+                waveform: a string, one of ['sine', 'square', 'triangle', 'sawtooth'] or a list of strings
                 num_sounds: number of sounds to process
 
             Returns:
@@ -84,27 +84,25 @@ class Signal:
 
         self.signal_values_sanity_check(amp, freq, waveform)
         t = self.time_samples
-        # todo: delete if not needed
-        # if num_sounds == 1:
-        #     phase = [phase[0] % TWO_PI][0]
-        # else:
-        phase = [element % TWO_PI for element in phase]
         oscillator = torch.zeros_like(t)
         for i in range(num_sounds):
-            waveform_str = waveform[i]
+            if not isinstance(waveform, str):
+                waveform_str = waveform[i]
+            else:
+                waveform_str=waveform
             freq_float = freq[i]
-            phase_float = phase[i]
+            # phase_float = phase[i]
             if waveform_str == 'sine':
-                oscillator = amp * torch.sin(TWO_PI * freq_float * t + phase_float)
+                oscillator = amp * torch.sin(TWO_PI * freq_float * t + phase)
             elif waveform_str == 'square':
-                oscillator = amp * torch.sign(torch.sin(TWO_PI * freq_float * t + phase_float))
+                oscillator = amp * torch.sign(torch.sin(TWO_PI * freq_float * t + phase))
             elif waveform_str == 'triangle':
-                oscillator = (2 * amp / PI) * torch.arcsin(torch.sin((TWO_PI * freq_float * t + phase_float)))
+                oscillator = (2 * amp / PI) * torch.arcsin(torch.sin((TWO_PI * freq_float * t + phase)))
             elif waveform_str == 'sawtooth':
                 # Sawtooth closed form
                 oscillator = 2 * (t * freq_float - torch.floor(0.5 + t * freq_float))
-                # Phase shift by normalization to range [0,1] and modulo operation
-                oscillator = (((oscillator + 1) / 2) + phase_float / TWO_PI) % 1
+                # Phase shift (by normalization to range [0,1] and modulo operation)
+                oscillator = (((oscillator + 1) / 2) + phase / TWO_PI) % 1
                 # re-normalization to range [-amp, amp]
                 oscillator = amp * (oscillator * 2 - 1)
 

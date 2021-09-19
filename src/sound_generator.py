@@ -1,9 +1,8 @@
 import numpy
 from synth import Signal
-from src.config import PI, SIGNAL_DURATION_SEC
+from src.config import SIGNAL_DURATION_SEC
 import synth
 import random
-import matplotlib.pyplot as plt
 import simpleaudio as sa
 import numpy as np
 import torch
@@ -45,23 +44,18 @@ class SynthBasicFlow:
     def init_random_synth_params(self, num_sounds):
         """init params_dict with lists of parameters"""
 
-        # osc1_freq_index = random.randrange(0, 2 * synth.SEMITONES_MAX_OFFSET + 1)
+        # todo: refactor: initializations by iterating synth.PARAM_LIST
         self.params_dict['osc1_amp'] = np.random.random_sample(size=num_sounds)
-        # self.params_dict['osc1_freq'] = synth.OSC_FREQ_LIST[osc1_freq_index]
         self.params_dict['osc1_freq'] = random.choices(synth.OSC_FREQ_LIST, k=num_sounds)
         self.params_dict['osc1_wave'] = random.choices(list(synth.WAVE_TYPE_DIC), k=num_sounds)
         self.params_dict['osc1_mod_index'] = np.random.uniform(low=0, high=synth.MAX_MOD_INDEX, size=num_sounds)
         self.params_dict['lfo1_freq'] = np.random.uniform(low=0, high=synth.MAX_LFO_FREQ, size=num_sounds)
-        self.params_dict['lfo1_phase'] = np.random.uniform(low=0, high=2 * PI, size=num_sounds)
-        self.params_dict['lfo1_wave'] = random.choices(list(synth.WAVE_TYPE_DIC), k=num_sounds)
 
         self.params_dict['osc2_amp'] = np.random.random_sample(size=num_sounds)
         self.params_dict['osc2_freq'] = random.choices(synth.OSC_FREQ_LIST, k=num_sounds)
         self.params_dict['osc2_wave'] = random.choices(list(synth.WAVE_TYPE_DIC), k=num_sounds)
         self.params_dict['osc2_mod_index'] = np.random.uniform(low=0, high=synth.MAX_MOD_INDEX, size=num_sounds)
         self.params_dict['lfo2_freq'] = np.random.uniform(low=0, high=synth.MAX_LFO_FREQ, size=num_sounds)
-        self.params_dict['lfo2_phase'] = np.random.uniform(low=0, high=2 * PI, size=num_sounds)
-        self.params_dict['lfo2_wave'] = random.choices(list(synth.WAVE_TYPE_DIC), k=num_sounds)
 
         self.params_dict['filter_type'] = random.choices(list(synth.FILTER_TYPE_DIC), k=num_sounds)
         self.params_dict['filter_freq'] = \
@@ -101,16 +95,12 @@ class SynthBasicFlow:
         osc1_wave = self.params_dict['osc1_wave']
         osc1_mod_index = self.params_dict['osc1_mod_index']
         lfo1_freq = self.params_dict['lfo1_freq']
-        lfo1_phase = self.params_dict['lfo1_phase']
-        lfo1_wave = self.params_dict['lfo1_wave']
 
         osc2_amp = self.params_dict['osc2_amp']
         osc2_freq = self.params_dict['osc2_freq']
         osc2_wave = self.params_dict['osc2_wave']
         osc2_mod_index = self.params_dict['osc2_mod_index']
         lfo2_freq = self.params_dict['lfo2_freq']
-        lfo2_phase = self.params_dict['lfo2_phase']
-        lfo2_wave = self.params_dict['lfo2_wave']
 
         filter_type = self.params_dict['filter_type']
         filter_freq = self.params_dict['filter_freq']
@@ -124,8 +114,8 @@ class SynthBasicFlow:
         lfo1 = Signal(num_sounds)
         lfo1.oscillator(amp=1,
                         freq=lfo1_freq,
-                        phase=lfo1_phase,
-                        waveform=lfo1_wave,
+                        phase=0,
+                        waveform='sine',
                         num_sounds=num_sounds)
         oscillator1 = Signal(num_sounds)
         oscillator1.fm_modulation_by_input_signal(input_signal=lfo1.signal,
@@ -138,8 +128,8 @@ class SynthBasicFlow:
         lfo2 = Signal(num_sounds)
         lfo2.oscillator(amp=1,
                         freq=lfo2_freq,
-                        phase=lfo2_phase,
-                        waveform=lfo2_wave,
+                        phase=0,
+                        waveform='sine',
                         num_sounds=num_sounds)
         oscillator2 = Signal(num_sounds)
         oscillator2.fm_modulation_by_input_signal(input_signal=lfo2.signal,

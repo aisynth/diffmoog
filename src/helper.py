@@ -166,9 +166,6 @@ class Normalizer:
         parameters_dict['lfo1_phase'] = self.lfo_phase_normalizer.normalise(parameters_dict['lfo1_phase'])
         parameters_dict['osc2_mod_index'] = self.mod_index_normalizer.normalise(parameters_dict['osc2_mod_index'])
         parameters_dict['lfo2_freq'] = self.lfo_freq_normalizer.normalise(parameters_dict['lfo2_freq'])
-        parameters_dict['lfo2_phase'] = parameters_dict['lfo2_phase'] % TWO_PI
-        parameters_dict['lfo2_phase'] = self.lfo_phase_normalizer.normalise(parameters_dict['lfo2_phase'])
-        parameters_dict['lfo2_phase'] = self.lfo_phase_normalizer.normalise(parameters_dict['lfo2_phase'])
         parameters_dict['filter_freq'] = self.filter_freq_normalizer.normalise(parameters_dict['filter_freq'])
         parameters_dict['attack_t'] = self.adsr_normalizer.normalise(parameters_dict['attack_t'])
         parameters_dict['decay_t'] = self.adsr_normalizer.normalise(parameters_dict['decay_t'])
@@ -179,13 +176,8 @@ class Normalizer:
 
         parameters_dict['osc1_mod_index'] = self.mod_index_normalizer.denormalise(parameters_dict['osc1_mod_index'])
         parameters_dict['lfo1_freq'] = self.lfo_freq_normalizer.denormalise(parameters_dict['lfo1_freq'])
-        parameters_dict['lfo1_phase'] = parameters_dict['lfo1_phase'] % TWO_PI
-        parameters_dict['lfo1_phase'] = self.lfo_phase_normalizer.denormalise(parameters_dict['lfo1_phase'])
         parameters_dict['osc2_mod_index'] = self.mod_index_normalizer.denormalise(parameters_dict['osc2_mod_index'])
         parameters_dict['lfo2_freq'] = self.lfo_freq_normalizer.denormalise(parameters_dict['lfo2_freq'])
-        parameters_dict['lfo2_phase'] = parameters_dict['lfo2_phase'] % TWO_PI
-        parameters_dict['lfo2_phase'] = self.lfo_phase_normalizer.denormalise(parameters_dict['lfo2_phase'])
-        parameters_dict['lfo2_phase'] = self.lfo_phase_normalizer.denormalise(parameters_dict['lfo2_phase'])
         parameters_dict['filter_freq'] = self.filter_freq_normalizer.denormalise(parameters_dict['filter_freq'])
         parameters_dict['attack_t'] = self.adsr_normalizer.denormalise(parameters_dict['attack_t'])
         parameters_dict['decay_t'] = self.adsr_normalizer.denormalise(parameters_dict['decay_t'])
