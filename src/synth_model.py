@@ -1,6 +1,6 @@
 from torch import nn
 from torchsummary import summary
-
+from synth import REGRESSION_PARAM_LIST, CLASSIFICATION_PARAM_LIST, WAVE_TYPE_DIC, FILTER_TYPE_DIC, OSC_FREQ_LIST
 
 # todo: this is value from Valerio Tutorial. has to check
 # LINEAR_IN_CHANNELS = 128 * 5 * 4
@@ -61,13 +61,13 @@ class SynthNetwork(nn.Module):
         )
         self.flatten = nn.Flatten()
         self.classification_params = nn.ModuleDict([
-            ['osc1_freq', nn.Linear(LINEAR_IN_CHANNELS, 49)],
-            ['osc1_wave', nn.Linear(LINEAR_IN_CHANNELS, 4)],
-            ['osc2_freq', nn.Linear(LINEAR_IN_CHANNELS, 49)],
-            ['osc2_wave', nn.Linear(LINEAR_IN_CHANNELS, 4)],
-            ['filter_type', nn.Linear(LINEAR_IN_CHANNELS, 3)],
+            ['osc1_freq', nn.Linear(LINEAR_IN_CHANNELS, len(OSC_FREQ_LIST))],
+            ['osc1_wave', nn.Linear(LINEAR_IN_CHANNELS, len(WAVE_TYPE_DIC))],
+            ['osc2_freq', nn.Linear(LINEAR_IN_CHANNELS, len(OSC_FREQ_LIST))],
+            ['osc2_wave', nn.Linear(LINEAR_IN_CHANNELS, len(WAVE_TYPE_DIC))],
+            ['filter_type', nn.Linear(LINEAR_IN_CHANNELS, len(FILTER_TYPE_DIC))],
         ])
-        self.regression_params = nn.Linear(LINEAR_IN_CHANNELS, 12)
+        self.regression_params = nn.Linear(LINEAR_IN_CHANNELS, len(REGRESSION_PARAM_LIST))
         # self.softmax = nn.Softmax(dim=1)
 
     def forward(self, input_data):

@@ -407,6 +407,7 @@ So it is not used
 """
 
 if __name__ == "__main__":
+    print(len(OSC_FREQ_LIST))
     a = Signal()
     b = Signal()
     b.oscillator(1, 5, 0, 'sine')
