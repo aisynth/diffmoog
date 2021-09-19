@@ -44,7 +44,7 @@ class SynthBasicFlow:
     def init_random_synth_params(self, num_sounds):
         """init params_dict with lists of parameters"""
 
-        # todo: refactor: initializations by iterating synth.PARAM_LIST
+        # todo: refactor: initializations by iterating/referencing synth.PARAM_LIST
         self.params_dict['osc1_amp'] = np.random.random_sample(size=num_sounds)
         self.params_dict['osc1_freq'] = random.choices(synth.OSC_FREQ_LIST, k=num_sounds)
         self.params_dict['osc1_wave'] = random.choices(list(synth.WAVE_TYPE_DIC), k=num_sounds)
@@ -88,6 +88,10 @@ class SynthBasicFlow:
         for key, val in self.params_dict.items():
             if isinstance(val, numpy.ndarray):
                 self.params_dict[key] = val.tolist()
+
+        if num_sounds == 1:
+            for key, value in self.params_dict.items():
+                self.params_dict[key] = value[0]
 
     def generate_signal(self, num_sounds):
         osc1_amp = self.params_dict['osc1_amp']
@@ -145,7 +149,7 @@ class SynthBasicFlow:
 
         for i in range(num_sounds):
             if num_sounds == 1:
-                filter_frequency = filter_freq[0]
+                filter_frequency = filter_freq
             elif num_sounds > 1:
                 if torch.is_tensor(filter_freq[i]):
                     filter_frequency = filter_freq[i].item()

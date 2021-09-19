@@ -70,9 +70,9 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
         for i in range(len(signal_log_mel_spec)):
             for key, value in predicted_dic.items():
                 if torch.is_tensor(predicted_dic[key][i]):
-                    current_predicted_dic[key] = [predicted_dic[key][i].item()]
+                    current_predicted_dic[key] = predicted_dic[key][i].item()
                 else:
-                    current_predicted_dic[key] = [predicted_dic[key][i]]
+                    current_predicted_dic[key] = predicted_dic[key][i]
 
             # Generate sound from predicted parameters
             synth_obj = SynthBasicFlow(parameters_dict=current_predicted_dic)
