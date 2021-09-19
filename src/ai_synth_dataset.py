@@ -17,11 +17,11 @@ class AiSynthDataset(Dataset):
         self.dataset_mode = dataset_mode
         self.params = pd.read_csv(csv_file)
 
-        if dataset_mode == 'WAV':
+        if self.dataset_mode == 'WAV':
             self.audio_dir = "dataset/wav_files"
             self.transformation = helper.log_mel_spec_transform.to(self.device)
 
-        elif dataset_mode == 'MEL_SPEC':
+        elif self.dataset_mode == 'MEL_SPEC':
             self.audio_dir = "dataset/audio_mel_spec_files"
 
     def __len__(self):

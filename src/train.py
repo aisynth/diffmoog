@@ -19,12 +19,17 @@ def create_data_loader(train_data, batch_size):
 
 def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
     normalizer = helper.Normalizer()
+
+    # Init criteria
+    criterion_spectrogram = nn.MSELoss()
+
     for signal_log_mel_spec, target_params_dic in data_loader:
         start = time.time()
 
         if DEBUG_MODE:
             helper.plot_spectrogram(signal_log_mel_spec[0][0].cpu(), title="MelSpectrogram (dB)", ylabel='mel freq')
 
+        optimizer_arg.zero_grad()
         # -------------------------------------
         # -----------Run Model-----------------
         # -------------------------------------
@@ -41,9 +46,6 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
         normalizer.denormalize(predicted_dic)
         helper.clamp_regression_params(predicted_dic)
 
-        # Init criteria
-        criterion_spectrogram = nn.MSELoss()
-
         # -------------------------------------
         # -----------Run Synth-----------------
         # -------------------------------------
@@ -56,7 +58,7 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
 
         signal_log_mel_spec = torch.squeeze(signal_log_mel_spec)
 
-        loss_spectrogram_total = criterion_spectrogram(predicted_log_mel_spec_sound_signal,
+        loss_spectrogram_total2 = criterion_spectrogram(predicted_log_mel_spec_sound_signal,
                                                        signal_log_mel_spec)
 
         # todo: remove the individual synth inference code
@@ -145,7 +147,6 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
             loss.requires_grad = True
 
         # backpropogate error and update wights
-        optimizer_arg.zero_grad()
         loss.backward()
         optimizer_arg.step()
 
