@@ -10,12 +10,28 @@ import time
 
 
 class AiSynthDataset(Dataset):
+    """
+    A custom Ai-synth dataset.
+    Holds a path for the sound files, and the corresponding parameters used to create each sound
+
+    Upon using dataloader:
+    1. The raw audio is returned represented as log mel-spectrogram
+    2. The non-numeric parameters are translated to integers
+    3. All data is saved as GPU tensors
+    """
 
     def __init__(self, csv_file, device_arg, dataset_mode):
-
         self.device = device_arg
         self.dataset_mode = dataset_mode
-        self.params = pd.read_csv(csv_file)
+        data_frame = pd.read_csv(csv_file)
+        # todo: refactor: initializations by iterating/referencing synth.PARAM_LIST
+        data_frame[['osc1_amp', 'osc1_freq', 'osc1_mod_index', 'lfo1_freq', 'osc2_amp', 'osc2_freq', 'osc2_mod_index',
+                    'lfo2_freq', 'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']] \
+            = data_frame[['osc1_amp', 'osc1_freq', 'osc1_mod_index', 'lfo1_freq', 'osc2_amp', 'osc2_freq',
+                          'osc2_mod_index', 'lfo2_freq', 'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t',
+                          'sustain_level']].astype(float)
+
+        self.params = data_frame
 
         if self.dataset_mode == 'WAV':
             self.audio_dir = "dataset/wav_files"
@@ -67,6 +83,13 @@ class AiSynthDataset(Dataset):
 
         classification_params_pd_series = params_pd_series.loc[synth.CLASSIFICATION_PARAM_LIST]
         classification_params_dic = classification_params_pd_series.to_dict()
+        helper.map_classification_params_to_ints(classification_params_dic)
+
+        # move all synth parameters to tensors on the GPU
+        for key, value in regression_params_dic.items():
+            regression_params_dic[key] = torch.tensor(regression_params_dic[key]).to(helper.get_device())
+        for key, value in classification_params_dic.items():
+            classification_params_dic[key] = torch.tensor(classification_params_dic[key]).to(helper.get_device())
 
         params_dic = {
             'classification_params': classification_params_dic,
