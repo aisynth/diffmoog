@@ -89,7 +89,7 @@ class Signal:
             if not isinstance(waveform, str):
                 waveform_str = waveform[i]
             else:
-                waveform_str=waveform
+                waveform_str = waveform
             if num_sounds > 1:
                 freq_float = freq[i]
             else:

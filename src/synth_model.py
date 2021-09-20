@@ -5,6 +5,7 @@ from synth import REGRESSION_PARAM_LIST, CLASSIFICATION_PARAM_LIST, WAVE_TYPE_DI
 # todo: this is value from Valerio Tutorial. has to check
 # LINEAR_IN_CHANNELS = 128 * 5 * 4
 LINEAR_IN_CHANNELS = 4480
+HIDDEN_IN_CHANNELS = 1000
 
 
 class SynthNetwork(nn.Module):
@@ -67,8 +68,11 @@ class SynthNetwork(nn.Module):
             ['osc2_wave', nn.Linear(LINEAR_IN_CHANNELS, len(WAVE_TYPE_DIC))],
             ['filter_type', nn.Linear(LINEAR_IN_CHANNELS, len(FILTER_TYPE_DIC))],
         ])
-        self.regression_params = nn.Linear(LINEAR_IN_CHANNELS, len(REGRESSION_PARAM_LIST))
-        # self.softmax = nn.Softmax(dim=1)
+        self.regression_params = nn.Sequential(
+            nn.Linear(LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
+            nn.Linear(HIDDEN_IN_CHANNELS, len(REGRESSION_PARAM_LIST))
+            )
+        self.softmax = nn.Softmax(dim=1)
 
     def forward(self, input_data):
         x = self.conv1(input_data)
@@ -78,9 +82,9 @@ class SynthNetwork(nn.Module):
         x = self.flatten(x)
         output_dic = {}
         for out_name, lin in self.classification_params.items():
-            # -----> Shall not use softmax since with use CrossEntropyLoss()
-            # predictions_dic[out_name] = self.softmax(lin(x))
-            output_dic[out_name] = lin(x)
+            # -----> do not use softmax if using CrossEntropyLoss()
+            output_dic[out_name] = self.softmax(lin(x))
+            # output_dic[out_name] = lin(x)
         output_dic['regression_params'] = self.regression_params(x)
 
         return output_dic
