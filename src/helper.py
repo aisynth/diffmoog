@@ -61,12 +61,17 @@ def map_classification_params_to_ints(params_dic: dict):
     for key, val in params_dic.items():
         if key in synth.CLASSIFICATION_PARAM_LIST:
             if key == "osc1_freq" or key == "osc2_freq":
-                params_dic[key] = torch.tensor([synth.OSC_FREQ_DIC[round(x.item(), 4)] for x in val])
-            if isinstance(val, list):
-                if "wave" in key:
-                    params_dic[key] = torch.tensor([synth.WAVE_TYPE_DIC[x] for x in val])
-                elif "filter_type" == key:
-                    params_dic[key] = torch.tensor([synth.FILTER_TYPE_DIC[x] for x in val])
+                # todo: inspect which of these are needed (i think only the middle one)
+                if torch.is_tensor(val):
+                    params_dic[key] = [synth.OSC_FREQ_DIC[round(x.item(), 4)] for x in val]
+                if isinstance(val, float):
+                    params_dic[key] = synth.OSC_FREQ_DIC[round(val, 4)]
+                else:
+                    params_dic[key] = [synth.OSC_FREQ_DIC[round(x, 4)] for x in val]
+            if "wave" in key:
+                params_dic[key] = synth.WAVE_TYPE_DIC[val]
+            elif "filter_type" == key:
+                params_dic[key] = synth.FILTER_TYPE_DIC[val]
 
 
 def map_classification_params_from_ints(params_dic: dict):
