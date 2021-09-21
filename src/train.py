@@ -35,13 +35,6 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
         # -------------------------------------
         output_dic = model(signal_log_mel_spec)
 
-        # Infer predictions
-        predicted_dic = {}
-        for param in synth.CLASSIFICATION_PARAM_LIST:
-            predicted_dic[param] = torch.argmax(output_dic[param], dim=1)
-        for index, param in enumerate(synth.REGRESSION_PARAM_LIST):
-            predicted_dic[param] = output_dic['regression_params'][:, index]
-
         helper.map_classification_params_from_ints(predicted_dic)
         normalizer.denormalize(predicted_dic)
         helper.clamp_regression_params(predicted_dic)

@@ -1,4 +1,6 @@
 from torch import nn
+import torch
+import helper
 from torchsummary import summary
 from synth import REGRESSION_PARAM_LIST, CLASSIFICATION_PARAM_LIST, WAVE_TYPE_DIC, FILTER_TYPE_DIC, OSC_FREQ_LIST
 
@@ -10,9 +12,28 @@ HIDDEN_IN_CHANNELS = 1000
 
 class SynthNetwork(nn.Module):
     """
-    CNN model to extract parameters from a signal mek-spectrogram
+    CNN model to extract synth parameters from a batch of signals represented by mel-spectrograms
 
-    :return: output_dic, that hold the logits for classification parameters and predictions for regression parameters
+    :return: output_dic with classification and regression parameters.
+                Concerning classification parameters:
+                    'osc1_wave', 'osc2_wave' and 'filter freq' are returned as probability vectors.
+                    size = (batch_size, #of_possibilities)
+
+                    * Note:
+                        In the synth module, in order to prevent if/else statements, the probability vectors will be
+                        used to weight all possible wave and filter types in a superposition.
+                        This operation is differential, while if/else statements are not
+
+
+                    'osc1_freq' and 'osc2_freq' are returned as single values, by dot product.
+                    size = (batch_size, 1)
+
+                    The dot product is between learnt probabilities and fixed possible frequencies vector.
+                    the learnt probabilities weight the possible frequencies.
+                    * Note:
+                        This technique allows the usage of a predicted frequency from a closed set of possible values in
+                        the synth module, while preserving gradients computation.
+                        Using argmax to predict a single value is not diffrentiable.
     """
     def __init__(self):
         super().__init__()
@@ -80,12 +101,23 @@ class SynthNetwork(nn.Module):
         x = self.conv3(x)
         x = self.conv4(x)
         x = self.flatten(x)
+
+        # Apply different heads to predict each synth parameter
         output_dic = {}
         for out_name, lin in self.classification_params.items():
             # -----> do not use softmax if using CrossEntropyLoss()
-            output_dic[out_name] = self.softmax(lin(x))
-            # output_dic[out_name] = lin(x)
-        output_dic['regression_params'] = self.regression_params(x)
+            probabilities = self.softmax(lin(x))
+            if out_name == 'osc1_freq' or out_name == 'osc2_freq':
+                osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())
+                output_dic[out_name] = torch.matmul(probabilities, osc_freq_tensor)
+            else:
+                output_dic[out_name] = probabilities
+
+        x = self.regression_params(x)
+        x = self.softmax(x)
+
+        for index, param in enumerate(REGRESSION_PARAM_LIST):
+            output_dic[param] = x[:, index]
 
         return output_dic
 
