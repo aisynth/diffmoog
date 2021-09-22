@@ -24,26 +24,38 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
     criterion_spectrogram = nn.MSELoss()
 
     for signal_log_mel_spec, target_params_dic in data_loader:
+
+        if torch.any(torch.isnan(signal_log_mel_spec)):
+            a = 0
+
         start = time.time()
 
         if DEBUG_MODE:
             helper.plot_spectrogram(signal_log_mel_spec[0][0].cpu(), title="MelSpectrogram (dB)", ylabel='mel freq')
 
         optimizer_arg.zero_grad()
+        model.zero_grad()
         # -------------------------------------
         # -----------Run Model-----------------
         # -------------------------------------
+        # signal_log_mel_spec.requires_grad = True
         output_dic = model(signal_log_mel_spec)
 
-        helper.map_classification_params_from_ints(predicted_dic)
-        normalizer.denormalize(predicted_dic)
-        helper.clamp_regression_params(predicted_dic)
+        for key, value in output_dic.items():
+            if torch.any(torch.isnan(value)):
+                a = 0
+
+        # helper.map_classification_params_from_ints(predicted_dic)
+        normalizer.denormalize(output_dic)
+        helper.clamp_regression_params(output_dic)
 
         # -------------------------------------
         # -----------Run Synth-----------------
         # -------------------------------------
-        overall_synth_obj = SynthBasicFlow(parameters_dict=predicted_dic, num_sounds=len(signal_log_mel_spec))
+        overall_synth_obj = SynthBasicFlow(parameters_dict=output_dic, num_sounds=len(signal_log_mel_spec))
 
+        if torch.any(torch.isnan(signal_log_mel_spec)):
+            a = 0
         overall_synth_obj.signal = helper.move_to(overall_synth_obj.signal, device_arg)
 
         predicted_log_mel_spec_sound_signal = helper.log_mel_spec_transform(overall_synth_obj.signal)
@@ -58,31 +70,31 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
         # -----------------------------------------------
         # -----------Compute sound individually----------
         # -----------------------------------------------
-        loss_spectrogram_total = 0
-        current_predicted_dic = {}
-        for i in range(len(signal_log_mel_spec)):
-            for key, value in predicted_dic.items():
-                if torch.is_tensor(predicted_dic[key][i]):
-                    current_predicted_dic[key] = predicted_dic[key][i].item()
-                else:
-                    current_predicted_dic[key] = predicted_dic[key][i]
 
-            # Generate sound from predicted parameters
-            synth_obj = SynthBasicFlow(parameters_dict=current_predicted_dic)
+        if False:
+            loss_spectrogram_total = 0
+            current_predicted_dic = {}
+            for i in range(len(signal_log_mel_spec)):
+                for key, value in output_dic.items():
+                    current_predicted_dic[key] = output_dic[key][i]
 
-            synth_obj.signal = helper.move_to(synth_obj.signal, device_arg)
-            predicted_log_mel_spec_sound_signal = helper.log_mel_spec_transform(synth_obj.signal)
 
-            predicted_log_mel_spec_sound_signal = helper.move_to(predicted_log_mel_spec_sound_signal, device_arg)
+                # Generate sound from predicted parameters
+                synth_obj = SynthBasicFlow(parameters_dict=current_predicted_dic)
 
-            signal_log_mel_spec = torch.squeeze(signal_log_mel_spec)
-            predicted_log_mel_spec_sound_signal = torch.squeeze(predicted_log_mel_spec_sound_signal)
-            target_log_mel_spec_sound_signal = signal_log_mel_spec[i]
-            current_loss_spectrogram = criterion_spectrogram(predicted_log_mel_spec_sound_signal,
-                                                             target_log_mel_spec_sound_signal)
-            loss_spectrogram_total = loss_spectrogram_total + current_loss_spectrogram
+                synth_obj.signal = helper.move_to(synth_obj.signal, device_arg)
+                predicted_log_mel_spec_sound_signal = helper.log_mel_spec_transform(synth_obj.signal)
 
-        loss_spectrogram_total = loss_spectrogram_total / len(signal_log_mel_spec)
+                predicted_log_mel_spec_sound_signal = helper.move_to(predicted_log_mel_spec_sound_signal, device_arg)
+
+                signal_log_mel_spec = torch.squeeze(signal_log_mel_spec)
+                predicted_log_mel_spec_sound_signal = torch.squeeze(predicted_log_mel_spec_sound_signal)
+                target_log_mel_spec_sound_signal = signal_log_mel_spec[i]
+                current_loss_spectrogram = criterion_spectrogram(predicted_log_mel_spec_sound_signal,
+                                                                 target_log_mel_spec_sound_signal)
+                loss_spectrogram_total = loss_spectrogram_total + current_loss_spectrogram
+
+            loss_spectrogram_total = loss_spectrogram_total / len(signal_log_mel_spec)
 
         # -----------------------------------------------
         #          -----------End Part----------
@@ -137,8 +149,8 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                 + SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total
 
         if LOSS_MODE == 'SPECTROGRAM_ONLY':
-            loss = loss_spectrogram_total
-            loss.requires_grad = True
+            loss = loss_spectrogram_total2
+            # loss.requires_grad = True
 
         # backpropogate error and update wights
         loss.backward()
@@ -185,6 +197,7 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
 
 
 def train(model, data_loader, optimiser_arg, device_arg, epochs):
+    model.train()
     for i in range(epochs):
         print(f"Epoch {i + 1}")
         train_single_epoch(model, data_loader, optimiser_arg, device_arg)
@@ -206,11 +219,11 @@ if __name__ == "__main__":
     synth_net = SynthNetwork().to(device)
 
     # initialize optimizer
-    optimiser = torch.optim.Adam(synth_net.parameters(), lr=LEARNING_RATE)
+    optimizer = torch.optim.Adam(synth_net.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
 
     # train model
     print("Training model with LOSS_MODE: ", LOSS_MODE)
-    train(synth_net, train_dataloader, optimiser, device, EPOCHS)
+    train(synth_net, train_dataloader, optimizer, device, EPOCHS)
 
     # save model
     torch.save(synth_net.state_dict(), "../trained_models/synth_net.pth")

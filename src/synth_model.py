@@ -97,10 +97,15 @@ class SynthNetwork(nn.Module):
 
     def forward(self, input_data):
         x = self.conv1(input_data)
+        if torch.any(torch.isnan(x)):
+            a = 0
         x = self.conv2(x)
         x = self.conv3(x)
         x = self.conv4(x)
         x = self.flatten(x)
+
+        if torch.any(torch.isnan(x)):
+            a = 0
 
         # Apply different heads to predict each synth parameter
         output_dic = {}

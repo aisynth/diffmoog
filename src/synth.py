@@ -51,10 +51,10 @@ class Signal:
     def __init__(self, num_sounds=1):
         self.sample_rate = SAMPLE_RATE
         self.sig_duration = SIGNAL_DURATION_SEC
-        self.time_samples = torch.linspace(0, self.sig_duration, steps=int(self.sample_rate * self.sig_duration))
+        self.time_samples = torch.linspace(0, self.sig_duration, steps=int(self.sample_rate * self.sig_duration), requires_grad=True)
         self.modulation_time = torch.linspace(0, self.sig_duration, steps=self.sample_rate)
         self.modulation = 0
-        self.signal = torch.zeros(size=(num_sounds, self.time_samples.shape[0]), dtype=torch.float32)
+        self.signal = torch.zeros(size=(num_sounds, self.time_samples.shape[0]), dtype=torch.float32, requires_grad=True)
 
         self.device = helper.get_device()
         self.time_samples = helper.move_to(self.time_samples, self.device)
@@ -72,7 +72,7 @@ class Signal:
                 amp: Amplitude in range [0, 1]
                 freq: Frequency in range [0, 22000]
                 phase: Phase in range [0, 2pi], default is 0
-                waveform: a string, one of ['sine', 'square', 'triangle', 'sawtooth'] or a list of strings
+                waveform: a string, one of ['sine', 'square', 'triangle', 'sawtooth'] or a probability vector
                 num_sounds: number of sounds to process
 
             Returns:
@@ -84,30 +84,38 @@ class Signal:
 
         self.signal_values_sanity_check(amp, freq, waveform)
         t = self.time_samples
-        oscillator = torch.zeros_like(t)
+        oscillator = torch.zeros_like(t, requires_grad=True)
         for i in range(num_sounds):
-            if not isinstance(waveform, str):
-                waveform_str = waveform[i]
-            else:
-                waveform_str = waveform
-            if num_sounds > 1:
-                freq_float = freq[i]
-            else:
+
+            if num_sounds == 1:
                 freq_float = freq
-            # phase_float = phase[i]
-            if waveform_str == 'sine':
-                oscillator = amp * torch.sin(TWO_PI * freq_float * t + phase)
-            elif waveform_str == 'square':
-                oscillator = amp * torch.sign(torch.sin(TWO_PI * freq_float * t + phase))
-            elif waveform_str == 'triangle':
-                oscillator = (2 * amp / PI) * torch.arcsin(torch.sin((TWO_PI * freq_float * t + phase)))
-            elif waveform_str == 'sawtooth':
-                # Sawtooth closed form
-                oscillator = 2 * (t * freq_float - torch.floor(0.5 + t * freq_float))
-                # Phase shift (by normalization to range [0,1] and modulo operation)
-                oscillator = (((oscillator + 1) / 2) + phase / TWO_PI) % 1
-                # re-normalization to range [-amp, amp]
-                oscillator = amp * (oscillator * 2 - 1)
+            else:
+                freq_float = freq[i]
+
+            sine_wave = amp * torch.sin(TWO_PI * freq_float * t + phase)
+            square_wave = amp * torch.sign(torch.sin(TWO_PI * freq_float * t + phase))
+            triangle_wave = (2 * amp / PI) * torch.arcsin(torch.sin((TWO_PI * freq_float * t + phase)))
+            sawtooth_wave = 2 * (t * freq_float - torch.floor(0.5 + t * freq_float))  # Sawtooth closed form
+            # Phase shift (by normalization to range [0,1] and modulo operation)
+            sawtooth_wave = (((sawtooth_wave + 1) / 2) + phase / TWO_PI) % 1
+            sawtooth_wave = amp * (sawtooth_wave * 2 - 1)  # re-normalization to range [-amp, amp]
+
+            if isinstance(waveform, str):
+                if waveform == 'sine':
+                    oscillator = sine_wave
+                elif waveform == 'square':
+                    oscillator = square_wave
+                elif waveform == 'triangle':
+                    oscillator = triangle_wave
+                elif waveform == 'sawtooth':
+                    oscillator = sawtooth_wave
+
+            else:
+                waveform_probabilities = waveform[i]
+                oscillator = waveform_probabilities[0] * sine_wave \
+                             + waveform_probabilities[1] * square_wave \
+                             + waveform_probabilities[2] * triangle_wave \
+                             + waveform_probabilities[3] * sawtooth_wave
 
             self.signal[i] = oscillator
 
@@ -142,32 +150,49 @@ class Signal:
         self.signal_values_sanity_check(amp_c, freq_c, waveform)
         t = self.time_samples
         for i in range(num_sounds):
-            if num_sounds > 1:
-                waveform_str = waveform[i]
-                amp_float = amp_c[i]
-                mod_index_float = mod_index[i]
-                freq_float = freq_c[i]
-                input_signal_cur = input_signal[i]
-            else:
-                waveform_str = waveform
+            if num_sounds == 1:
                 amp_float = amp_c
                 mod_index_float = mod_index
                 freq_float = freq_c
                 input_signal_cur = input_signal
+            else:
+                amp_float = amp_c[i]
+                mod_index_float = mod_index[i]
+                freq_float = freq_c[i]
+                input_signal_cur = input_signal[i]
 
-            if waveform_str == 'sine':
-                self.signal[i] = amp_float * torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur)
-            if waveform_str == 'square':
-                self.signal[i] = amp_float \
-                                 * torch.sign(torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur))
-            if waveform_str == 'triangle':
-                self.signal[i] = \
-                    (2 * amp_float / PI) * torch.arcsin(
-                        torch.sin((TWO_PI * freq_float * t + mod_index_float * input_signal_cur)))
-            if waveform_str == 'sawtooth':
-                oscillator = 2 * (t * freq_float - torch.floor(0.5 + t * freq_float))
-                oscillator = (((oscillator + 1) / 2) + mod_index_float * input_signal_cur / TWO_PI) % 1
-                self.signal[i] = amp_float * (oscillator * 2 - 1)
+            fm_sine_wave = amp_float * torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur)
+            fm_square_wave = amp_float \
+                          * torch.sign(torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur))
+            fm_triangle_wave = (2 * amp_float / PI) \
+                            * torch.arcsin(torch.sin((TWO_PI * freq_float * t + mod_index_float * input_signal_cur)))
+            fm_sawtooth_wave = 2 * (t * freq_float - torch.floor(0.5 + t * freq_float))
+            fm_sawtooth_wave = (((fm_sawtooth_wave + 1) / 2) + mod_index_float * input_signal_cur / TWO_PI) % 1
+            fm_sawtooth_wave = amp_float * (fm_sawtooth_wave * 2 - 1)
+
+            if isinstance(waveform, str):
+                if waveform == 'sine':
+                    oscillator = fm_sine_wave
+                elif waveform == 'square':
+                    oscillator = fm_square_wave
+                elif waveform == 'triangle':
+                    oscillator = fm_triangle_wave
+                elif waveform == 'sawtooth':
+                    oscillator = fm_sawtooth_wave
+
+            else:
+                if num_sounds == 1:
+                    waveform_probabilities = waveform
+                else:
+                    waveform_probabilities = waveform[i]
+
+                oscillator = waveform_probabilities[0] * fm_sine_wave \
+                             + waveform_probabilities[1] * fm_square_wave \
+                             + waveform_probabilities[2] * fm_triangle_wave \
+                             + waveform_probabilities[3] * fm_sawtooth_wave
+
+            self.signal[i] = oscillator
+
 
     def am_modulation(self, amp_c, freq_c, amp_m, freq_m, final_max_amp, waveform):
         """AM modulation
@@ -287,9 +312,9 @@ class Signal:
 
             if num_sounds == 1:
                 attack = torch.linspace(0, 1, attack_num_samples)
-                decay = torch.linspace(1, sustain_level, decay_num_samples)
-                sustain = torch.full((sustain_num_samples,), sustain_level)
-                release = torch.linspace(sustain_level, 0, release_num_samples)
+                decay = torch.linspace(1, sustain_level.item(), decay_num_samples)
+                sustain = torch.full((sustain_num_samples,), sustain_level.item())
+                release = torch.linspace(sustain_level.item(), 0, release_num_samples)
             else:
                 attack = torch.linspace(0, 1, attack_num_samples[i])
                 decay = torch.linspace(1, sustain_level[i], decay_num_samples[i])
@@ -316,17 +341,19 @@ class Signal:
                 plt.show()
 
     def low_pass(self, cutoff_freq, q=0.707, index=0):
-        waveform = torch.clone(self.signal[index])
-        self.signal[index] = taF.lowpass_biquad(waveform, self.sample_rate, cutoff_freq, q)
+        waveform = self.signal[index]
+        filtered_waveform = taF.lowpass_biquad(waveform, self.sample_rate, cutoff_freq, q)
+        return filtered_waveform
 
     def high_pass(self, cutoff_freq, q=0.707, index=0):
-        waveform = torch.clone(self.signal[index])
-        self.signal[index] = taF.highpass_biquad(waveform, self.sample_rate, cutoff_freq, q)
+        waveform = self.signal[index]
+        filtered_waveform = taF.highpass_biquad(waveform, self.sample_rate, cutoff_freq, q)
+        return filtered_waveform
 
     def band_pass(self, central_freq, q=0.707, const_skirt_gain=False, index=0):
-        waveform = torch.clone(self.signal[index])
-        self.signal[index] = \
-            taF.bandpass_biquad(waveform, self.sample_rate, central_freq, q, const_skirt_gain)
+        waveform = self.signal[index]
+        filtered_waveform = taF.bandpass_biquad(waveform, self.sample_rate, central_freq, q, const_skirt_gain)
+        return filtered_waveform
 
     @staticmethod
     # todo: remove all except list instances
@@ -344,12 +371,9 @@ class Signal:
         elif isinstance(amp, list):
             if any(element < 0 or element > 1 for element in amp):
                 raise ValueError("Provided amplitude is not in range [0, 1]")
-        # if len(waveform) == 1:
-        #     if waveform[0][0] not in ['sine', 'square', 'triangle', 'sawtooth']:
-        #         raise ValueError("Unknown waveform provided")
-        # else:
-        if not any(x in waveform for x in ['sine', 'square', 'triangle', 'sawtooth']):
-            raise ValueError("Unknown waveform provided")
+        if isinstance(waveform, str):
+            if not any(x in waveform for x in ['sine', 'square', 'triangle', 'sawtooth']):
+                raise ValueError("Unknown waveform provided")
 
 
 """

@@ -161,10 +161,12 @@ class Normalizer:
                                                 original_min_val=0,
                                                 original_max_val=synth.SIGNAL_DURATION_SEC)
 
-        self.filter_freq_normalizer = LogNormaliser()
+        self.filter_freq_normalizer = MinMaxNormaliser(target_min_val=0,
+                                                       target_max_val=1,
+                                                       original_min_val=0,
+                                                       original_max_val=synth.MAX_FILTER_FREQ)
 
     def normalize(self, parameters_dict: dict):
-
         parameters_dict['osc1_mod_index'] = self.mod_index_normalizer.normalise(parameters_dict['osc1_mod_index'])
         parameters_dict['lfo1_freq'] = self.lfo_freq_normalizer.normalise(parameters_dict['lfo1_freq'])
         parameters_dict['lfo1_phase'] = parameters_dict['lfo1_phase'] % TWO_PI
@@ -178,7 +180,6 @@ class Normalizer:
         parameters_dict['release_t'] = self.adsr_normalizer.normalise(parameters_dict['release_t'])
 
     def denormalize(self, parameters_dict: dict):
-
         parameters_dict['osc1_mod_index'] = self.mod_index_normalizer.denormalise(parameters_dict['osc1_mod_index'])
         parameters_dict['lfo1_freq'] = self.lfo_freq_normalizer.denormalise(parameters_dict['lfo1_freq'])
         parameters_dict['osc2_mod_index'] = self.mod_index_normalizer.denormalise(parameters_dict['osc2_mod_index'])

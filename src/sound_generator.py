@@ -6,6 +6,7 @@ import random
 import simpleaudio as sa
 import numpy as np
 import torch
+import helper
 
 
 class SynthBasicFlow:
@@ -147,22 +148,36 @@ class SynthBasicFlow:
         audio.signal = (oscillator1.signal + oscillator2.signal) / 2
         audio.signal = audio.signal.cpu()
 
-        for i in range(num_sounds):
-            if num_sounds == 1:
-                filter_frequency = filter_freq
-            elif num_sounds > 1:
-                if torch.is_tensor(filter_freq[i]):
-                    filter_frequency = filter_freq[i].item()
-                else:
-                    filter_frequency = filter_freq[i]
-            if filter_type[i] == 'high_pass':
-                audio.high_pass(cutoff_freq=filter_frequency, index=i)
-            elif filter_type[i] == 'low_pass':
-                audio.low_pass(cutoff_freq=filter_frequency, index=i)
-            elif filter_type[i] == "band_pass":
-                audio.band_pass(central_freq=filter_frequency, index=i)
+        # for i in range(num_sounds):
+        #     if num_sounds == 1:
+        #         filter_frequency = filter_freq
+        #     elif num_sounds > 1:
+        #         filter_frequency = filter_freq[i]
+        #
+        #     high_pass_signal = audio.high_pass(cutoff_freq=filter_frequency, index=i)
+        #     low_pass_signal = audio.low_pass(cutoff_freq=filter_frequency, index=i)
+        #     band_pass_signal = audio.band_pass(central_freq=filter_frequency, index=i)
+        #
+        #     if isinstance(filter_type, str):
+        #         if filter_type == 'high_pass':
+        #             audio.signal[i] = high_pass_signal
+        #         elif filter_type == 'low_pass':
+        #             audio.signal[i] = low_pass_signal
+        #         elif filter_type == "band_pass":
+        #             audio.signal[i] = band_pass_signal
+        #     else:
+        #         if num_sounds == 1:
+        #             filter_type_probabilities = filter_type
+        #         else:
+        #             filter_type_probabilities = filter_type[i]
+        #
+        #         filter_type_probabilities = filter_type_probabilities.cpu()
+        #         audio.signal[i] = filter_type_probabilities[0] * high_pass_signal \
+        #                           + filter_type_probabilities[1] * low_pass_signal \
+        #                           + filter_type_probabilities[2] * band_pass_signal
+        #         audio.signal[i] = audio.signal[i].to(helper.get_device())
 
-        audio.adsr_envelope(attack_t, decay_t, sustain_t, sustain_level, release_t, num_sounds)
+        # audio.adsr_envelope(attack_t, decay_t, sustain_t, sustain_level, release_t, num_sounds)
 
         return audio.signal
 
