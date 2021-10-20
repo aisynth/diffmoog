@@ -90,47 +90,60 @@ def map_classification_params_from_ints(params_dic: dict):
 
 
 def clamp_regression_params(parameters_dict: dict):
-    """ clamp regression parameters to values that can be interpreted by the synth module"""
+    """ clamp regression parameters to values that can be interpreted by the synth module,
+        add classification parameters as is"""
     '''
-    ['osc1_amp', 'osc1_mod_index', 'lfo1_freq', 'lfo1_phase',
-     'osc2_amp', 'osc2_mod_index', 'lfo2_freq', 'lfo2_phase',
+    ['osc1_amp', 'osc1_mod_index', 'lfo1_freq',
+     'osc2_amp', 'osc2_mod_index', 'lfo2_freq',
      'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']'''
 
-    parameters_dict['osc1_amp'] = torch.clamp(parameters_dict['osc1_amp'], min=0, max=synth.MAX_AMP)
-    parameters_dict['osc1_mod_index'] = torch.clamp(parameters_dict['osc1_mod_index'], min=0, max=synth.MAX_MOD_INDEX)
-    parameters_dict['lfo1_freq'] = torch.clamp(parameters_dict['lfo1_freq'], min=0, max=synth.MAX_LFO_FREQ)
-    parameters_dict['lfo1_phase'] = parameters_dict['lfo1_freq'] % TWO_PI
-    parameters_dict['osc2_amp'] = torch.clamp(parameters_dict['osc2_amp'], min=0, max=synth.MAX_AMP)
-    parameters_dict['osc2_mod_index'] = torch.clamp(parameters_dict['osc2_mod_index'], min=0, max=synth.MAX_MOD_INDEX)
-    parameters_dict['lfo2_freq'] = torch.clamp(parameters_dict['lfo2_freq'], min=0, max=synth.MAX_LFO_FREQ)
-    parameters_dict['lfo2_phase'] = parameters_dict['lfo2_freq'] % TWO_PI
+    clamped_params_dict = {}
+    clamped_params_dict['osc1_amp'] = torch.clamp(parameters_dict['osc1_amp'], min=0, max=synth.MAX_AMP)
+    clamped_params_dict['osc1_mod_index'] = torch.clamp(parameters_dict['osc1_mod_index'], min=0,
+                                                        max=synth.MAX_MOD_INDEX)
+    clamped_params_dict['lfo1_freq'] = torch.clamp(parameters_dict['lfo1_freq'], min=0, max=synth.MAX_LFO_FREQ)
+    clamped_params_dict['osc2_amp'] = torch.clamp(parameters_dict['osc2_amp'], min=0, max=synth.MAX_AMP)
+    clamped_params_dict['osc2_mod_index'] = torch.clamp(parameters_dict['osc2_mod_index'], min=0,
+                                                        max=synth.MAX_MOD_INDEX)
+    clamped_params_dict['lfo2_freq'] = torch.clamp(parameters_dict['lfo2_freq'], min=0, max=synth.MAX_LFO_FREQ)
 
-    parameters_dict['filter_freq'] = torch.clamp(parameters_dict['filter_freq'],
-                                                 min=synth.MIN_FILTER_FREQ,
-                                                 max=synth.MAX_FILTER_FREQ)
+    clamped_params_dict['filter_freq'] = torch.clamp(parameters_dict['filter_freq'],
+                                                     min=synth.MIN_FILTER_FREQ,
+                                                     max=synth.MAX_FILTER_FREQ)
 
-    parameters_dict['attack_t'] = torch.clamp(parameters_dict['attack_t'], min=0, max=synth.SIGNAL_DURATION_SEC)
-    parameters_dict['decay_t'] = torch.clamp(parameters_dict['decay_t'], min=0, max=synth.SIGNAL_DURATION_SEC)
-    parameters_dict['sustain_t'] = torch.clamp(parameters_dict['release_t'], min=0, max=synth.SIGNAL_DURATION_SEC)
-    parameters_dict['release_t'] = torch.clamp(parameters_dict['release_t'], min=0, max=synth.SIGNAL_DURATION_SEC)
+    attack_t = torch.clamp(parameters_dict['attack_t'], min=0, max=synth.SIGNAL_DURATION_SEC)
+    decay_t = torch.clamp(parameters_dict['decay_t'], min=0, max=synth.SIGNAL_DURATION_SEC)
+    sustain_t = torch.clamp(parameters_dict['release_t'], min=0, max=synth.SIGNAL_DURATION_SEC)
+    release_t = torch.clamp(parameters_dict['release_t'], min=0, max=synth.SIGNAL_DURATION_SEC)
 
     # clamp aggregated adsr parameters that are longer than signal duration
-    adsr_length_in_sec = parameters_dict['attack_t'] \
-                         + parameters_dict['decay_t'] \
-                         + parameters_dict['sustain_t'] \
-                         + parameters_dict['release_t']
+    adsr_length_in_sec = attack_t + decay_t + sustain_t + release_t
 
     adsr_clamp_indices = torch.nonzero(adsr_length_in_sec >= synth.SIGNAL_DURATION_SEC, as_tuple=True)[0]
 
     for i in adsr_clamp_indices.tolist():
         # add small number to normalization to prevent numerical issue where the sum exceeds 1
         normalization_value = adsr_length_in_sec[i] + 1e-5
-        parameters_dict['attack_t'][i] /= normalization_value
-        parameters_dict['decay_t'][i] /= normalization_value
-        parameters_dict['sustain_t'][i] /= normalization_value
-        parameters_dict['release_t'][i] /= normalization_value
+        attack_t[i] /= normalization_value
+        decay_t[i] /= normalization_value
+        sustain_t[i] /= normalization_value
+        release_t[i] /= normalization_value
 
-    parameters_dict['sustain_level'] = torch.clamp(parameters_dict['sustain_level'], min=0, max=synth.MAX_AMP)
+    clamped_params_dict['attack_t'] = attack_t
+    clamped_params_dict['decay_t'] = decay_t
+    clamped_params_dict['sustain_t'] = sustain_t
+    clamped_params_dict['release_t'] = release_t
+
+    clamped_params_dict['sustain_level'] = torch.clamp(parameters_dict['sustain_level'], min=0, max=synth.MAX_AMP)
+
+    # Add Classification parameters as-is
+    clamped_params_dict['osc1_freq'] = parameters_dict['osc1_freq']
+    clamped_params_dict['osc2_freq'] = parameters_dict['osc2_freq']
+    clamped_params_dict['osc1_wave'] = parameters_dict['osc1_wave']
+    clamped_params_dict['osc2_wave'] = parameters_dict['osc2_wave']
+    clamped_params_dict['filter_type'] = parameters_dict['filter_type']
+
+    return clamped_params_dict
 
 
 class Normalizer:
@@ -167,28 +180,43 @@ class Normalizer:
                                                        original_max_val=synth.MAX_FILTER_FREQ)
 
     def normalize(self, parameters_dict: dict):
-        parameters_dict['osc1_mod_index'] = self.mod_index_normalizer.normalise(parameters_dict['osc1_mod_index'])
-        parameters_dict['lfo1_freq'] = self.lfo_freq_normalizer.normalise(parameters_dict['lfo1_freq'])
-        parameters_dict['lfo1_phase'] = parameters_dict['lfo1_phase'] % TWO_PI
-        parameters_dict['lfo1_phase'] = self.lfo_phase_normalizer.normalise(parameters_dict['lfo1_phase'])
-        parameters_dict['osc2_mod_index'] = self.mod_index_normalizer.normalise(parameters_dict['osc2_mod_index'])
-        parameters_dict['lfo2_freq'] = self.lfo_freq_normalizer.normalise(parameters_dict['lfo2_freq'])
-        parameters_dict['filter_freq'] = self.filter_freq_normalizer.normalise(parameters_dict['filter_freq'])
-        parameters_dict['attack_t'] = self.adsr_normalizer.normalise(parameters_dict['attack_t'])
-        parameters_dict['decay_t'] = self.adsr_normalizer.normalise(parameters_dict['decay_t'])
-        parameters_dict['sustain_t'] = self.adsr_normalizer.normalise(parameters_dict['sustain_t'])
-        parameters_dict['release_t'] = self.adsr_normalizer.normalise(parameters_dict['release_t'])
+        normalized_params_dict = {
+            'osc1_mod_index': self.mod_index_normalizer.normalise(parameters_dict['osc1_mod_index']),
+            'lfo1_freq': self.lfo_freq_normalizer.normalise(parameters_dict['lfo1_freq']),
+            'lfo1_phase': self.lfo_phase_normalizer.normalise(parameters_dict['lfo1_phase']),
+            'osc2_mod_index': self.mod_index_normalizer.normalise(parameters_dict['osc2_mod_index']),
+            'lfo2_freq': self.lfo_freq_normalizer.normalise(parameters_dict['lfo2_freq']),
+            'filter_freq': self.filter_freq_normalizer.normalise(parameters_dict['filter_freq']),
+            'attack_t': self.adsr_normalizer.normalise(parameters_dict['attack_t']),
+            'decay_t': self.adsr_normalizer.normalise(parameters_dict['decay_t']),
+            'sustain_t': self.adsr_normalizer.normalise(parameters_dict['sustain_t']),
+            'release_t': self.adsr_normalizer.normalise(parameters_dict['release_t'])}
+
+        return normalized_params_dict
 
     def denormalize(self, parameters_dict: dict):
-        parameters_dict['osc1_mod_index'] = self.mod_index_normalizer.denormalise(parameters_dict['osc1_mod_index'])
-        parameters_dict['lfo1_freq'] = self.lfo_freq_normalizer.denormalise(parameters_dict['lfo1_freq'])
-        parameters_dict['osc2_mod_index'] = self.mod_index_normalizer.denormalise(parameters_dict['osc2_mod_index'])
-        parameters_dict['lfo2_freq'] = self.lfo_freq_normalizer.denormalise(parameters_dict['lfo2_freq'])
-        parameters_dict['filter_freq'] = self.filter_freq_normalizer.denormalise(parameters_dict['filter_freq'])
-        parameters_dict['attack_t'] = self.adsr_normalizer.denormalise(parameters_dict['attack_t'])
-        parameters_dict['decay_t'] = self.adsr_normalizer.denormalise(parameters_dict['decay_t'])
-        parameters_dict['sustain_t'] = self.adsr_normalizer.denormalise(parameters_dict['sustain_t'])
-        parameters_dict['release_t'] = self.adsr_normalizer.denormalise(parameters_dict['release_t'])
+        denormalized_params_dict = {
+            'osc1_mod_index': self.mod_index_normalizer.denormalise(parameters_dict['osc1_mod_index']),
+            'lfo1_freq': self.lfo_freq_normalizer.denormalise(parameters_dict['lfo1_freq']),
+            'osc2_mod_index': self.mod_index_normalizer.denormalise(parameters_dict['osc2_mod_index']),
+            'lfo2_freq': self.lfo_freq_normalizer.denormalise(parameters_dict['lfo2_freq']),
+            'filter_freq': self.filter_freq_normalizer.denormalise(parameters_dict['filter_freq']),
+            'attack_t': self.adsr_normalizer.denormalise(parameters_dict['attack_t']),
+            'decay_t': self.adsr_normalizer.denormalise(parameters_dict['decay_t']),
+            'sustain_t': self.adsr_normalizer.denormalise(parameters_dict['sustain_t']),
+            'release_t': self.adsr_normalizer.denormalise(parameters_dict['release_t']),
+
+            # params that doesn't need denormalization:
+            'osc1_freq': parameters_dict['osc1_freq'],
+            'osc1_wave': parameters_dict['osc1_wave'],
+            'osc1_amp': parameters_dict['osc1_amp'],
+            'osc2_freq': parameters_dict['osc2_freq'],
+            'osc2_wave': parameters_dict['osc2_wave'],
+            'osc2_amp': parameters_dict['osc2_amp'],
+            'filter_type': parameters_dict['filter_type'],
+            'sustain_level': parameters_dict['sustain_level']}
+
+        return denormalized_params_dict
 
 
 def plot_spectrogram(spec, title=None, ylabel='freq_bin', aspect='auto', xmax=None):

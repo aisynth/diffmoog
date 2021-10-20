@@ -1,11 +1,12 @@
 import numpy
-from synth import Signal
+from synth import Synth
 from src.config import SIGNAL_DURATION_SEC
 import synth
 import random
 import simpleaudio as sa
 import numpy as np
 import torch
+from torch import nn
 import helper
 
 
@@ -116,78 +117,61 @@ class SynthBasicFlow:
         release_t = self.params_dict['release_t']
         sustain_level = self.params_dict['sustain_level']
 
-        lfo1 = Signal(num_sounds)
-        lfo1.oscillator(amp=1,
-                        freq=lfo1_freq,
-                        phase=0,
-                        waveform='sine',
-                        num_sounds=num_sounds)
-        oscillator1 = Signal(num_sounds)
-        oscillator1.fm_modulation_by_input_signal(input_signal=lfo1.signal,
-                                                  amp_c=osc1_amp,
-                                                  freq_c=osc1_freq,
-                                                  mod_index=osc1_mod_index,
-                                                  waveform=osc1_wave,
-                                                  num_sounds=num_sounds)
+        synth = Synth(num_sounds)
 
-        lfo2 = Signal(num_sounds)
-        lfo2.oscillator(amp=1,
-                        freq=lfo2_freq,
-                        phase=0,
-                        waveform='sine',
-                        num_sounds=num_sounds)
-        oscillator2 = Signal(num_sounds)
-        oscillator2.fm_modulation_by_input_signal(input_signal=lfo2.signal,
-                                                  amp_c=osc2_amp,
-                                                  freq_c=osc2_freq,
-                                                  mod_index=osc2_mod_index,
-                                                  waveform=osc2_wave,
-                                                  num_sounds=num_sounds)
+        lfo1 = synth.oscillator(amp=1,
+                                freq=lfo1_freq,
+                                phase=0,
+                                waveform='sine',
+                                num_sounds=num_sounds)
 
-        audio = Signal(num_sounds)
-        audio.signal = (oscillator1.signal + oscillator2.signal) / 2
-        audio.signal = audio.signal.cpu()
+        fm_osc1 = synth.fm_modulation_by_input_signal(input_signal=lfo1,
+                                                      amp_c=osc1_amp,
+                                                      freq_c=osc1_freq,
+                                                      mod_index=osc1_mod_index,
+                                                      waveform=osc1_wave,
+                                                      num_sounds=num_sounds)
 
-        # for i in range(num_sounds):
-        #     if num_sounds == 1:
-        #         filter_frequency = filter_freq
-        #     elif num_sounds > 1:
-        #         filter_frequency = filter_freq[i]
-        #
-        #     high_pass_signal = audio.high_pass(cutoff_freq=filter_frequency, index=i)
-        #     low_pass_signal = audio.low_pass(cutoff_freq=filter_frequency, index=i)
-        #     band_pass_signal = audio.band_pass(central_freq=filter_frequency, index=i)
-        #
-        #     if isinstance(filter_type, str):
-        #         if filter_type == 'high_pass':
-        #             audio.signal[i] = high_pass_signal
-        #         elif filter_type == 'low_pass':
-        #             audio.signal[i] = low_pass_signal
-        #         elif filter_type == "band_pass":
-        #             audio.signal[i] = band_pass_signal
-        #     else:
-        #         if num_sounds == 1:
-        #             filter_type_probabilities = filter_type
-        #         else:
-        #             filter_type_probabilities = filter_type[i]
-        #
-        #         filter_type_probabilities = filter_type_probabilities.cpu()
-        #         audio.signal[i] = filter_type_probabilities[0] * high_pass_signal \
-        #                           + filter_type_probabilities[1] * low_pass_signal \
-        #                           + filter_type_probabilities[2] * band_pass_signal
-        #         audio.signal[i] = audio.signal[i].to(helper.get_device())
+        lfo2 = synth.oscillator(amp=1,
+                                freq=lfo2_freq,
+                                phase=0,
+                                waveform='sine',
+                                num_sounds=num_sounds)
 
-        # audio.adsr_envelope(attack_t, decay_t, sustain_t, sustain_level, release_t, num_sounds)
+        fm_osc2 = synth.fm_modulation_by_input_signal(input_signal=lfo2,
+                                                      amp_c=osc2_amp,
+                                                      freq_c=osc2_freq,
+                                                      mod_index=osc2_mod_index,
+                                                      waveform=osc2_wave,
+                                                      num_sounds=num_sounds)
 
-        return audio.signal
+        mixed_signal = (fm_osc1 + fm_osc2) / 2
+        # mixed_signal = mixed_signal.cpu()
+
+        filtered_signal = synth.filter(mixed_signal, filter_freq, filter_type, num_sounds)
+
+        enveloped_signal = synth.adsr_envelope(filtered_signal,
+                                               attack_t,
+                                               decay_t,
+                                               sustain_t,
+                                               sustain_level,
+                                               release_t,
+                                               num_sounds)
+
+        return enveloped_signal
 
 
 if __name__ == "__main__":
-    a = SynthBasicFlow('audio_example', num_sounds=3)
+    torch.autograd.set_detect_anomaly(True)
+    a = SynthBasicFlow('audio_example', num_sounds=10)
+    b = torch.rand(10, 44100)
+    criterion = nn.MSELoss()
+    loss = criterion(a.signal, b)
+    loss.backward()
     # plt.plot(a.signal.cpu())
     # plt.ylim([-1, 1])
     # plt.show()
-    play_obj = sa.play_buffer(a.signal.cpu().numpy(),
+    play_obj = sa.play_buffer(a.signal.detach().cpu().numpy(),
                               num_channels=1,
                               bytes_per_sample=4,
                               sample_rate=44100)

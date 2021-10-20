@@ -18,6 +18,7 @@ def create_data_loader(train_data, batch_size):
 
 
 def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
+    torch.autograd.set_detect_anomaly(True)
     normalizer = helper.Normalizer()
 
     # Init criteria
@@ -25,43 +26,40 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
 
     for signal_log_mel_spec, target_params_dic in data_loader:
 
-        if torch.any(torch.isnan(signal_log_mel_spec)):
-            a = 0
-
         start = time.time()
 
         if DEBUG_MODE:
-            helper.plot_spectrogram(signal_log_mel_spec[0][0].cpu(), title="MelSpectrogram (dB)", ylabel='mel freq')
+            helper.plot_spectrogram(signal_log_mel_spec[0][0].cpu(),
+                                    title="MelSpectrogram (dB)",
+                                    ylabel='mel freq')
 
-        optimizer_arg.zero_grad()
-        model.zero_grad()
+        # set_to_none as advised in page 6:
+        # https://tigress-web.princeton.edu/~jdh4/PyTorchPerformanceTuningGuide_GTC2021.pdf
+        model.zero_grad(set_to_none=True)
+
         # -------------------------------------
         # -----------Run Model-----------------
         # -------------------------------------
         # signal_log_mel_spec.requires_grad = True
         output_dic = model(signal_log_mel_spec)
 
-        for key, value in output_dic.items():
-            if torch.any(torch.isnan(value)):
-                a = 0
-
         # helper.map_classification_params_from_ints(predicted_dic)
-        normalizer.denormalize(output_dic)
-        helper.clamp_regression_params(output_dic)
+        denormalized_output_dic = normalizer.denormalize(output_dic)
+        denormalized_clamped_output_dic = helper.clamp_regression_params(denormalized_output_dic)
 
         # -------------------------------------
         # -----------Run Synth-----------------
         # -------------------------------------
-        overall_synth_obj = SynthBasicFlow(parameters_dict=output_dic, num_sounds=len(signal_log_mel_spec))
+        overall_synth_obj = SynthBasicFlow(parameters_dict=denormalized_clamped_output_dic,
+                                           num_sounds=len(signal_log_mel_spec))
 
-        if torch.any(torch.isnan(signal_log_mel_spec)):
-            a = 0
         overall_synth_obj.signal = helper.move_to(overall_synth_obj.signal, device_arg)
 
         predicted_log_mel_spec_sound_signal = helper.log_mel_spec_transform(overall_synth_obj.signal)
         predicted_log_mel_spec_sound_signal = helper.move_to(predicted_log_mel_spec_sound_signal, device_arg)
 
         signal_log_mel_spec = torch.squeeze(signal_log_mel_spec)
+        predicted_log_mel_spec_sound_signal = torch.squeeze(predicted_log_mel_spec_sound_signal)
 
         loss_spectrogram_total2 = criterion_spectrogram(predicted_log_mel_spec_sound_signal,
                                                         signal_log_mel_spec)
@@ -77,7 +75,6 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
             for i in range(len(signal_log_mel_spec)):
                 for key, value in output_dic.items():
                     current_predicted_dic[key] = output_dic[key][i]
-
 
                 # Generate sound from predicted parameters
                 synth_obj = SynthBasicFlow(parameters_dict=current_predicted_dic)

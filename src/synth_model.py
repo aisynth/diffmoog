@@ -94,6 +94,7 @@ class SynthNetwork(nn.Module):
             nn.Linear(HIDDEN_IN_CHANNELS, len(REGRESSION_PARAM_LIST))
             )
         self.softmax = nn.Softmax(dim=1)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, input_data):
         x = self.conv1(input_data)
@@ -119,7 +120,7 @@ class SynthNetwork(nn.Module):
                 output_dic[out_name] = probabilities
 
         x = self.regression_params(x)
-        x = self.softmax(x)
+        x = self.sigmoid(x)
 
         for index, param in enumerate(REGRESSION_PARAM_LIST):
             output_dic[param] = x[:, index]

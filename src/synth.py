@@ -3,15 +3,15 @@
 """
 Created on Mon May 31 15:41:38 2021
 
-@author: moshelaufer, Noy Uzrad
+@author: Moshe Laufer, Noy Uzrad
 """
-import numpy
 import torch
 import torchaudio.functional as taF
 from src.config import PI, TWO_PI, DEBUG_MODE, SAMPLE_RATE, SIGNAL_DURATION_SEC
 import matplotlib.pyplot as plt
 import simpleaudio as sa
 import helper
+import julius
 
 CLASSIFICATION_PARAM_LIST = \
     ['osc1_freq', 'osc1_wave', 'osc2_freq', 'osc2_wave', 'filter_type']
@@ -23,13 +23,11 @@ PARAM_LIST = [CLASSIFICATION_PARAM_LIST, REGRESSION_PARAM_LIST]
 
 WAVE_TYPE_DIC = {"sine": 0,
                  "square": 1,
-                 "triangle": 2,
-                 "sawtooth": 3}
+                 "sawtooth": 2}
 WAVE_TYPE_DIC_INV = {v: k for k, v in WAVE_TYPE_DIC.items()}
 
 FILTER_TYPE_DIC = {"low_pass": 0,
-                   "high_pass": 1,
-                   "band_pass": 2}
+                   "high_pass": 1}
 FILTER_TYPE_DIC_INV = {v: k for k, v in FILTER_TYPE_DIC.items()}
 
 # build a list of possible frequencies
@@ -47,14 +45,16 @@ MIN_FILTER_FREQ = 20
 MAX_FILTER_FREQ = 20000
 
 
-class Signal:
+class Synth:
     def __init__(self, num_sounds=1):
         self.sample_rate = SAMPLE_RATE
         self.sig_duration = SIGNAL_DURATION_SEC
-        self.time_samples = torch.linspace(0, self.sig_duration, steps=int(self.sample_rate * self.sig_duration), requires_grad=True)
+        self.time_samples = torch.linspace(0, self.sig_duration, steps=int(self.sample_rate * self.sig_duration),
+                                           requires_grad=True)
         self.modulation_time = torch.linspace(0, self.sig_duration, steps=self.sample_rate)
         self.modulation = 0
-        self.signal = torch.zeros(size=(num_sounds, self.time_samples.shape[0]), dtype=torch.float32, requires_grad=True)
+        self.signal = torch.zeros(size=(num_sounds, self.time_samples.shape[0]), dtype=torch.float32,
+                                  requires_grad=True)
 
         self.device = helper.get_device()
         self.time_samples = helper.move_to(self.time_samples, self.device)
@@ -84,7 +84,10 @@ class Signal:
 
         self.signal_values_sanity_check(amp, freq, waveform)
         t = self.time_samples
-        oscillator = torch.zeros_like(t, requires_grad=True)
+        # oscillator = torch.zeros_like(t, requires_grad=True)
+
+        oscillator_tensor = torch.tensor(()).to(helper.get_device())
+        first_time = True
         for i in range(num_sounds):
 
             if num_sounds == 1:
@@ -95,6 +98,7 @@ class Signal:
             sine_wave = amp * torch.sin(TWO_PI * freq_float * t + phase)
             square_wave = amp * torch.sign(torch.sin(TWO_PI * freq_float * t + phase))
             triangle_wave = (2 * amp / PI) * torch.arcsin(torch.sin((TWO_PI * freq_float * t + phase)))
+            # triangle_wave = amp * torch.sin(TWO_PI * freq_float * t + phase)
             sawtooth_wave = 2 * (t * freq_float - torch.floor(0.5 + t * freq_float))  # Sawtooth closed form
             # Phase shift (by normalization to range [0,1] and modulo operation)
             sawtooth_wave = (((sawtooth_wave + 1) / 2) + phase / TWO_PI) % 1
@@ -117,7 +121,14 @@ class Signal:
                              + waveform_probabilities[2] * triangle_wave \
                              + waveform_probabilities[3] * sawtooth_wave
 
-            self.signal[i] = oscillator
+            if first_time:
+                oscillator_tensor = torch.cat((oscillator_tensor, oscillator), dim=0).unsqueeze(dim=0)
+                first_time = False
+            else:
+                oscillator = oscillator.unsqueeze(dim=0)
+                oscillator_tensor = torch.cat((oscillator_tensor, oscillator), dim=0)
+
+        return oscillator_tensor
 
     def mix_signal(self, new_signal, factor):
         """Signal superposition. factor balances the mix
@@ -149,6 +160,8 @@ class Signal:
 
         self.signal_values_sanity_check(amp_c, freq_c, waveform)
         t = self.time_samples
+        oscillator_tensor = torch.tensor(()).to(helper.get_device())
+        first_time = True
         for i in range(num_sounds):
             if num_sounds == 1:
                 amp_float = amp_c
@@ -162,13 +175,19 @@ class Signal:
                 input_signal_cur = input_signal[i]
 
             fm_sine_wave = amp_float * torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur)
-            fm_square_wave = amp_float \
-                          * torch.sign(torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur))
-            fm_triangle_wave = (2 * amp_float / PI) \
-                            * torch.arcsin(torch.sin((TWO_PI * freq_float * t + mod_index_float * input_signal_cur)))
+            fm_square_wave = amp_float * torch.sign(torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur))
+            # fm_triangle_wave = (2 * amp_float / PI) * torch.arcsin(torch.sin((TWO_PI * freq_float * t + mod_index_float * input_signal_cur)))
+            fm_triangle_wave = amp_float * torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur)
+            if torch.any(torch.isnan(fm_triangle_wave)):
+                a = 0
+            if torch.any(torch.isinf(fm_triangle_wave)):
+                a = 0
             fm_sawtooth_wave = 2 * (t * freq_float - torch.floor(0.5 + t * freq_float))
             fm_sawtooth_wave = (((fm_sawtooth_wave + 1) / 2) + mod_index_float * input_signal_cur / TWO_PI) % 1
             fm_sawtooth_wave = amp_float * (fm_sawtooth_wave * 2 - 1)
+
+            if isinstance(waveform, list):
+                waveform = waveform[i]
 
             if isinstance(waveform, str):
                 if waveform == 'sine':
@@ -183,16 +202,22 @@ class Signal:
             else:
                 if num_sounds == 1:
                     waveform_probabilities = waveform
-                else:
+
+                elif torch.is_tensor(waveform):
                     waveform_probabilities = waveform[i]
 
                 oscillator = waveform_probabilities[0] * fm_sine_wave \
                              + waveform_probabilities[1] * fm_square_wave \
-                             + waveform_probabilities[2] * fm_triangle_wave \
-                             + waveform_probabilities[3] * fm_sawtooth_wave
+                             + waveform_probabilities[2] * fm_sawtooth_wave
 
-            self.signal[i] = oscillator
+            if first_time:
+                oscillator_tensor = torch.cat((oscillator_tensor, oscillator), dim=0).unsqueeze(dim=0)
+                first_time = False
+            else:
+                oscillator = oscillator.unsqueeze(dim=0)
+                oscillator_tensor = torch.cat((oscillator_tensor, oscillator), dim=0)
 
+        return oscillator_tensor
 
     def am_modulation(self, amp_c, freq_c, amp_m, freq_m, final_max_amp, waveform):
         """AM modulation
@@ -228,7 +253,7 @@ class Signal:
 
         t = self.time_samples
         dc = 1
-        carrier = Signal()
+        carrier = Synth()
         carrier.oscillator(amp=amp_c, freq=freq_c, phase=0, waveform=waveform)
         modulator = amp_m * torch.sin(TWO_PI * freq_m * t)
         am_signal = (dc + modulator / amp_c) * carrier.signal
@@ -257,14 +282,14 @@ class Signal:
                 ValueError: Resulted Amplitude is out of range [-1, 1]
             """
         self.signal_values_sanity_check(amp_c, freq_c, waveform)
-        carrier = Signal()
+        carrier = Synth()
         carrier.oscillator(amp=1, freq=freq_c, phase=0, waveform=waveform)
         modulated_amplitude = (amp_c + modulation_factor * input_signal)
         if torch.max(modulated_amplitude).item() > 1 or torch.min(modulated_amplitude).item() < -1:
             raise ValueError("AM modulation resulted amplitude out of range [-1, 1].")
         self.signal = modulated_amplitude * carrier.signal
 
-    def adsr_envelope(self, attack_t, decay_t, sustain_t, sustain_level, release_t, num_sounds=1):
+    def adsr_envelope(self, input_signal, attack_t, decay_t, sustain_t, sustain_level, release_t, num_sounds=1):
         """Apply an ADSR envelope to the signal
 
             builds the ADSR shape and multiply by the signal
@@ -308,13 +333,15 @@ class Signal:
             else:
                 sustain_level = [sustain_level[i] for i in range(num_sounds)]
 
+        filtered_signal_tensor = torch.tensor(()).to(helper.get_device())
+        first_time = True
         for i in range(num_sounds):
 
             if num_sounds == 1:
                 attack = torch.linspace(0, 1, attack_num_samples)
-                decay = torch.linspace(1, sustain_level.item(), decay_num_samples)
-                sustain = torch.full((sustain_num_samples,), sustain_level.item())
-                release = torch.linspace(sustain_level.item(), 0, release_num_samples)
+                decay = torch.linspace(1, sustain_level, decay_num_samples)
+                sustain = torch.full((sustain_num_samples,), sustain_level)
+                release = torch.linspace(sustain_level, 0, release_num_samples)
             else:
                 attack = torch.linspace(0, 1, attack_num_samples[i])
                 decay = torch.linspace(1, sustain_level[i], decay_num_samples[i])
@@ -331,29 +358,94 @@ class Signal:
             else:
                 raise ValueError("Envelope length exceeds signal duration")
 
-            # envelope = helper.move_to(envelope, self.device)
-
-            self.signal[i] = self.signal[i] * envelope
+            envelope = helper.move_to(envelope, self.device)
+            enveloped_signal = input_signal * envelope
+            if first_time:
+                filtered_signal_tensor = torch.cat((filtered_signal_tensor, enveloped_signal), dim=0).unsqueeze(dim=0)
+                first_time = False
+            else:
+                filtered_signal = enveloped_signal.unsqueeze(dim=0)
+                filtered_signal_tensor = torch.cat((filtered_signal_tensor, filtered_signal), dim=0)
 
             if DEBUG_MODE:
                 plt.plot(envelope.cpu())
                 plt.plot(self.signal.cpu())
                 plt.show()
 
-    def low_pass(self, cutoff_freq, q=0.707, index=0):
-        waveform = self.signal[index]
-        filtered_waveform = taF.lowpass_biquad(waveform, self.sample_rate, cutoff_freq, q)
-        return filtered_waveform
+            return filtered_signal_tensor
 
-    def high_pass(self, cutoff_freq, q=0.707, index=0):
-        waveform = self.signal[index]
-        filtered_waveform = taF.highpass_biquad(waveform, self.sample_rate, cutoff_freq, q)
-        return filtered_waveform
+    def filter(self, input_signal, filter_freq, filter_type, num_sounds=1):
+        """Apply an ADSR envelope to the signal
 
-    def band_pass(self, central_freq, q=0.707, const_skirt_gain=False, index=0):
-        waveform = self.signal[index]
-        filtered_waveform = taF.bandpass_biquad(waveform, self.sample_rate, central_freq, q, const_skirt_gain)
-        return filtered_waveform
+            builds the ADSR shape and multiply by the signal
+
+            Args:
+                self: Self object
+                :param input_signal: 1D or 2D array or tensor to apply filter along rows
+                :param filter_type: one of ['low_pass', 'high_pass', 'band_pass']
+                :param filter_freq: corner or central frequency
+                :param num_sounds: number of sounds in the input
+
+            Raises:
+                none
+
+            """
+        filtered_signal_tensor = torch.tensor(()).to(helper.get_device())
+        first_time = True
+        for i in range(num_sounds):
+            if num_sounds == 1:
+                filter_frequency = filter_freq
+            elif num_sounds > 1:
+                filter_frequency = filter_freq[i]
+
+            if torch.is_tensor(filter_frequency):
+                filter_frequency = helper.move_to(filter_frequency, "cpu")
+            high_pass_signal = self.high_pass(input_signal[i], cutoff_freq=filter_frequency, index=i)
+            low_pass_signal = self.low_pass(input_signal[i], cutoff_freq=filter_frequency, index=i)
+
+            if isinstance(filter_type, str):
+                if filter_type == 'high_pass':
+                    filtered_signal = high_pass_signal
+                elif filter_type == 'low_pass':
+                    filtered_signal = low_pass_signal
+
+            else:
+                if num_sounds == 1:
+                    filter_type_probabilities = filter_type
+                else:
+                    filter_type_probabilities = filter_type[i]
+
+                filter_type_probabilities = filter_type_probabilities.cpu()
+                filtered_signal = filter_type_probabilities[0] * high_pass_signal \
+                                  + filter_type_probabilities[1] * low_pass_signal
+                filtered_signal = filtered_signal.to(helper.get_device())
+
+            if first_time:
+                filtered_signal_tensor = torch.cat((filtered_signal_tensor, filtered_signal), dim=0).unsqueeze(dim=0)
+                first_time = False
+            else:
+                filtered_signal = filtered_signal.unsqueeze(dim=0)
+                filtered_signal_tensor = torch.cat((filtered_signal_tensor, filtered_signal), dim=0)
+
+        return filtered_signal_tensor
+
+    def low_pass(self, input_signal, cutoff_freq, q=0.707, index=0):
+        # filtered_waveform = taF.lowpass_biquad(input_signal, self.sample_rate, cutoff_freq, q)
+        # filtered_waveform = julius.lowpass_filter(input_signal, cutoff_freq.item()/44100)
+        if cutoff_freq == 0:
+            return input_signal
+        else:
+            filtered_waveform_new = julius.lowpass_filter_new(input_signal, cutoff_freq/44100)
+            return filtered_waveform_new
+
+    def high_pass(self, input_signal, cutoff_freq, q=0.707, index=0):
+        # filtered_waveform = julius.lowpass_filter(input_signal, cutoff_freq.item()/44100)
+        # filtered_waveform_new = julius.highpass_filter(input_signal, cutoff_freq/44100)
+        if cutoff_freq == 0:
+            return input_signal
+        else:
+            filtered_waveform_new = julius.highpass_filter_new(input_signal, cutoff_freq/44100)
+            return filtered_waveform_new
 
     @staticmethod
     # todo: remove all except list instances
@@ -453,8 +545,8 @@ So it is not used
 
 if __name__ == "__main__":
     print(len(OSC_FREQ_LIST))
-    a = Signal()
-    b = Signal()
+    a = Synth()
+    b = Synth()
     b.oscillator(1, 5, 0, 'sine')
     a.fm_modulation_by_input_signal(b.signal, 1, 440, 10, 'sine')
     # a.oscillator(amp=1, freq=100, phase=0, waveform='sine')
