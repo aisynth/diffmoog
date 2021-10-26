@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOSS_FACTOR,\
-    SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, DATASET_MODE, LOSS_MODE, SAVE_MODEL_PATH
+    SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, LOSS_MODE, SAVE_MODEL_PATH, DATASET_MODE, DATASET_TYPE
 from ai_synth_dataset import AiSynthDataset
 from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, OS
 from synth_model import SynthNetwork
@@ -9,11 +9,7 @@ from sound_generator import SynthBasicFlow
 import synth
 import helper
 import time
-
-
-def create_data_loader(train_data, batch_size):
-    dataloader_obj = DataLoader(train_data, batch_size=batch_size)
-    return dataloader_obj
+import os
 
 
 def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
@@ -193,9 +189,10 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
     return loss
 
 
-
 def train(model, data_loader, optimiser_arg, device_arg, epochs):
     model.train()
+    path_parent = os.path.dirname(os.getcwd())
+
     for i in range(epochs):
         print(f"Epoch {i + 1}")
         loss = train_single_epoch(model, data_loader, optimiser_arg, device_arg)
@@ -203,9 +200,9 @@ def train(model, data_loader, optimiser_arg, device_arg, epochs):
 
         # save model checkpoint
         if OS == 'WINDOWS':
-            model_checkpoint = f"..\\trained_models\\synth_net_epoch{i}.pth"
+            model_checkpoint = path_parent + f"\\ai_synth\\trained_models\\synth_net_epoch{i}.pth"
         elif OS == 'LINUX':
-            model_checkpoint = f"../trained_models/synth_net_epoch{i}.pth"
+            model_checkpoint = path_parent + f"/ai_synth/trained_models/synth_net_epoch{i}.pth"
 
         torch.save({
             'epoch': i,
@@ -220,11 +217,14 @@ def train(model, data_loader, optimiser_arg, device_arg, epochs):
 if __name__ == "__main__":
     device = helper.get_device()
 
-    ai_synth_dataset = AiSynthDataset(TRAIN_PARAMETERS_FILE,
+    ai_synth_dataset = AiSynthDataset(DATASET_MODE,
+                                      DATASET_TYPE,
+                                      TRAIN_PARAMETERS_FILE,
                                       TRAIN_AUDIO_DIR,
-                                      dataset_mode=DATASET_MODE,
+                                      helper.mel_spectrogram_transform,
+                                      synth.SAMPLE_RATE,
+                                      device
                                       )
-
 
     train_dataloader = helper.create_data_loader(ai_synth_dataset, BATCH_SIZE)
 
@@ -238,11 +238,13 @@ if __name__ == "__main__":
     print("Training model with LOSS_MODE: ", LOSS_MODE)
     train(synth_net, train_dataloader, optimizer, device, EPOCHS)
 
+    path_parent = os.path.dirname(os.getcwd())
+
     # save model
     if OS == 'WINDOWS':
-        saved_model_path = "..\\trained_models\\trained_synth_net.pth"
+        saved_model_path = path_parent + "\\ai_synth\\trained_models\\trained_synth_net.pth"
     elif OS == 'LINUX':
-        saved_model_path = "../trained_models/trained_synth_net.pth"
+        saved_model_path = path_parent + "/ai_synth/trained_models/trained_synth_net.pth"
 
     torch.save(synth_net.state_dict(), saved_model_path)
     print("Trained synth net saved at synth_net.pth")

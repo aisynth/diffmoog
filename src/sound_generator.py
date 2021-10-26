@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from torch import nn
 import helper
+from synth import Synth
 
 
 class SynthBasicFlow:
@@ -165,6 +166,7 @@ if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
     a = SynthBasicFlow('audio_example', num_sounds=10)
     b = torch.rand(10, 44100)
+    b = helper.move_to(b, helper.get_device())
     criterion = nn.MSELoss()
     loss = criterion(a.signal, b)
     loss.backward()

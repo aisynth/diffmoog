@@ -1,24 +1,27 @@
 import os
 
 # change this to either WINDOWS or LINUX
-OS = 'WINDOWS'
+OS = 'LINUX'
 
 # Definitions
 PI = 3.141592653589793
 TWO_PI = 2 * PI
 
 # Dataset configs
+DATASET_SIZE = 1000
+DATASET_TYPE = 'TRAIN'  # TRAIN or TEST
+DATASET_MODE = 'WAV'  # WAV or MEL_SPEC
 path_parent = os.path.dirname(os.getcwd())
 if OS == 'WINDOWS':
-    TRAIN_PARAMETERS_FILE = path_parent + "\\dataset\\train\\dataset.csv"
-    TRAIN_AUDIO_DIR = path_parent + "\\dataset\\train\\wav_files"
-    TEST_PARAMETERS_FILE = path_parent + "\\dataset\\test\\dataset.csv"
-    TEST_AUDIO_DIR = path_parent + "\\dataset\\test\\wav_files"
+    TRAIN_PARAMETERS_FILE = path_parent + "\\ai_synth\\dataset\\train\\dataset.csv"
+    TRAIN_AUDIO_DIR = path_parent + "\\ai_synth\\dataset\\train\\wav_files"
+    TEST_PARAMETERS_FILE = path_parent + "\\ai_synth\\dataset\\test\\dataset.csv"
+    TEST_AUDIO_DIR = path_parent + "\\ai_synth\\dataset\\test\\wav_files"
 elif OS == 'LINUX':
-    TRAIN_PARAMETERS_FILE = path_parent + "/dataset/train/dataset.csv"
-    TRAIN_AUDIO_DIR = path_parent + "/dataset/train/wav_files"
-    TEST_PARAMETERS_FILE = path_parent + "/dataset/test/dataset.csv"
-    TEST_AUDIO_DIR = path_parent + "/dataset/test/wav_files"
+    TRAIN_PARAMETERS_FILE = path_parent + "/ai_synth/dataset/train/dataset.csv"
+    TRAIN_AUDIO_DIR = path_parent + "/ai_synth/dataset/train/wav_files"
+    TEST_PARAMETERS_FILE = path_parent + "/ai_synth/dataset/test/dataset.csv"
+    TEST_AUDIO_DIR = path_parent + "/ai_synth/dataset/test/wav_files"
 
 # Model configs
 BATCH_SIZE = 128

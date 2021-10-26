@@ -2,22 +2,21 @@ SAMPLE_RATE = 44100
 SIGNAL_DURATION_SEC = 1.0
 
 CLASSIFICATION_PARAM_LIST = \
-    ['osc1_freq', 'osc1_wave', 'lfo1_wave', 'osc2_freq', 'osc2_wave', 'lfo2_wave', 'filter_type']
+    ['osc1_freq', 'osc1_wave', 'osc2_freq', 'osc2_wave', 'filter_type']
 REGRESSION_PARAM_LIST = \
-    ['osc1_amp', 'osc1_mod_index', 'lfo1_freq', 'lfo1_phase',
-     'osc2_amp', 'osc2_mod_index', 'lfo2_freq', 'lfo2_phase',
+    ['osc1_amp', 'osc1_mod_index', 'lfo1_freq',
+     'osc2_amp', 'osc2_mod_index', 'lfo2_freq',
      'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']
 PARAM_LIST = [CLASSIFICATION_PARAM_LIST, REGRESSION_PARAM_LIST]
 
 WAVE_TYPE_DIC = {"sine": 0,
                  "square": 1,
-                 "triangle": 2,
-                 "sawtooth": 3}
+                 "sawtooth": 2}
+
 WAVE_TYPE_DIC_INV = {v: k for k, v in WAVE_TYPE_DIC.items()}
 
 FILTER_TYPE_DIC = {"low_pass": 0,
-                   "high_pass": 1,
-                   "band_pass": 2}
+                   "high_pass": 1}
 FILTER_TYPE_DIC_INV = {v: k for k, v in FILTER_TYPE_DIC.items()}
 
 # build a list of possible frequencies

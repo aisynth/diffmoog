@@ -1,12 +1,12 @@
 import torch
-from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR
 import pandas as pd
 import torchaudio
 import os
 import helper
 import synth
 from torch.utils.data import Dataset
-from config import PARAMETERS_FILE, DATASET_MODE
+from src.config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, TEST_PARAMETERS_FILE, TEST_AUDIO_DIR, \
+    DATASET_MODE, DATASET_TYPE, OS
 import time
 
 
@@ -21,25 +21,38 @@ class AiSynthDataset(Dataset):
     3. All data is saved as GPU tensors
     """
 
-    def __init__(self, csv_file, device_arg, dataset_mode):
+    def __init__(self, dataset_mode, dataset_type, parameters_csv, audio_dir, transformation, target_sample_rate, device_arg):
+        self.params = pd.read_csv(parameters_csv)
+        self.audio_dir = audio_dir
         self.device = device_arg
+        self.transformation = transformation.to(self.device)
+        self.target_sample_rate = target_sample_rate
         self.dataset_mode = dataset_mode
-        data_frame = pd.read_csv(csv_file)
-        # todo: refactor: initializations by iterating/referencing synth.PARAM_LIST
-        data_frame[['osc1_amp', 'osc1_freq', 'osc1_mod_index', 'lfo1_freq', 'osc2_amp', 'osc2_freq', 'osc2_mod_index',
-                    'lfo2_freq', 'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']] \
-            = data_frame[['osc1_amp', 'osc1_freq', 'osc1_mod_index', 'lfo1_freq', 'osc2_amp', 'osc2_freq',
-                          'osc2_mod_index', 'lfo2_freq', 'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t',
-                          'sustain_level']].astype(float)
+        self.dataset_type = dataset_type
 
-        self.params = data_frame
-
-        if self.dataset_mode == 'WAV':
-            self.audio_dir = "dataset/wav_files"
-            self.transformation = helper.log_mel_spec_transform.to(self.device)
+        if dataset_mode == 'WAV':
+            if dataset_type == 'TRAIN':
+                if OS == 'WINDOWS':
+                    self.audio_dir = "dataset\\train\\wav_files"
+                elif OS == 'LINUX':
+                    self.audio_dir = "dataset/train/wav_files"
+            if dataset_type == 'TEST':
+                if OS == 'WINDOWS':
+                    self.audio_dir = "dataset\\test\\wav_files"
+                elif OS == 'LINUX':
+                    self.audio_dir = "dataset/test/wav_files"
 
         elif self.dataset_mode == 'MEL_SPEC':
-            self.audio_dir = "dataset/audio_mel_spec_files"
+            if dataset_type == 'TRAIN':
+                if OS == 'WINDOWS':
+                    self.audio_dir = "dataset\\train\\audio_mel_spec_files"
+                elif OS == 'LINUX':
+                    self.audio_dir = "dataset/train/audio_mel_spec_files"
+            if dataset_type == 'TEST':
+                if OS == 'WINDOWS':
+                    self.audio_dir = "dataset\\test\\audio_mel_spec_files"
+                elif OS == 'LINUX':
+                    self.audio_dir = "dataset/test/audio_mel_spec_files"
 
     def __len__(self):
         return len(self.params)
@@ -103,10 +116,13 @@ if __name__ == "__main__":
     device = helper.get_device()
 
     # init dataset
-    ai_synth_dataset = AiSynthDataset(TRAIN_PARAMETERS_FILE,
+    ai_synth_dataset = AiSynthDataset(DATASET_MODE,
+                                      DATASET_TYPE,
+                                      TRAIN_PARAMETERS_FILE,
                                       TRAIN_AUDIO_DIR,
-                                      dataset_mode=DATASET_MODE,
-                                      transformation=helper.mel_spectrogram_transform,
+                                      helper.mel_spectrogram_transform,
+                                      synth.SAMPLE_RATE,
+                                      device
                                       )
 
     print(f"there are {len(ai_synth_dataset)} files in the dataset")

@@ -180,8 +180,11 @@ class Synth:
                              + waveform_probabilities[2] * fm_sawtooth_wave
 
             if first_time:
-                oscillator_tensor = torch.cat((oscillator_tensor, oscillator), dim=0).unsqueeze(dim=0)
-                first_time = False
+                if num_sounds == 1:
+                    oscillator_tensor = oscillator
+                else:
+                    oscillator_tensor = torch.cat((oscillator_tensor, oscillator), dim=0).unsqueeze(dim=0)
+                    first_time = False
             else:
                 oscillator = oscillator.unsqueeze(dim=0)
                 oscillator_tensor = torch.cat((oscillator_tensor, oscillator), dim=0)
@@ -265,6 +268,7 @@ class Synth:
 
             Args:
                 self: Self object
+                input_signal: target signal to apply adsr
                 attack_t: Length of attack in seconds. Time to go from 0 to 1 amplitude.
                 decay_t: Length of decay in seconds. Time to go from 1 amplitude to sustain level.
                 sustain_t: Length of sustain in seconds, with sustain level amplitude
@@ -302,7 +306,7 @@ class Synth:
             else:
                 sustain_level = [sustain_level[i] for i in range(num_sounds)]
 
-        filtered_signal_tensor = torch.tensor(()).to(helper.get_device())
+        enveloped_signal_tensor = torch.tensor(()).to(helper.get_device())
         first_time = True
         for i in range(num_sounds):
 
@@ -328,20 +332,30 @@ class Synth:
                 raise ValueError("Envelope length exceeds signal duration")
 
             envelope = helper.move_to(envelope, self.device)
-            enveloped_signal = input_signal * envelope
+
+            if torch.is_tensor(input_signal) and num_sounds > 1:
+                signal_to_shape = input_signal[i]
+            else:
+                signal_to_shape = input_signal
+
+            enveloped_signal = signal_to_shape * envelope
+
             if first_time:
-                filtered_signal_tensor = torch.cat((filtered_signal_tensor, enveloped_signal), dim=0).unsqueeze(dim=0)
-                first_time = False
+                if num_sounds == 1:
+                    enveloped_signal_tensor = enveloped_signal
+                else:
+                    enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped_signal), dim=0).unsqueeze(dim=0)
+                    first_time = False
             else:
                 filtered_signal = enveloped_signal.unsqueeze(dim=0)
-                filtered_signal_tensor = torch.cat((filtered_signal_tensor, filtered_signal), dim=0)
+                enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, filtered_signal), dim=0)
 
             if DEBUG_MODE:
                 plt.plot(envelope.cpu())
                 plt.plot(self.signal.cpu())
                 plt.show()
 
-            return filtered_signal_tensor
+        return enveloped_signal_tensor
 
     def filter(self, input_signal, filter_freq, filter_type, num_sounds=1):
         """Apply an ADSR envelope to the signal
@@ -372,6 +386,9 @@ class Synth:
             high_pass_signal = self.high_pass(input_signal[i], cutoff_freq=filter_frequency, index=i)
             low_pass_signal = self.low_pass(input_signal[i], cutoff_freq=filter_frequency, index=i)
 
+            if isinstance(filter_type, list):
+                filter_type = filter_type[i]
+
             if isinstance(filter_type, str):
                 if filter_type == 'high_pass':
                     filtered_signal = high_pass_signal
@@ -390,8 +407,11 @@ class Synth:
                 filtered_signal = filtered_signal.to(helper.get_device())
 
             if first_time:
-                filtered_signal_tensor = torch.cat((filtered_signal_tensor, filtered_signal), dim=0).unsqueeze(dim=0)
-                first_time = False
+                if num_sounds == 1:
+                    filtered_signal_tensor = filtered_signal
+                else:
+                    filtered_signal_tensor = torch.cat((filtered_signal_tensor, filtered_signal), dim=0).unsqueeze(dim=0)
+                    first_time = False
             else:
                 filtered_signal = filtered_signal.unsqueeze(dim=0)
                 filtered_signal_tensor = torch.cat((filtered_signal_tensor, filtered_signal), dim=0)
