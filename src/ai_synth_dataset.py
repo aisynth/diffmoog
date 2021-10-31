@@ -36,7 +36,7 @@ class AiSynthDataset(Dataset):
                     self.audio_dir = "dataset\\train\\wav_files"
                 elif OS == 'LINUX':
                     self.audio_dir = "dataset/train/wav_files"
-            if dataset_type == 'TEST':
+            elif dataset_type == 'TEST':
                 if OS == 'WINDOWS':
                     self.audio_dir = "dataset\\test\\wav_files"
                 elif OS == 'LINUX':

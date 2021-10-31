@@ -6,13 +6,13 @@ Created on Mon May 31 15:41:38 2021
 @author: Moshe Laufer, Noy Uzrad
 """
 import torch
-import torchaudio.functional as taF
 from config import PI, TWO_PI, DEBUG_MODE
 import matplotlib.pyplot as plt
-import simpleaudio as sa
+# import simpleaudio as sa
 import helper
 import julius
 from synth_config import *
+
 
 class Synth:
     def __init__(self, num_sounds=1):
@@ -424,7 +424,7 @@ class Synth:
         if cutoff_freq == 0:
             return input_signal
         else:
-            filtered_waveform_new = julius.lowpass_filter_new(input_signal, cutoff_freq/44100)
+            filtered_waveform_new = julius.lowpass_filter_new(input_signal, cutoff_freq / 44100)
             return filtered_waveform_new
 
     def high_pass(self, input_signal, cutoff_freq, q=0.707, index=0):
@@ -433,7 +433,7 @@ class Synth:
         if cutoff_freq == 0:
             return input_signal
         else:
-            filtered_waveform_new = julius.highpass_filter_new(input_signal, cutoff_freq/44100)
+            filtered_waveform_new = julius.highpass_filter_new(input_signal, cutoff_freq / 44100)
             return filtered_waveform_new
 
     @staticmethod
@@ -542,7 +542,7 @@ if __name__ == "__main__":
     # a.adsr_envelope(attack_t=0.5, decay_t=0, sustain_t=0.5, sustain_level=0.5, release_t=0)
     # plt.plot(a.signal)
     # plt.show
-    play_obj = sa.play_buffer(a.signal.numpy(), num_channels=1, bytes_per_sample=4, sample_rate=a.sample_rate)
+    # play_obj = sa.play_buffer(a.signal.numpy(), num_channels=1, bytes_per_sample=4, sample_rate=a.sample_rate)
     # play_obj.wait_done()
     # b = Signal()
     # a.am_modulation(amp_c=1, freq_c=4, amp_m=0.3, freq_m=0, final_max_amp=0.5, waveform='sine')
