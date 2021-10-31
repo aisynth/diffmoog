@@ -1,4 +1,5 @@
 import torch
+import matplotlib.pyplot as plt
 from torch import nn
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOSS_FACTOR,\
     SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, LOSS_MODE, SAVE_MODEL_PATH, DATASET_MODE, DATASET_TYPE
@@ -18,9 +19,9 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
 
     # Init criteria
     criterion_spectrogram = nn.MSELoss()
-
+    avg_epoch_loss = 0
+    num_of_loss_calc = 0
     for signal_log_mel_spec, target_params_dic in data_loader:
-
         start = time.time()
 
         if DEBUG_MODE:
@@ -141,9 +142,11 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                 + SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total
 
         if LOSS_MODE == 'SPECTROGRAM_ONLY':
-            loss = loss_spectrogram_total2
+            loss = SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total2
             # loss.requires_grad = True
 
+        num_of_loss_calc += 1
+        avg_epoch_loss += loss.item()
         # backpropogate error and update wights
         loss.backward()
         optimizer_arg.step()
@@ -186,30 +189,41 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
 
         end = time.time()
         print("batch processing time:", end - start)
-    return loss
+
+    avg_epoch_loss = avg_epoch_loss / num_of_loss_calc
+    return avg_epoch_loss
 
 
 def train(model, data_loader, optimiser_arg, device_arg, epochs):
     model.train()
     path_parent = os.path.dirname(os.getcwd())
-
+    loss_list = []
     for i in range(epochs):
-        print(f"Epoch {i + 1}")
-        loss = train_single_epoch(model, data_loader, optimiser_arg, device_arg)
+        print(f"Epoch {i + 1} start")
+        avg_epoch_loss = train_single_epoch(model, data_loader, optimiser_arg, device_arg)
+        print(f"Epoch {i + 1} end")
+        print(f"Average Epoch{i} LOSS:", avg_epoch_loss)
         print("--------------------------------------\n")
 
         # save model checkpoint
         if OS == 'WINDOWS':
             model_checkpoint = path_parent + f"\\ai_synth\\trained_models\\synth_net_epoch{i}.pth"
+            plot_path = path_parent + f"\\ai_synth\\trained_models\\loss_graphs\\end_epoch{i}_loss_graph.png"
         elif OS == 'LINUX':
             model_checkpoint = path_parent + f"/ai_synth/trained_models/synth_net_epoch{i}.pth"
+            plot_path = path_parent + f"/ai_synth/trained_models/loss_graphs/end_epoch{i}_loss_graph.png"
 
         torch.save({
             'epoch': i,
             'model_state_dict': synth_net.state_dict(),
             'optimizer_state_dict': optimiser_arg.state_dict(),
-            'loss': loss
+            'loss': avg_epoch_loss
         }, model_checkpoint)
+
+        loss_list.append(avg_epoch_loss)
+        plt.plot(loss_list)
+        plt.savefig(plot_path)
+
 
     print("Finished training")
 

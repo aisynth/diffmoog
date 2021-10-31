@@ -147,10 +147,7 @@ class Synth:
             fm_square_wave = amp_float * torch.sign(torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur))
             # fm_triangle_wave = (2 * amp_float / PI) * torch.arcsin(torch.sin((TWO_PI * freq_float * t + mod_index_float * input_signal_cur)))
             fm_triangle_wave = amp_float * torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur)
-            if torch.any(torch.isnan(fm_triangle_wave)):
-                a = 0
-            if torch.any(torch.isinf(fm_triangle_wave)):
-                a = 0
+
             fm_sawtooth_wave = 2 * (t * freq_float - torch.floor(0.5 + t * freq_float))
             fm_sawtooth_wave = (((fm_sawtooth_wave + 1) / 2) + mod_index_float * input_signal_cur / TWO_PI) % 1
             fm_sawtooth_wave = amp_float * (fm_sawtooth_wave * 2 - 1)
