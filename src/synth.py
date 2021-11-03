@@ -319,10 +319,10 @@ class Synth:
                 sustain = torch.full((sustain_num_samples,), sustain_level)
                 release = torch.linspace(sustain_level, 0, release_num_samples)
             else:
-                attack = torch.linspace(0, 1, int(attack_num_samples[i].item()) , device=get)
-                decay = torch.linspace(1, int(sustain_level[i].item()), int(decay_num_samples[i].item()))
-                sustain = torch.full((int(sustain_num_samples[i].item()),), int(sustain_level[i].item()))
-                release = torch.linspace(int(sustain_num_samples[i].item()), 0, int(release_num_samples[i].item()))
+                attack = torch.linspace(0, 1, int(attack_num_samples[i].item()), device=helper.get_device())
+                decay = torch.linspace(1, int(sustain_level[i].item()), int(decay_num_samples[i].item()), device=helper.get_device())
+                sustain = torch.full((int(sustain_num_samples[i].item()),), int(sustain_level[i].item()), device=helper.get_device())
+                release = torch.linspace(int(sustain_num_samples[i].item()), 0, int(release_num_samples[i].item()), device=helper.get_device())
 
                 # todo: make sure ADSR behavior is differentiable. linspace has to know to get tensors
                 # attack_mod = helper.linspace(torch.tensor(0), torch.tensor(1), attack_num_samples[i])
@@ -336,7 +336,7 @@ class Synth:
             envelope_len = envelope.shape[0]
             signal_len = self.time_samples.shape[0]
             if envelope_len <= signal_len:
-                padding = torch.zeros(signal_len - envelope_len)
+                padding = torch.zeros((signal_len - envelope_len), device=helper.get_device())
                 envelope = torch.cat((envelope, padding))
             else:
                 raise ValueError("Envelope length exceeds signal duration")
