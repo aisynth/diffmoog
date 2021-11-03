@@ -38,7 +38,7 @@ def predict(model, test_data_loader, device_arg):
             for index, param in enumerate(synth.REGRESSION_PARAM_LIST):
                 predicted_dic[param] = output_dic['regression_params'][:, index]
 
-            helper.map_classification_params_from_ints(predicted_dic)
+            predicted_dic = helper.map_classification_params_from_ints(predicted_dic)
 
             normalizer.denormalize(predicted_dic)
             helper.clamp_regression_params(predicted_dic)

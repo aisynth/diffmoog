@@ -1,4 +1,5 @@
 import torch
+from torch import Tensor
 import torchaudio
 import synth
 import matplotlib.pyplot as plt
@@ -59,36 +60,41 @@ log_mel_spec_transform = torch.nn.Sequential(mel_spectrogram_transform, amplitud
 
 def map_classification_params_to_ints(params_dic: dict):
     """ map classification params to ints, to input them for a neural network """
-
+    mapped_params_dict = {}
     for key, val in params_dic.items():
         if key in synth.CLASSIFICATION_PARAM_LIST:
             if key == "osc1_freq" or key == "osc2_freq":
                 # todo: inspect which of these are needed (i think only the middle one)
                 if torch.is_tensor(val):
-                    params_dic[key] = [synth.OSC_FREQ_DIC[round(x.item(), 4)] for x in val]
+                    mapped_params_dict[key] = [synth.OSC_FREQ_DIC[round(x.item(), 4)] for x in val]
                 if isinstance(val, float):
-                    params_dic[key] = synth.OSC_FREQ_DIC[round(val, 4)]
+                    mapped_params_dict[key] = synth.OSC_FREQ_DIC[round(val, 4)]
                 else:
-                    params_dic[key] = [synth.OSC_FREQ_DIC[round(x, 4)] for x in val]
+                    mapped_params_dict[key] = [synth.OSC_FREQ_DIC[round(x, 4)] for x in val]
             if "wave" in key:
-                params_dic[key] = synth.WAVE_TYPE_DIC[val]
+                mapped_params_dict[key] = synth.WAVE_TYPE_DIC[val]
             elif "filter_type" == key:
-                params_dic[key] = synth.FILTER_TYPE_DIC[val]
+                mapped_params_dict[key] = synth.FILTER_TYPE_DIC[val]
+
+    return mapped_params_dict
 
 
 def map_classification_params_from_ints(params_dic: dict):
     """ map classification params from ints (inverse operation of map_classification_params_to_ints),
      to input them for a neural network """
 
+    mapped_params_dict = {}
     for key, val in params_dic.items():
         if key in synth.CLASSIFICATION_PARAM_LIST:
             if key == "osc1_freq" or key == "osc2_freq":
                 # classification_params_dic[key] = synth.OSC_FREQ_DIC[round(val, 4)]
-                params_dic[key] = torch.tensor([synth.OSC_FREQ_DIC_INV[x.item()] for x in val])
+                mapped_params_dict[key] = torch.tensor([synth.OSC_FREQ_DIC_INV[x.item()] for x in val])
             if "wave" in key:
-                params_dic[key] = [synth.WAVE_TYPE_DIC_INV[x.item()] for x in val]
+                mapped_params_dict[key] = [synth.WAVE_TYPE_DIC_INV[x.item()] for x in val]
             elif "filter_type" == key:
-                params_dic[key] = [synth.FILTER_TYPE_DIC_INV[x.item()] for x in val]
+                mapped_params_dict[key] = [synth.FILTER_TYPE_DIC_INV[x.item()] for x in val]
+
+    return mapped_params_dict
 
 
 def clamp_regression_params(parameters_dict: dict):
@@ -123,18 +129,40 @@ def clamp_regression_params(parameters_dict: dict):
 
     adsr_clamp_indices = torch.nonzero(adsr_length_in_sec >= synth.SIGNAL_DURATION_SEC, as_tuple=True)[0]
 
-    for i in adsr_clamp_indices.tolist():
-        # add small number to normalization to prevent numerical issue where the sum exceeds 1
-        normalization_value = adsr_length_in_sec[i] + 1e-5
-        attack_t[i] /= normalization_value
-        decay_t[i] /= normalization_value
-        sustain_t[i] /= normalization_value
-        release_t[i] /= normalization_value
+    normalized_attack_list = []
+    normalized_decay_list = []
+    normalized_sustain_list = []
+    normalized_release_list = []
 
-    clamped_params_dict['attack_t'] = attack_t
-    clamped_params_dict['decay_t'] = decay_t
-    clamped_params_dict['sustain_t'] = sustain_t
-    clamped_params_dict['release_t'] = release_t
+    for i in range(adsr_length_in_sec.shape[0]):
+        if i in adsr_clamp_indices.tolist():
+            # add small number to normalization to prevent numerical issue where the sum exceeds 1
+            normalization_value = adsr_length_in_sec[i] + 1e-3
+            normalized_attack = attack_t[i] / normalization_value
+            normalized_decay = decay_t[i] / normalization_value
+            normalized_sustain = sustain_t[i] / normalization_value
+            normalized_release = release_t[i] / normalization_value
+
+        else:
+            normalized_attack = attack_t[i]
+            normalized_decay = decay_t[i]
+            normalized_sustain = sustain_t[i]
+            normalized_release = release_t[i]
+
+        normalized_attack_list.append(normalized_attack)
+        normalized_decay_list.append(normalized_decay)
+        normalized_sustain_list.append(normalized_sustain)
+        normalized_release_list.append(normalized_release)
+
+    normalized_attack_tensor = torch.stack(normalized_attack_list)
+    normalized_decay_tensor = torch.stack(normalized_decay_list)
+    normalized_sustain_tensor = torch.stack(normalized_sustain_list)
+    normalized_release_tensor = torch.stack(normalized_release_list)
+
+    clamped_params_dict['attack_t'] = normalized_attack_tensor
+    clamped_params_dict['decay_t'] = normalized_decay_tensor
+    clamped_params_dict['sustain_t'] = normalized_sustain_tensor
+    clamped_params_dict['release_t'] = normalized_release_tensor
 
     clamped_params_dict['sustain_level'] = torch.clamp(parameters_dict['sustain_level'], min=0, max=synth.MAX_AMP)
 
@@ -272,3 +300,41 @@ class LogNormaliser:
 def create_data_loader(train_data, batch_size):
     train_dataloader = DataLoader(train_data, batch_size=batch_size)
     return train_dataloader
+
+
+# from https://github.com/pytorch/pytorch/issues/61292
+def linspace(start: Tensor, stop: Tensor, num: Tensor):
+    """
+    Creates a tensor of shape [num, *start.shape] whose values are evenly spaced from start to end, inclusive.
+    Replicates but the multi-dimensional bahaviour of numpy.linspace in PyTorch.
+    """
+    start = start.to(get_device())
+    stop = stop.to(get_device())
+    num = num.to(get_device())
+    # create a tensor of 'num' steps from 0 to 1
+
+    # todo: make sure ADSR behavior is differentiable. arange has to know to get tensors
+    # OPTION1
+    # arange_list_of_tensors = []
+    # current_tensor = torch.tensor([0], dtype=torch.float32, device=get_device(), requires_grad=True)
+    # while current_tensor.item() < num.item():
+    #     arange_list_of_tensors.append(current_tensor)
+    #     current_tensor = current_tensor + 1
+    #
+    # arange_tensor1 = torch.stack(arange_list_of_tensors).to(get_device()).squeeze()
+
+    # OPTION2
+    arange_tensor2 = torch.arange(num, dtype=torch.float32, device=get_device(), requires_grad=True)
+
+    steps = arange_tensor2 / (num - 1)
+
+    # reshape the 'steps' tensor to [-1, *([1]*start.ndim)] to allow for broadcastings
+    # - using 'steps.reshape([-1, *([1]*start.ndim)])' would be nice here but torchscript
+    #   "cannot statically infer the expected size of a list in this contex", hence the code below
+    for i in range(start.ndim):
+        steps = steps.unsqueeze(-1)
+
+    # the output starts at 'start' and increments until 'stop' in each dimension
+    out = start[None] + steps * (stop - start)[None]
+
+    return out

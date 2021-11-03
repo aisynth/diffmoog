@@ -30,30 +30,6 @@ class AiSynthDataset(Dataset):
         self.dataset_mode = dataset_mode
         self.dataset_type = dataset_type
 
-        if dataset_mode == 'WAV':
-            if dataset_type == 'TRAIN':
-                if OS == 'WINDOWS':
-                    self.audio_dir = "dataset\\train\\wav_files"
-                elif OS == 'LINUX':
-                    self.audio_dir = "dataset/train/wav_files"
-            elif dataset_type == 'TEST':
-                if OS == 'WINDOWS':
-                    self.audio_dir = "dataset\\test\\wav_files"
-                elif OS == 'LINUX':
-                    self.audio_dir = "dataset/test/wav_files"
-
-        elif self.dataset_mode == 'MEL_SPEC':
-            if dataset_type == 'TRAIN':
-                if OS == 'WINDOWS':
-                    self.audio_dir = "dataset\\train\\audio_mel_spec_files"
-                elif OS == 'LINUX':
-                    self.audio_dir = "dataset/train/audio_mel_spec_files"
-            if dataset_type == 'TEST':
-                if OS == 'WINDOWS':
-                    self.audio_dir = "dataset\\test\\audio_mel_spec_files"
-                elif OS == 'LINUX':
-                    self.audio_dir = "dataset/test/audio_mel_spec_files"
-
     def __len__(self):
         return len(self.params)
 
@@ -97,7 +73,7 @@ class AiSynthDataset(Dataset):
 
         classification_params_pd_series = params_pd_series.loc[synth.CLASSIFICATION_PARAM_LIST]
         classification_params_dic = classification_params_pd_series.to_dict()
-        helper.map_classification_params_to_ints(classification_params_dic)
+        classification_params_dic = helper.map_classification_params_to_ints(classification_params_dic)
 
         # move all synth parameters to tensors on the GPU
         for key, value in regression_params_dic.items():

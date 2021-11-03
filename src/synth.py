@@ -55,7 +55,7 @@ class Synth:
         t = self.time_samples
         # oscillator = torch.zeros_like(t, requires_grad=True)
 
-        oscillator_tensor = torch.tensor(()).to(helper.get_device())
+        oscillator_tensor = torch.tensor((), requires_grad=True).to(helper.get_device())
         first_time = True
         for i in range(num_sounds):
 
@@ -129,7 +129,7 @@ class Synth:
 
         self.signal_values_sanity_check(amp_c, freq_c, waveform)
         t = self.time_samples
-        oscillator_tensor = torch.tensor(()).to(helper.get_device())
+        oscillator_tensor = torch.tensor((), requires_grad=True).to(helper.get_device())
         first_time = True
         for i in range(num_sounds):
             if num_sounds == 1:
@@ -291,19 +291,25 @@ class Synth:
             sustain_num_samples = int(self.sample_rate * sustain_t)
             release_num_samples = int(self.sample_rate * release_t)
         else:
-            attack_num_samples = [int(self.sample_rate * attack_t[i]) for i in range(num_sounds)]
-            decay_num_samples = [int(self.sample_rate * decay_t[i]) for i in range(num_sounds)]
-            sustain_num_samples = [int(self.sample_rate * sustain_t[i]) for i in range(num_sounds)]
-            release_num_samples = [int(self.sample_rate * release_t[i]) for i in range(num_sounds)]
+
+            attack_num_samples = [torch.floor(self.sample_rate * attack_t[i]) for i in range(num_sounds)]
+            decay_num_samples = [torch.floor(self.sample_rate * decay_t[i]) for i in range(num_sounds)]
+            sustain_num_samples = [torch.floor(self.sample_rate * sustain_t[i]) for i in range(num_sounds)]
+            release_num_samples = [torch.floor(self.sample_rate * release_t[i]) for i in range(num_sounds)]
+            attack_num_samples = torch.stack(attack_num_samples)
+            decay_num_samples = torch.stack(decay_num_samples)
+            sustain_num_samples = torch.stack(sustain_num_samples)
+            release_num_samples = torch.stack(release_num_samples)
 
         if num_sounds > 1:
             # todo: change the check with sustain_level[0]
             if torch.is_tensor(sustain_level[0]):
-                sustain_level = [sustain_level[i].item() for i in range(num_sounds)]
+                sustain_level = [sustain_level[i] for i in range(num_sounds)]
+                sustain_level = torch.stack(sustain_level)
             else:
                 sustain_level = [sustain_level[i] for i in range(num_sounds)]
 
-        enveloped_signal_tensor = torch.tensor(()).to(helper.get_device())
+        enveloped_signal_tensor = torch.tensor((), requires_grad=True).to(helper.get_device())
         first_time = True
         for i in range(num_sounds):
 
@@ -313,12 +319,19 @@ class Synth:
                 sustain = torch.full((sustain_num_samples,), sustain_level)
                 release = torch.linspace(sustain_level, 0, release_num_samples)
             else:
-                attack = torch.linspace(0, 1, attack_num_samples[i])
-                decay = torch.linspace(1, sustain_level[i], decay_num_samples[i])
-                sustain = torch.full((sustain_num_samples[i],), sustain_level[i])
-                release = torch.linspace(sustain_level[i], 0, release_num_samples[i])
+                attack = torch.linspace(0, 1, int(attack_num_samples[i].item()) , device=get)
+                decay = torch.linspace(1, int(sustain_level[i].item()), int(decay_num_samples[i].item()))
+                sustain = torch.full((int(sustain_num_samples[i].item()),), int(sustain_level[i].item()))
+                release = torch.linspace(int(sustain_num_samples[i].item()), 0, int(release_num_samples[i].item()))
+
+                # todo: make sure ADSR behavior is differentiable. linspace has to know to get tensors
+                # attack_mod = helper.linspace(torch.tensor(0), torch.tensor(1), attack_num_samples[i])
+                # decay_mod = helper.linspace(torch.tensor(1), sustain_level[i], decay_num_samples[i])
+                # sustain_mod = torch.full((sustain_num_samples[i],), sustain_level[i])
+                # release_mod = helper.linspace(sustain_num_samples[i], torch.tensor(0), release_num_samples[i])
 
             envelope = torch.cat((attack, decay, sustain, release))
+            # envelope = torch.cat((attack_mod, decay_mod, sustain_mod, release_mod))
 
             envelope_len = envelope.shape[0]
             signal_len = self.time_samples.shape[0]
@@ -370,7 +383,7 @@ class Synth:
                 none
 
             """
-        filtered_signal_tensor = torch.tensor(()).to(helper.get_device())
+        filtered_signal_tensor = torch.tensor((), requires_grad=True).to(helper.get_device())
         first_time = True
         for i in range(num_sounds):
             if num_sounds == 1:
