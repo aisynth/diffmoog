@@ -3,10 +3,12 @@ import torch
 import helper
 from torchsummary import summary
 from synth import REGRESSION_PARAM_LIST, CLASSIFICATION_PARAM_LIST, WAVE_TYPE_DIC, FILTER_TYPE_DIC, OSC_FREQ_LIST
+from config import SYNTH_TYPE
 
 # todo: this is value from Valerio Tutorial. has to check
 # LINEAR_IN_CHANNELS = 128 * 5 * 4
 LINEAR_IN_CHANNELS = 4480
+# LINEAR_IN_CHANNELS = 8064
 HIDDEN_IN_CHANNELS = 1000
 
 
@@ -82,19 +84,35 @@ class SynthNetwork(nn.Module):
             nn.MaxPool2d(kernel_size=2)
         )
         self.flatten = nn.Flatten()
-        self.classification_params = nn.ModuleDict([
-            ['osc1_freq', nn.Linear(LINEAR_IN_CHANNELS, len(OSC_FREQ_LIST))],
-            ['osc1_wave', nn.Linear(LINEAR_IN_CHANNELS, len(WAVE_TYPE_DIC))],
-            ['osc2_freq', nn.Linear(LINEAR_IN_CHANNELS, len(OSC_FREQ_LIST))],
-            ['osc2_wave', nn.Linear(LINEAR_IN_CHANNELS, len(WAVE_TYPE_DIC))],
-            ['filter_type', nn.Linear(LINEAR_IN_CHANNELS, len(FILTER_TYPE_DIC))],
-        ])
-        self.regression_params = nn.Sequential(
-            nn.Linear(LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-            nn.Linear(HIDDEN_IN_CHANNELS, len(REGRESSION_PARAM_LIST))
-            )
+        if SYNTH_TYPE == 'OSC_ONLY':
+            self.classification_params = nn.ModuleDict([
+                ['osc1_freq', nn.Linear(LINEAR_IN_CHANNELS, len(OSC_FREQ_LIST))],
+            ])
+        elif SYNTH_TYPE == 'SYNTH_BASIC':
+            self.classification_params = nn.ModuleDict([
+                ['osc1_freq', nn.Linear(LINEAR_IN_CHANNELS, len(OSC_FREQ_LIST))],
+                ['osc1_wave', nn.Linear(LINEAR_IN_CHANNELS, len(WAVE_TYPE_DIC))],
+                ['osc2_freq', nn.Linear(LINEAR_IN_CHANNELS, len(OSC_FREQ_LIST))],
+                ['osc2_wave', nn.Linear(LINEAR_IN_CHANNELS, len(WAVE_TYPE_DIC))],
+                ['filter_type', nn.Linear(LINEAR_IN_CHANNELS, len(FILTER_TYPE_DIC))],
+            ])
+        else:
+            raise ValueError("Provided SYNTH_TYPE is not recognized")
+
+        if SYNTH_TYPE != 'OSC_ONLY':
+            self.regression_params = nn.Sequential(
+                nn.Linear(LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
+                nn.Linear(HIDDEN_IN_CHANNELS, len(REGRESSION_PARAM_LIST))
+                )
+
         self.softmax = nn.Softmax(dim=1)
         self.sigmoid = nn.Sigmoid()
+
+        # Initialization
+        nn.init.kaiming_normal_(self.conv1, mode='fan_in', nonlinearity='relu')
+        nn.init.kaiming_normal_(self.conv2, mode='fan_in', nonlinearity='relu')
+        nn.init.kaiming_normal_(self.conv3, mode='fan_in', nonlinearity='relu')
+        nn.init.kaiming_normal_(self.conv4, mode='fan_in', nonlinearity='relu')
 
     def forward(self, input_data):
         x = self.conv1(input_data)
@@ -103,25 +121,24 @@ class SynthNetwork(nn.Module):
         x = self.conv4(x)
         x = self.flatten(x)
 
-        if torch.any(torch.isnan(x)):
-            a = 0
-
         # Apply different heads to predict each synth parameter
         output_dic = {}
         for out_name, lin in self.classification_params.items():
             # -----> do not use softmax if using CrossEntropyLoss()
-            probabilities = self.softmax(lin(x))
+            x = lin(x)
+            probabilities = self.softmax(x)
             if out_name == 'osc1_freq' or out_name == 'osc2_freq':
                 osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())
                 output_dic[out_name] = torch.matmul(probabilities, osc_freq_tensor)
             else:
                 output_dic[out_name] = probabilities
 
-        x = self.regression_params(x)
-        x = self.sigmoid(x)
+        if SYNTH_TYPE != 'OSC_ONLY':
+            x = self.regression_params(x)
+            x = self.sigmoid(x)
 
-        for index, param in enumerate(REGRESSION_PARAM_LIST):
-            output_dic[param] = x[:, index]
+            for index, param in enumerate(REGRESSION_PARAM_LIST):
+                output_dic[param] = x[:, index]
 
         return output_dic
 

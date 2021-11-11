@@ -3,8 +3,8 @@ import os
 import scipy.io.wavfile
 import torch
 import helper
-from sound_generator import SynthBasicFlow
-from config import DATASET_SIZE, DATASET_TYPE, DATASET_MODE, OS
+from sound_generator import SynthBasicFlow, SynthOscOnly
+from config import DATASET_SIZE, DATASET_TYPE, DATASET_MODE, OS, SYNTH_TYPE
 
 """
 Create a dataset by randomizing synthesizer parameters and generating sound.
@@ -40,7 +40,12 @@ if __name__ == "__main__":
     for i in range(DATASET_SIZE):
         file_name = f"sound_{i}"
 
-        synth_obj = SynthBasicFlow(file_name)
+        if SYNTH_TYPE == 'SYNTH_BASIC':
+            synth_obj = SynthBasicFlow(file_name)
+        elif SYNTH_TYPE == 'OSC_ONLY':
+            synth_obj = SynthOscOnly(file_name)
+        else:
+            raise ValueError("Provided SYNTH_TYPE is not recognized")
 
         audio = synth_obj.signal
         parameters = synth_obj.params_dict
@@ -54,8 +59,12 @@ if __name__ == "__main__":
                 audio_path = dataset_dir_path + "wav_files/" + f"{file_name}.wav"
 
             audio = audio.detach().cpu().numpy()
+            if SYNTH_TYPE == 'OSC_ONLY':
+                audio = audio.T
+
             scipy.io.wavfile.write(audio_path, 44100, audio)
             print(f"Generated {file_name}")
+
         elif DATASET_MODE == 'MEL_SPEC':
             audio_mel_spec = helper.mel_spectrogram_transform(audio)
             audio_log_mel_spec = helper.amplitude_to_db_transform(audio_mel_spec)

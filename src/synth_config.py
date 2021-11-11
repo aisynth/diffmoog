@@ -1,13 +1,24 @@
+from config import SYNTH_TYPE
+
 SAMPLE_RATE = 44100
 SIGNAL_DURATION_SEC = 1.0
 
-CLASSIFICATION_PARAM_LIST = \
-    ['osc1_freq', 'osc1_wave', 'osc2_freq', 'osc2_wave', 'filter_type']
-REGRESSION_PARAM_LIST = \
-    ['osc1_amp', 'osc1_mod_index', 'lfo1_freq',
-     'osc2_amp', 'osc2_mod_index', 'lfo2_freq',
-     'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']
-PARAM_LIST = [CLASSIFICATION_PARAM_LIST, REGRESSION_PARAM_LIST]
+if SYNTH_TYPE == 'OSC_ONLY':
+    CLASSIFICATION_PARAM_LIST = ['osc1_freq']
+    REGRESSION_PARAM_LIST = []
+    PARAM_LIST = [CLASSIFICATION_PARAM_LIST, REGRESSION_PARAM_LIST]
+
+elif SYNTH_TYPE == 'SYNTH_BASIC':
+    CLASSIFICATION_PARAM_LIST = \
+        ['osc1_freq', 'osc1_wave', 'osc2_freq', 'osc2_wave', 'filter_type']
+    REGRESSION_PARAM_LIST = \
+        ['osc1_amp', 'osc1_mod_index', 'lfo1_freq',
+         'osc2_amp', 'osc2_mod_index', 'lfo2_freq',
+         'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']
+    PARAM_LIST = [CLASSIFICATION_PARAM_LIST, REGRESSION_PARAM_LIST]
+
+else:
+    raise ValueError("Provided SYNTH_TYPE is not recognized")
 
 WAVE_TYPE_DIC = {"sine": 0,
                  "square": 1,

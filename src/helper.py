@@ -4,7 +4,7 @@ import torchaudio
 import synth
 import matplotlib.pyplot as plt
 import librosa
-from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE
+from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE, SYNTH_TYPE
 from synth_config import *
 from torch.utils.data import DataLoader
 
@@ -225,38 +225,43 @@ class Normalizer:
         return normalized_params_dict
 
     def denormalize(self, parameters_dict: dict):
-        denormalized_params_dict = {
-            'osc1_mod_index': self.mod_index_normalizer.denormalise(parameters_dict['osc1_mod_index']),
-            'lfo1_freq': self.lfo_freq_normalizer.denormalise(parameters_dict['lfo1_freq']),
-            'osc2_mod_index': self.mod_index_normalizer.denormalise(parameters_dict['osc2_mod_index']),
-            'lfo2_freq': self.lfo_freq_normalizer.denormalise(parameters_dict['lfo2_freq']),
-            'filter_freq': self.filter_freq_normalizer.denormalise(parameters_dict['filter_freq']),
-            'attack_t': self.adsr_normalizer.denormalise(parameters_dict['attack_t']),
-            'decay_t': self.adsr_normalizer.denormalise(parameters_dict['decay_t']),
-            'sustain_t': self.adsr_normalizer.denormalise(parameters_dict['sustain_t']),
-            'release_t': self.adsr_normalizer.denormalise(parameters_dict['release_t']),
 
-            # params that doesn't need denormalization:
-            'osc1_freq': parameters_dict['osc1_freq'],
-            'osc1_wave': parameters_dict['osc1_wave'],
-            'osc1_amp': parameters_dict['osc1_amp'],
-            'osc2_freq': parameters_dict['osc2_freq'],
-            'osc2_wave': parameters_dict['osc2_wave'],
-            'osc2_amp': parameters_dict['osc2_amp'],
-            'filter_type': parameters_dict['filter_type'],
-            'sustain_level': parameters_dict['sustain_level']}
+        if SYNTH_TYPE == 'OSC_ONLY':
+            denormalized_params_dict = {'osc1_freq': parameters_dict['osc1_freq']}
+        else:
+            denormalized_params_dict = {
+                'osc1_mod_index': self.mod_index_normalizer.denormalise(parameters_dict['osc1_mod_index']),
+                'lfo1_freq': self.lfo_freq_normalizer.denormalise(parameters_dict['lfo1_freq']),
+                'osc2_mod_index': self.mod_index_normalizer.denormalise(parameters_dict['osc2_mod_index']),
+                'lfo2_freq': self.lfo_freq_normalizer.denormalise(parameters_dict['lfo2_freq']),
+                'filter_freq': self.filter_freq_normalizer.denormalise(parameters_dict['filter_freq']),
+                'attack_t': self.adsr_normalizer.denormalise(parameters_dict['attack_t']),
+                'decay_t': self.adsr_normalizer.denormalise(parameters_dict['decay_t']),
+                'sustain_t': self.adsr_normalizer.denormalise(parameters_dict['sustain_t']),
+                'release_t': self.adsr_normalizer.denormalise(parameters_dict['release_t']),
+
+                # params that doesn't need denormalization:
+                'osc1_freq': parameters_dict['osc1_freq'],
+                'osc1_wave': parameters_dict['osc1_wave'],
+                'osc1_amp': parameters_dict['osc1_amp'],
+                'osc2_freq': parameters_dict['osc2_freq'],
+                'osc2_wave': parameters_dict['osc2_wave'],
+                'osc2_amp': parameters_dict['osc2_amp'],
+                'filter_type': parameters_dict['filter_type'],
+                'sustain_level': parameters_dict['sustain_level']}
 
         return denormalized_params_dict
 
 
-def plot_spectrogram(spec, title=None, ylabel='freq_bin', aspect='auto', xmax=None):
-    """ note that the spectrogram shall be given from STFT computation.
-        before display, an amplitude to db conversion is done"""
+def plot_spectrogram(spec, scale='linear', title=None, ylabel='freq_bin', aspect='auto', xmax=None):
     fig, axs = plt.subplots(1, 1)
-    axs.set_title(title or 'Spectrogram')
+    axs.set_title(title or 'Spectrogram (db)')
     axs.set_ylabel(ylabel)
     axs.set_xlabel('frame')
-    im = axs.imshow(spec, origin='lower', aspect=aspect)
+    if scale == 'linear':
+        im = axs.imshow(spec, origin='lower', aspect=aspect)
+    elif scale == 'dB:':
+        im = axs.imshow(librosa.power_to_db(spec), origin='lower', aspect=aspect)
     if xmax:
         axs.set_xlim((0, xmax))
     fig.colorbar(im, ax=axs)

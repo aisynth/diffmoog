@@ -1,6 +1,8 @@
+import matplotlib.pyplot as plt
 import numpy
-from config import PI
+from config import PI, PLOT_SPEC
 from src.config import SIGNAL_DURATION_SEC
+from synth_config import OSC_FREQ_LIST
 import synth
 import random
 import simpleaudio as sa
@@ -162,8 +164,78 @@ class SynthBasicFlow:
         return enveloped_signal
 
 
+class SynthOscOnly:
+    """A synthesizer that produces a single sine oscillator.
+
+        Args:
+            self: Self object
+            file_name: name for sound
+            parameters_dict(optional): parameters for the synth components to generate specific sounds
+            num_sounds: number of sounds to generate.
+        """
+
+    def __init__(self, file_name='unnamed_sound', parameters_dict=None, num_sounds=1):
+        self.file_name = file_name
+        self.params_dict = {}
+        # init parameters_dict
+        if parameters_dict is None:
+            self.init_random_synth_params(num_sounds)
+        elif type(parameters_dict) is dict:
+            self.params_dict = parameters_dict.copy()
+        else:
+            ValueError("Provided parameters are not provided as dictionary")
+
+        # generate signal with basic signal flow
+        self.signal = self.generate_signal(num_sounds)
+
+    def init_random_synth_params(self, num_sounds):
+        """init params_dict with lists of parameters"""
+
+        self.params_dict['osc1_freq'] = random.choices(synth.OSC_FREQ_LIST, k=num_sounds)
+
+        for key, val in self.params_dict.items():
+            if isinstance(val, numpy.ndarray):
+                self.params_dict[key] = val.tolist()
+
+        if num_sounds == 1:
+            for key, value in self.params_dict.items():
+                self.params_dict[key] = value[0]
+
+    def generate_signal(self, num_sounds):
+        osc_freq = self.params_dict['osc1_freq']
+
+        synthesizer = Synth(num_sounds)
+
+        osc = synthesizer.oscillator(amp=1,
+                                     freq=osc_freq,
+                                     phase=0,
+                                     waveform='sine',
+                                     num_sounds=num_sounds)
+        return osc
+
+
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
+    for i in OSC_FREQ_LIST:
+        a = SynthOscOnly('audio_example', {'osc1_freq': i}, num_sounds=1)
+        # signal = a.signal.squeeze().cpu().detach().numpy()
+        # plt.plot(signal)
+        # plt.show()
+        play_obj = sa.play_buffer(a.signal.detach().cpu().numpy(),
+                                  num_channels=1,
+                                  bytes_per_sample=4,
+                                  sample_rate=44100)
+        play_obj.wait_done()
+
+        a = helper.mel_spectrogram_transform(a.signal).squeeze()
+
+        if PLOT_SPEC:
+            helper.plot_spectrogram(a.cpu().detach().numpy(),
+                                    scale='linear',
+                                    title="MelSpectrogram (dB)",
+                                    ylabel='mel freq')
+
+    a = SynthOscOnly('audio_example', num_sounds=10)
     a = SynthBasicFlow('audio_example', num_sounds=10)
     b = torch.rand(10, 44100)
     b = helper.move_to(b, helper.get_device())
