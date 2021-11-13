@@ -8,7 +8,7 @@ PI = 3.141592653589793
 TWO_PI = 2 * PI
 
 # Synth architecture. OSC_ONLY or SYNTH_BASIC
-SYNTH_TYPE = 'SYNTH_BASIC'
+SYNTH_TYPE = 'OSC_ONLY'
 
 # Dataset configs
 DATASET_SIZE = 10000

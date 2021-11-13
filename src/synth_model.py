@@ -47,6 +47,7 @@ class SynthNetwork(nn.Module):
                 stride=1,
                 padding=2
             ),
+            nn.BatchNorm2d(16),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2)
         )
@@ -58,6 +59,7 @@ class SynthNetwork(nn.Module):
                 stride=1,
                 padding=2
             ),
+            nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2)
         )
@@ -69,6 +71,7 @@ class SynthNetwork(nn.Module):
                 stride=1,
                 padding=2
             ),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2)
         )
@@ -80,6 +83,7 @@ class SynthNetwork(nn.Module):
                 stride=1,
                 padding=2
             ),
+            nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2)
         )
@@ -109,10 +113,12 @@ class SynthNetwork(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
         # Initialization
-        nn.init.kaiming_normal_(self.conv1, mode='fan_in', nonlinearity='relu')
-        nn.init.kaiming_normal_(self.conv2, mode='fan_in', nonlinearity='relu')
-        nn.init.kaiming_normal_(self.conv3, mode='fan_in', nonlinearity='relu')
-        nn.init.kaiming_normal_(self.conv4, mode='fan_in', nonlinearity='relu')
+        nn.init.kaiming_normal_(self.conv1[0].weight, mode='fan_in', nonlinearity='relu')
+        nn.init.kaiming_normal_(self.conv2[0].weight, mode='fan_in', nonlinearity='relu')
+        nn.init.kaiming_normal_(self.conv3[0].weight, mode='fan_in', nonlinearity='relu')
+        nn.init.kaiming_normal_(self.conv4[0].weight, mode='fan_in', nonlinearity='relu')
+        # nn.init.kaiming_normal_(self.classification_params, mode='fan_in', nonlinearity='relu')
+        # nn.init.kaiming_normal_(self.classification_params, mode='fan_in', nonlinearity='relu')
 
     def forward(self, input_data):
         x = self.conv1(input_data)
