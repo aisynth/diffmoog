@@ -343,3 +343,11 @@ def linspace(start: Tensor, stop: Tensor, num: Tensor):
     out = start[None] + steps * (stop - start)[None]
 
     return out
+
+
+def lsd_loss(input_spectrogram: Tensor, ouput_spectrogram: Tensor) -> Tensor:
+    """ Log Spectral Density loss
+    https://en.wikipedia.org/wiki/Log-spectral_distance
+    """
+    log_spectral_distance = torch.sum(torch.square(10 * torch.log10(input_spectrogram / ouput_spectrogram)))
+    return log_spectral_distance

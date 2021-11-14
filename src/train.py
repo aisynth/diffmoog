@@ -2,7 +2,8 @@ import torch
 import matplotlib.pyplot as plt
 from torch import nn
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOSS_FACTOR, \
-    SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, LOSS_MODE, SAVE_MODEL_PATH, DATASET_MODE, DATASET_TYPE, SYNTH_TYPE
+    SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, LOSS_MODE, SAVE_MODEL_PATH, DATASET_MODE, DATASET_TYPE, SYNTH_TYPE, \
+    LOSS_TYPE
 from ai_synth_dataset import AiSynthDataset, AiSynthSingleOscDataset
 from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, OS, PLOT_SPEC
 from synth_model import SynthNetwork
@@ -74,8 +75,9 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                                     title="MelSpectrogram (dB)",
                                     ylabel='mel freq')
 
-        loss_spectrogram_total2 = criterion_spectrogram(predicted_mel_spec_sound_signal,
+        mse_loss = criterion_spectrogram(predicted_mel_spec_sound_signal,
                                                         signal_mel_spec)
+        lsd_loss = helper.lsd_loss(signal_mel_spec, predicted_mel_spec_sound_signal)
 
         # todo: remove the individual synth inference code
         # -----------------------------------------------
@@ -159,7 +161,12 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                 + SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total
 
         if LOSS_MODE == 'SPECTROGRAM_ONLY':
-            loss = SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total2
+            if LOSS_TYPE == 'MSE':
+                loss = SPECTROGRAM_LOSS_FACTOR * mse_loss
+            elif LOSS_TYPE == 'LSD':
+                loss = SPECTROGRAM_LOSS_FACTOR * lsd_loss
+            else:
+                raise ValueError("Provided LOSS_TYPE is not recognized")
             # loss.requires_grad = True
 
         num_of_loss_calc += 1
