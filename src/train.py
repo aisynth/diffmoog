@@ -3,11 +3,12 @@ import matplotlib.pyplot as plt
 from torch import nn
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOSS_FACTOR, \
     SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, LOSS_MODE, SAVE_MODEL_PATH, DATASET_MODE, DATASET_TYPE, SYNTH_TYPE, \
-    LOSS_TYPE
+    LOSS_TYPE, LOAD_MODEL_PATH, USE_LOADED_MODEL
 from ai_synth_dataset import AiSynthDataset, AiSynthSingleOscDataset
 from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, OS, PLOT_SPEC
 from synth_model import SynthNetwork
 from sound_generator import SynthBasicFlow, SynthOscOnly
+from synth_config import OSC_FREQ_LIST, OSC_FREQ_DIC_INV
 import synth
 import helper
 import time
@@ -21,7 +22,8 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
     # Init criteria
     criterion_spectrogram = nn.MSELoss()
     sum_epoch_loss = 0
-    num_of_loss_calc = 0
+    sum_epoch_accuracy = 0
+    num_of_mini_batches = 0
     for signal_mel_spec, target_params_dic in data_loader:
         start = time.time()
 
@@ -169,11 +171,35 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                 raise ValueError("Provided LOSS_TYPE is not recognized")
             # loss.requires_grad = True
 
-        num_of_loss_calc += 1
+        num_of_mini_batches += 1
         sum_epoch_loss += loss.item()
         # backpropogate error and update wights
         loss.backward()
         optimizer_arg.step()
+
+        # Check Accuracy
+        osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, device=device_arg)
+        closest_frequency_index = torch.searchsorted(osc_freq_tensor, param_dict_to_synth['osc1_freq'])
+        num_correct_predictions = 0
+        for i in range(len(closest_frequency_index)):
+            predicted_osc = param_dict_to_synth['osc1_freq'][i]
+            closest_osc_index_from_below = closest_frequency_index[i] - 1
+            closest_osc_index_from_above = closest_frequency_index[i]
+            below_ratio = predicted_osc / OSC_FREQ_LIST[closest_osc_index_from_below.item()]
+            above_ratio = OSC_FREQ_LIST[closest_osc_index_from_above.item()] / predicted_osc
+            if below_ratio < above_ratio:
+                rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_below.item()]
+            else:
+                rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_above.item()]
+
+            target_osc = OSC_FREQ_DIC_INV[target_params_dic['classification_params']['osc1_freq'][i].item()]
+            if abs(rounded_predicted_freq - target_osc) < 1:
+                num_correct_predictions += 1
+
+        accuracy = num_correct_predictions / len(closest_frequency_index)
+        sum_epoch_accuracy += accuracy
+
+        end = time.time()
 
         if PRINT_TRAIN_STATS:
             if LOSS_MODE == 'FULL':
@@ -189,9 +215,8 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                 print('loss_regression_params', REGRESSION_LOSS_FACTOR * loss_regression_params)
                 print('loss_spectrogram_total', SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total)
                 print('\n')
-            print("-----Total Loss-----")
-            print(f"loss: {loss.item()}")
-            print("--------------------")
+            print(f"loss: {round(loss.item(), 2)},\t accuracy: {round(accuracy*100, 2)}%,\t batch processing time: {round(end - start, 2)}s")
+
 
         if DEBUG_MODE:
             print("osc1_freq",
@@ -211,36 +236,36 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
             print("regression_params",
                   output_dic['regression_params'], regression_target_parameters_tensor)
 
-        end = time.time()
-        print("batch processing time:", end - start)
-
-    avg_epoch_loss = sum_epoch_loss / num_of_loss_calc
-    return avg_epoch_loss
+    avg_epoch_loss = sum_epoch_loss / num_of_mini_batches
+    avg_epoch_accuracy = sum_epoch_accuracy / num_of_mini_batches
+    return avg_epoch_loss, avg_epoch_accuracy
 
 
-def train(model, data_loader, optimiser_arg, device_arg, epochs):
+def train(model, data_loader, optimiser_arg, device_arg, cur_epoch, num_epochs):
     model.train()
     path_parent = os.path.dirname(os.getcwd())
     loss_list = []
-    for i in range(epochs):
-        print(f"Epoch {i + 1} start")
-        avg_epoch_loss = train_single_epoch(model, data_loader, optimiser_arg, device_arg)
-        print(f"Epoch {i + 1} end")
-        print(f"Average Epoch{i} LOSS:", avg_epoch_loss)
+    for i in range(num_epochs):
+        print(f"Epoch {cur_epoch + i + 1} start")
+        avg_epoch_loss, avg_epoch_accuracy = train_single_epoch(model, data_loader, optimiser_arg, device_arg)
+        print("--------------------------------------")
+        print(f"Epoch {cur_epoch + i + 1} end")
+        print(f"Average Epoch{cur_epoch} Loss:", round(avg_epoch_loss, 2))
+        print(f"Average Epoch{cur_epoch} Accuracy: {round(avg_epoch_accuracy*100, 2)}%")
         print("--------------------------------------\n")
 
         # save model checkpoint
         if OS == 'WINDOWS':
-            model_checkpoint = path_parent + f"\\ai_synth\\trained_models\\synth_net_epoch{i}.pth"
-            plot_path = path_parent + f"\\ai_synth\\trained_models\\loss_graphs\\end_epoch{i}_loss_graph.png"
-            txt_path = path_parent + f"\\ai_synth\\trained_models\\loss_list.txt"
+            model_checkpoint = path_parent + f"\\trained_models\\synth_net_epoch{i}.pth"
+            plot_path = path_parent + f"\\trained_models\\loss_graphs\\end_epoch{i}_loss_graph.png"
+            txt_path = path_parent + f"\\trained_models\\loss_list.txt"
         elif OS == 'LINUX':
             model_checkpoint = path_parent + f"/ai_synth/trained_models/synth_net_epoch{i}.pth"
             plot_path = path_parent + f"/ai_synth/trained_models/loss_graphs/end_epoch{i}_loss_graph.png"
             txt_path = path_parent + f"/ai_synth/trained_models/loss_list.txt"
 
         torch.save({
-            'epoch': i,
+            'epoch': cur_epoch + i,
             'model_state_dict': synth_net.state_dict(),
             'optimizer_state_dict': optimiser_arg.state_dict(),
             'loss': avg_epoch_loss
@@ -249,10 +274,12 @@ def train(model, data_loader, optimiser_arg, device_arg, epochs):
         loss_list.append(avg_epoch_loss)
         plt.savefig(plot_path)
 
-        textfile = open(txt_path, "w")
+        text_file = open(txt_path, "w")
         for element in loss_list:
-            textfile.write(str(element) + "\n")
-        textfile.close()
+            text_file.write(str(element) + "\n")
+        text_file.close()
+
+        cur_epoch += 1
 
     print("Finished training")
 
@@ -287,9 +314,18 @@ if __name__ == "__main__":
     # initialize optimizer
     optimizer = torch.optim.Adam(synth_net.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
 
-    # train model
     print("Training model with LOSS_MODE: ", LOSS_MODE)
-    train(synth_net, train_dataloader, optimizer, device, EPOCHS)
+    if USE_LOADED_MODEL:
+        checkpoint = torch.load(LOAD_MODEL_PATH)
+        synth_net.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        cur_epoch = checkpoint['epoch']
+        loss = checkpoint['loss']
+    else:
+        cur_epoch = 0
+
+    # train model
+    train(synth_net, train_dataloader, optimizer, device, cur_epoch=cur_epoch, num_epochs=EPOCHS)
 
     path_parent = os.path.dirname(os.getcwd())
 

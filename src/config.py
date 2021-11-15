@@ -31,9 +31,10 @@ BATCH_SIZE = 256
 EPOCHS = 10
 LEARNING_RATE = 0.001
 LOSS_TYPE = 'MSE' # MSE or LSD (log spectral distance)
+USE_LOADED_MODEL = True
 if OS == 'WINDOWS':
     SAVE_MODEL_PATH = "..\\trained_models\\trained_synth_net.pth"
-    LOAD_MODEL_PATH = "..\\trained_models\\synth_net_epoch2.pth"
+    LOAD_MODEL_PATH = "..\\trained_models\\synth_net_epoch8.pth"
 elif OS == 'LINUX':
     SAVE_MODEL_PATH = "../trained_models/trained_synth_net.pth"
     LOAD_MODEL_PATH = "../trained_models/synth_net_epoch2.pth"

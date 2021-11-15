@@ -28,7 +28,7 @@ if __name__ == "__main__":
     path_parent = os.path.dirname(os.getcwd())
     if dataset_type == 'TRAIN':
         if OS == 'WINDOWS':
-            dataset_dir_path = path_parent + f"\\ai_synth\\dataset\\train\\"
+            dataset_dir_path = path_parent + f"\\dataset\\train\\"
         elif OS == 'LINUX':
             dataset_dir_path = path_parent + f"/ai_synth/dataset/train/"
     if dataset_type == 'TEST':

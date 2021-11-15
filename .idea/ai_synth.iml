@@ -9,7 +9,7 @@
     <content url="file://$MODULE_DIR$/julius">
       <sourceFolder url="file://$MODULE_DIR$/julius" isTestSource="false" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.8 (PyCharmLearningProject)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.7 (base)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
