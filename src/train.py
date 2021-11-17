@@ -16,14 +16,17 @@ import os
 
 
 def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
-    torch.autograd.set_detect_anomaly(True)
-    normalizer = helper.Normalizer()
 
-    # Init criteria
+    # Initializations
     criterion_spectrogram = nn.MSELoss()
+    criterion_osc_freq = nn.CrossEntropyLoss()
+    normalizer = helper.Normalizer()
+    torch.autograd.set_detect_anomaly(True)
+
     sum_epoch_loss = 0
     sum_epoch_accuracy = 0
     num_of_mini_batches = 0
+
     for signal_mel_spec, target_params_dic in data_loader:
         start = time.time()
 
@@ -38,166 +41,180 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
         output_dic = model(signal_mel_spec)
 
         # helper.map_classification_params_from_ints(predicted_dic)
-        denormalized_output_dic = normalizer.denormalize(output_dic)
-        if SYNTH_TYPE == 'OSC_ONLY':
-            param_dict_to_synth = denormalized_output_dic
 
-            # -------------------------------------
-            # -----------Run Synth-----------------
-            # -------------------------------------
-            overall_synth_obj = SynthOscOnly(parameters_dict=param_dict_to_synth,
-                                             num_sounds=len(signal_mel_spec))
+        if LOSS_MODE == 'PARAMETERS_ONLY':
+            osc_logits_pred = output_dic['osc1_freq']
+            osc_target = target_params_dic['classification_params']['osc1_freq']
+            ce_loss = criterion_osc_freq(osc_logits_pred, osc_target)
+            loss = ce_loss
 
-        elif SYNTH_TYPE == 'SYNTH_BASIC':
-            param_dict_to_synth = helper.clamp_regression_params(denormalized_output_dic)
+        if LOSS_MODE == 'FULL' or LOSS_MODE == 'SPECTROGRAM_ONLY':
+            denormalized_output_dic = normalizer.denormalize(output_dic)
+            if SYNTH_TYPE == 'OSC_ONLY':
+                param_dict_to_synth = denormalized_output_dic
 
-            # -------------------------------------
-            # -----------Run Synth-----------------
-            # -------------------------------------
-            overall_synth_obj = SynthBasicFlow(parameters_dict=param_dict_to_synth,
-                                               num_sounds=len(signal_mel_spec))
+                # -------------------------------------
+                # -----------Run Synth-----------------
+                # -------------------------------------
+                overall_synth_obj = SynthOscOnly(parameters_dict=param_dict_to_synth,
+                                                 num_sounds=len(signal_mel_spec))
 
-        else:
-            raise ValueError("Provided SYNTH_TYPE is not recognized")
+            elif SYNTH_TYPE == 'SYNTH_BASIC':
+                param_dict_to_synth = helper.clamp_regression_params(denormalized_output_dic)
 
-        overall_synth_obj.signal = helper.move_to(overall_synth_obj.signal, device_arg)
+                # -------------------------------------
+                # -----------Run Synth-----------------
+                # -------------------------------------
+                overall_synth_obj = SynthBasicFlow(parameters_dict=param_dict_to_synth,
+                                                   num_sounds=len(signal_mel_spec))
 
-        predicted_mel_spec_sound_signal = helper.mel_spectrogram_transform(overall_synth_obj.signal)
-        predicted_mel_spec_sound_signal = helper.move_to(predicted_mel_spec_sound_signal, device_arg)
-
-        signal_mel_spec = torch.squeeze(signal_mel_spec)
-        predicted_mel_spec_sound_signal = torch.squeeze(predicted_mel_spec_sound_signal)
-
-        if PLOT_SPEC:
-            helper.plot_spectrogram(signal_mel_spec[0].cpu(),
-                                    title="MelSpectrogram (dB)",
-                                    ylabel='mel freq')
-
-            helper.plot_spectrogram(predicted_mel_spec_sound_signal[0].cpu().detach().numpy(),
-                                    title="MelSpectrogram (dB)",
-                                    ylabel='mel freq')
-
-        mse_loss = criterion_spectrogram(predicted_mel_spec_sound_signal,
-                                                        signal_mel_spec)
-        lsd_loss = helper.lsd_loss(signal_mel_spec, predicted_mel_spec_sound_signal)
-
-        # todo: remove the individual synth inference code
-        # -----------------------------------------------
-        # -----------Compute sound individually----------
-        # -----------------------------------------------
-
-        if False:
-            loss_spectrogram_total = 0
-            current_predicted_dic = {}
-            for i in range(len(signal_mel_spec)):
-                for key, value in output_dic.items():
-                    current_predicted_dic[key] = output_dic[key][i]
-
-                # Generate sound from predicted parameters
-                synth_obj = SynthBasicFlow(parameters_dict=current_predicted_dic)
-
-                synth_obj.signal = helper.move_to(synth_obj.signal, device_arg)
-                predicted_log_mel_spec_sound_signal = helper.log_mel_spec_transform(synth_obj.signal)
-
-                predicted_log_mel_spec_sound_signal = helper.move_to(predicted_log_mel_spec_sound_signal, device_arg)
-
-                signal_mel_spec = torch.squeeze(signal_mel_spec)
-                predicted_log_mel_spec_sound_signal = torch.squeeze(predicted_log_mel_spec_sound_signal)
-                target_log_mel_spec_sound_signal = signal_mel_spec[i]
-                current_loss_spectrogram = criterion_spectrogram(predicted_log_mel_spec_sound_signal,
-                                                                 target_log_mel_spec_sound_signal)
-                loss_spectrogram_total = loss_spectrogram_total + current_loss_spectrogram
-
-            loss_spectrogram_total = loss_spectrogram_total / len(signal_mel_spec)
-
-        # -----------------------------------------------
-        #          -----------End Part----------
-        # -----------------------------------------------
-
-        if LOSS_MODE == "FULL":
-            classification_target_params = target_params_dic['classification_params']
-            regression_target_parameters = target_params_dic['regression_params']
-            helper.map_classification_params_to_ints(classification_target_params)
-            normalizer.normalize(regression_target_parameters)
-
-            classification_target_params = helper.move_to(classification_target_params, device_arg)
-            regression_target_parameters = helper.move_to(regression_target_parameters, device_arg)
-
-            criterion_osc1_freq = criterion_osc1_wave = criterion_lfo1_wave \
-                = criterion_osc2_freq = criterion_osc2_wave = criterion_lfo2_wave \
-                = criterion_filter_type \
-                = nn.CrossEntropyLoss()
-            criterion_regression_params = nn.MSELoss()
-
-            loss_osc1_freq = criterion_osc1_freq(output_dic['osc1_freq'], classification_target_params['osc1_freq'])
-            loss_osc1_wave = criterion_osc1_wave(output_dic['osc1_wave'], classification_target_params['osc1_wave'])
-            loss_lfo1_wave = criterion_lfo1_wave(output_dic['lfo1_wave'], classification_target_params['lfo1_wave'])
-            loss_osc2_freq = criterion_osc2_freq(output_dic['osc2_freq'], classification_target_params['osc2_freq'])
-            loss_osc2_wave = criterion_osc2_wave(output_dic['osc2_wave'], classification_target_params['osc2_wave'])
-            loss_lfo2_wave = criterion_lfo2_wave(output_dic['lfo2_wave'], classification_target_params['lfo2_wave'])
-            loss_filter_type = \
-                criterion_filter_type(output_dic['filter_type'], classification_target_params['filter_type'])
-
-            # todo: refactor code. the code gets dictionary of tensors
-            #  (regression_target_parameters) and return 2d tensor
-            regression_target_parameters_tensor = torch.empty((len(regression_target_parameters['osc1_amp']), 1))
-            regression_target_parameters_tensor = helper.move_to(regression_target_parameters_tensor, device_arg)
-            for key, value in regression_target_parameters.items():
-                regression_target_parameters_tensor = \
-                    torch.cat([regression_target_parameters_tensor, regression_target_parameters[key].unsqueeze(dim=1)],
-                              dim=1)
-            regression_target_parameters_tensor = regression_target_parameters_tensor[:, 1:]
-            regression_target_parameters_tensor = regression_target_parameters_tensor.float()
-
-            loss_classification_params = \
-                loss_osc1_freq + loss_osc1_wave + loss_lfo1_wave + \
-                loss_osc2_freq + loss_osc2_wave + loss_lfo2_wave + \
-                loss_filter_type
-
-            loss_regression_params = \
-                criterion_regression_params(output_dic['regression_params'], regression_target_parameters_tensor)
-
-            loss = \
-                loss_classification_params \
-                + REGRESSION_LOSS_FACTOR * loss_regression_params \
-                + SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total
-
-        if LOSS_MODE == 'SPECTROGRAM_ONLY':
-            if LOSS_TYPE == 'MSE':
-                loss = SPECTROGRAM_LOSS_FACTOR * mse_loss
-            elif LOSS_TYPE == 'LSD':
-                loss = SPECTROGRAM_LOSS_FACTOR * lsd_loss
             else:
-                raise ValueError("Provided LOSS_TYPE is not recognized")
-            # loss.requires_grad = True
+                raise ValueError("Provided SYNTH_TYPE is not recognized")
+
+            overall_synth_obj.signal = helper.move_to(overall_synth_obj.signal, device_arg)
+
+            predicted_mel_spec_sound_signal = helper.mel_spectrogram_transform(overall_synth_obj.signal)
+            predicted_mel_spec_sound_signal = helper.move_to(predicted_mel_spec_sound_signal, device_arg)
+
+            signal_mel_spec = torch.squeeze(signal_mel_spec)
+            predicted_mel_spec_sound_signal = torch.squeeze(predicted_mel_spec_sound_signal)
+
+            if PLOT_SPEC:
+                helper.plot_spectrogram(signal_mel_spec[0].cpu(),
+                                        title="MelSpectrogram (dB)",
+                                        ylabel='mel freq')
+
+                helper.plot_spectrogram(predicted_mel_spec_sound_signal[0].cpu().detach().numpy(),
+                                        title="MelSpectrogram (dB)",
+                                        ylabel='mel freq')
+
+            mse_loss = criterion_spectrogram(predicted_mel_spec_sound_signal,
+                                             signal_mel_spec)
+            lsd_loss = helper.lsd_loss(signal_mel_spec, predicted_mel_spec_sound_signal)
+
+            # todo: remove the individual synth inference code
+            # -----------------------------------------------
+            # -----------Compute sound individually----------
+            # -----------------------------------------------
+
+            if False:
+                loss_spectrogram_total = 0
+                current_predicted_dic = {}
+                for i in range(len(signal_mel_spec)):
+                    for key, value in output_dic.items():
+                        current_predicted_dic[key] = output_dic[key][i]
+
+                    # Generate sound from predicted parameters
+                    synth_obj = SynthBasicFlow(parameters_dict=current_predicted_dic)
+
+                    synth_obj.signal = helper.move_to(synth_obj.signal, device_arg)
+                    predicted_log_mel_spec_sound_signal = helper.log_mel_spec_transform(synth_obj.signal)
+
+                    predicted_log_mel_spec_sound_signal = helper.move_to(predicted_log_mel_spec_sound_signal, device_arg)
+
+                    signal_mel_spec = torch.squeeze(signal_mel_spec)
+                    predicted_log_mel_spec_sound_signal = torch.squeeze(predicted_log_mel_spec_sound_signal)
+                    target_log_mel_spec_sound_signal = signal_mel_spec[i]
+                    current_loss_spectrogram = criterion_spectrogram(predicted_log_mel_spec_sound_signal,
+                                                                     target_log_mel_spec_sound_signal)
+                    loss_spectrogram_total = loss_spectrogram_total + current_loss_spectrogram
+
+                loss_spectrogram_total = loss_spectrogram_total / len(signal_mel_spec)
+
+            # -----------------------------------------------
+            #          -----------End Part----------
+            # -----------------------------------------------
+
+            if LOSS_MODE == "FULL":
+                classification_target_params = target_params_dic['classification_params']
+                regression_target_parameters = target_params_dic['regression_params']
+                helper.map_classification_params_to_ints(classification_target_params)
+                normalizer.normalize(regression_target_parameters)
+
+                classification_target_params = helper.move_to(classification_target_params, device_arg)
+                regression_target_parameters = helper.move_to(regression_target_parameters, device_arg)
+
+                criterion_osc1_freq = criterion_osc1_wave = criterion_lfo1_wave \
+                    = criterion_osc2_freq = criterion_osc2_wave = criterion_lfo2_wave \
+                    = criterion_filter_type \
+                    = nn.CrossEntropyLoss()
+                criterion_regression_params = nn.MSELoss()
+
+                loss_osc1_freq = criterion_osc1_freq(output_dic['osc1_freq'], classification_target_params['osc1_freq'])
+                loss_osc1_wave = criterion_osc1_wave(output_dic['osc1_wave'], classification_target_params['osc1_wave'])
+                loss_lfo1_wave = criterion_lfo1_wave(output_dic['lfo1_wave'], classification_target_params['lfo1_wave'])
+                loss_osc2_freq = criterion_osc2_freq(output_dic['osc2_freq'], classification_target_params['osc2_freq'])
+                loss_osc2_wave = criterion_osc2_wave(output_dic['osc2_wave'], classification_target_params['osc2_wave'])
+                loss_lfo2_wave = criterion_lfo2_wave(output_dic['lfo2_wave'], classification_target_params['lfo2_wave'])
+                loss_filter_type = \
+                    criterion_filter_type(output_dic['filter_type'], classification_target_params['filter_type'])
+
+                # todo: refactor code. the code gets dictionary of tensors
+                #  (regression_target_parameters) and return 2d tensor
+                regression_target_parameters_tensor = torch.empty((len(regression_target_parameters['osc1_amp']), 1))
+                regression_target_parameters_tensor = helper.move_to(regression_target_parameters_tensor, device_arg)
+                for key, value in regression_target_parameters.items():
+                    regression_target_parameters_tensor = \
+                        torch.cat([regression_target_parameters_tensor, regression_target_parameters[key].unsqueeze(dim=1)],
+                                  dim=1)
+                regression_target_parameters_tensor = regression_target_parameters_tensor[:, 1:]
+                regression_target_parameters_tensor = regression_target_parameters_tensor.float()
+
+                loss_classification_params = \
+                    loss_osc1_freq + loss_osc1_wave + loss_lfo1_wave + \
+                    loss_osc2_freq + loss_osc2_wave + loss_lfo2_wave + \
+                    loss_filter_type
+
+                loss_regression_params = \
+                    criterion_regression_params(output_dic['regression_params'], regression_target_parameters_tensor)
+
+                loss = \
+                    loss_classification_params \
+                    + REGRESSION_LOSS_FACTOR * loss_regression_params \
+                    + SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total
+
+            if LOSS_MODE == 'SPECTROGRAM_ONLY':
+                if LOSS_TYPE == 'MSE':
+                    loss = SPECTROGRAM_LOSS_FACTOR * mse_loss
+                elif LOSS_TYPE == 'LSD':
+                    loss = SPECTROGRAM_LOSS_FACTOR * lsd_loss
+                else:
+                    raise ValueError("Provided LOSS_TYPE is not recognized")
+                # loss.requires_grad = True
 
         num_of_mini_batches += 1
         sum_epoch_loss += loss.item()
-        # backpropogate error and update wights
         loss.backward()
         optimizer_arg.step()
 
         # Check Accuracy
-        osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, device=device_arg)
-        closest_frequency_index = torch.searchsorted(osc_freq_tensor, param_dict_to_synth['osc1_freq'])
-        num_correct_predictions = 0
-        for i in range(len(closest_frequency_index)):
-            predicted_osc = param_dict_to_synth['osc1_freq'][i]
-            closest_osc_index_from_below = closest_frequency_index[i] - 1
-            closest_osc_index_from_above = closest_frequency_index[i]
-            below_ratio = predicted_osc / OSC_FREQ_LIST[closest_osc_index_from_below.item()]
-            above_ratio = OSC_FREQ_LIST[closest_osc_index_from_above.item()] / predicted_osc
-            if below_ratio < above_ratio:
-                rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_below.item()]
-            else:
-                rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_above.item()]
+        if LOSS_MODE == 'PARAMETERS_ONLY':
+            correct = 0
+            correct += (osc_logits_pred.argmax(1) == osc_target).type(torch.float).sum().item()
+            accuracy = correct / len(osc_logits_pred)
+            sum_epoch_accuracy += accuracy
 
-            target_osc = OSC_FREQ_DIC_INV[target_params_dic['classification_params']['osc1_freq'][i].item()]
-            if abs(rounded_predicted_freq - target_osc) < 1:
-                num_correct_predictions += 1
+        if LOSS_MODE == 'FULL' or LOSS_MODE == 'SPECTROGRAM_ONLY':
+            osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, device=device_arg)
+            closest_frequency_index = torch.searchsorted(osc_freq_tensor, param_dict_to_synth['osc1_freq'])
+            num_correct_predictions = 0
+            for i in range(len(closest_frequency_index)):
+                predicted_osc = param_dict_to_synth['osc1_freq'][i]
+                closest_osc_index_from_below = closest_frequency_index[i] - 1
+                closest_osc_index_from_above = closest_frequency_index[i]
+                below_ratio = predicted_osc / OSC_FREQ_LIST[closest_osc_index_from_below.item()]
+                above_ratio = OSC_FREQ_LIST[closest_osc_index_from_above.item()] / predicted_osc
+                if below_ratio < above_ratio:
+                    rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_below.item()]
+                else:
+                    rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_above.item()]
 
-        accuracy = num_correct_predictions / len(closest_frequency_index)
-        sum_epoch_accuracy += accuracy
+                target_osc = OSC_FREQ_DIC_INV[target_params_dic['classification_params']['osc1_freq'][i].item()]
+                if abs(rounded_predicted_freq - target_osc) < 1:
+                    num_correct_predictions += 1
+
+            accuracy = num_correct_predictions / len(closest_frequency_index)
+            sum_epoch_accuracy += accuracy
 
         end = time.time()
 
@@ -215,8 +232,8 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                 print('loss_regression_params', REGRESSION_LOSS_FACTOR * loss_regression_params)
                 print('loss_spectrogram_total', SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total)
                 print('\n')
-            print(f"loss: {round(loss.item(), 2)},\t accuracy: {round(accuracy*100, 2)}%,\t batch processing time: {round(end - start, 2)}s")
-
+            print(
+                f"loss: {round(loss.item(), 2)},\t accuracy: {round(accuracy * 100, 2)}%,\t batch processing time: {round(end - start, 2)}s")
 
         if DEBUG_MODE:
             print("osc1_freq",
@@ -252,7 +269,7 @@ def train(model, data_loader, optimiser_arg, device_arg, cur_epoch, num_epochs):
         print("--------------------------------------")
         print(f"Epoch {cur_epoch} end")
         print(f"Average Epoch{cur_epoch} Loss:", round(avg_epoch_loss, 2))
-        print(f"Average Epoch{cur_epoch} Accuracy: {round(avg_epoch_accuracy*100, 2)}%")
+        print(f"Average Epoch{cur_epoch} Accuracy: {round(avg_epoch_accuracy * 100, 2)}%")
         print("--------------------------------------\n")
 
         # save model checkpoint
@@ -273,7 +290,7 @@ def train(model, data_loader, optimiser_arg, device_arg, cur_epoch, num_epochs):
         }, model_checkpoint)
 
         loss_list.append(avg_epoch_loss)
-        accuracy_list.append(avg_epoch_accuracy*100)
+        accuracy_list.append(avg_epoch_accuracy * 100)
         plt.savefig(plot_path)
 
         text_file = open(txt_path, "w")
