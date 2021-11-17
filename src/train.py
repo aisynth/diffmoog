@@ -245,38 +245,40 @@ def train(model, data_loader, optimiser_arg, device_arg, cur_epoch, num_epochs):
     model.train()
     path_parent = os.path.dirname(os.getcwd())
     loss_list = []
+    accuracy_list = []
     for i in range(num_epochs):
-        print(f"Epoch {cur_epoch + i + 1} start")
+        print(f"Epoch {cur_epoch} start")
         avg_epoch_loss, avg_epoch_accuracy = train_single_epoch(model, data_loader, optimiser_arg, device_arg)
         print("--------------------------------------")
-        print(f"Epoch {cur_epoch + i + 1} end")
+        print(f"Epoch {cur_epoch} end")
         print(f"Average Epoch{cur_epoch} Loss:", round(avg_epoch_loss, 2))
         print(f"Average Epoch{cur_epoch} Accuracy: {round(avg_epoch_accuracy*100, 2)}%")
         print("--------------------------------------\n")
 
         # save model checkpoint
         if OS == 'WINDOWS':
-            model_checkpoint = path_parent + f"\\trained_models\\synth_net_epoch{i}.pth"
-            plot_path = path_parent + f"\\trained_models\\loss_graphs\\end_epoch{i}_loss_graph.png"
+            model_checkpoint = path_parent + f"\\trained_models\\synth_net_epoch{cur_epoch}.pth"
+            plot_path = path_parent + f"\\trained_models\\loss_graphs\\end_epoch{cur_epoch}_loss_graph.png"
             txt_path = path_parent + f"\\trained_models\\loss_list.txt"
         elif OS == 'LINUX':
-            model_checkpoint = path_parent + f"/ai_synth/trained_models/synth_net_epoch{i}.pth"
-            plot_path = path_parent + f"/ai_synth/trained_models/loss_graphs/end_epoch{i}_loss_graph.png"
+            model_checkpoint = path_parent + f"/ai_synth/trained_models/synth_net_epoch{cur_epoch}.pth"
+            plot_path = path_parent + f"/ai_synth/trained_models/loss_graphs/end_epoch{cur_epoch}_loss_graph.png"
             txt_path = path_parent + f"/ai_synth/trained_models/loss_list.txt"
 
         torch.save({
-            'epoch': cur_epoch + i,
+            'epoch': cur_epoch,
             'model_state_dict': synth_net.state_dict(),
             'optimizer_state_dict': optimiser_arg.state_dict(),
             'loss': avg_epoch_loss
         }, model_checkpoint)
 
         loss_list.append(avg_epoch_loss)
+        accuracy_list.append(avg_epoch_accuracy*100)
         plt.savefig(plot_path)
 
         text_file = open(txt_path, "w")
-        for element in loss_list:
-            text_file.write(str(element) + "\n")
+        for j in range(len(loss_list)):
+            text_file.write("loss: " + str(loss_list[j]) + " " + "accuracy: " + str(accuracy_list[j]) + "\n")
         text_file.close()
 
         cur_epoch += 1

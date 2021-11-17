@@ -50,7 +50,9 @@ mel_spectrogram_transform = torchaudio.transforms.MelSpectrogram(
     n_fft=1024,
     hop_length=512,
     n_mels=64,
-    power=2.0
+    power=2.0,
+    f_min=50,
+    f_max=1100
 ).to(get_device())
 
 amplitude_to_db_transform = torchaudio.transforms.AmplitudeToDB().to(get_device())
