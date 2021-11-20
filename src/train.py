@@ -194,6 +194,24 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
             accuracy = correct / len(osc_logits_pred)
             sum_epoch_accuracy += accuracy
 
+            # Sanity check - generate synth sounds with the resulted frequencies and compare spectrograms
+            freq_ints_dict = {'osc1_freq': osc_logits_pred.argmax(1)}
+            freq_hz_dict = helper.map_classification_params_from_ints(freq_ints_dict)
+
+            overall_synth_obj = SynthOscOnly(parameters_dict=freq_hz_dict,
+                                             num_sounds=len(signal_mel_spec))
+
+            overall_synth_obj.signal = helper.move_to(overall_synth_obj.signal, device_arg)
+
+            predicted_mel_spec_sound_signal = helper.mel_spectrogram_transform(overall_synth_obj.signal)
+            predicted_mel_spec_sound_signal = helper.move_to(predicted_mel_spec_sound_signal, device_arg)
+
+            signal_mel_spec = torch.squeeze(signal_mel_spec)
+            predicted_mel_spec_sound_signal = torch.squeeze(predicted_mel_spec_sound_signal)
+
+            mse_loss = criterion_spectrogram(predicted_mel_spec_sound_signal,
+                                             signal_mel_spec)
+
         if LOSS_MODE == 'FULL' or LOSS_MODE == 'SPECTROGRAM_ONLY':
             osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, device=device_arg)
             closest_frequency_index = torch.searchsorted(osc_freq_tensor, param_dict_to_synth['osc1_freq'])
@@ -232,8 +250,19 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                 print('loss_regression_params', REGRESSION_LOSS_FACTOR * loss_regression_params)
                 print('loss_spectrogram_total', SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total)
                 print('\n')
-            print(
-                f"loss: {round(loss.item(), 2)},\t accuracy: {round(accuracy * 100, 2)}%,\t batch processing time: {round(end - start, 2)}s")
+
+            if LOSS_MODE == 'SPECTROGRAM_ONLY':
+                print(
+                    f"MSE loss: {round(loss.item(), 2)},\t"
+                    f"accuracy: {round(accuracy * 100, 2)}%,\t"
+                    f"batch processing time: {round(end - start, 2)}s")
+
+            if LOSS_MODE == 'PARAMETERS_ONLY':
+                print(
+                    f"CE loss: {round(loss.item(), 2)},\t"
+                    f"accuracy: {round(accuracy * 100, 2)}%,\t"
+                    f"batch processing time: {round(end - start, 2)}s, \t"
+                    f"MSE of spectrograms: {SPECTROGRAM_LOSS_FACTOR * mse_loss.item()}")
 
         if DEBUG_MODE:
             print("osc1_freq",
@@ -333,7 +362,7 @@ if __name__ == "__main__":
     # initialize optimizer
     optimizer = torch.optim.Adam(synth_net.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
 
-    print("Training model with LOSS_MODE: ", LOSS_MODE)
+    print(f"Training model with: \n LOSS_MODE: {LOSS_MODE} \n SYNTH_TYPE: {SYNTH_TYPE}")
     if USE_LOADED_MODEL:
         checkpoint = torch.load(LOAD_MODEL_PATH)
         synth_net.load_state_dict(checkpoint['model_state_dict'])

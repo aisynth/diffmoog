@@ -82,8 +82,7 @@ def map_classification_params_to_ints(params_dic: dict):
 
 
 def map_classification_params_from_ints(params_dic: dict):
-    """ map classification params from ints (inverse operation of map_classification_params_to_ints),
-     to input them for a neural network """
+    """ map classification params from ints (inverse operation of map_classification_params_to_ints) """
 
     mapped_params_dict = {}
     for key, val in params_dic.items():
