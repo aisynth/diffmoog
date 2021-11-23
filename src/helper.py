@@ -356,6 +356,30 @@ def lsd_loss(input_spectrogram: Tensor, ouput_spectrogram: Tensor) -> Tensor:
     return log_spectral_distance
 
 
+def regression_freq_accuracy(output_dic, target_params_dic, device_arg):
+    osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, device=device_arg)
+    param_dict_to_synth = output_dic
+    closest_frequency_index = torch.searchsorted(osc_freq_tensor, param_dict_to_synth['osc1_freq'])
+    num_correct_predictions = 0
+    for i in range(len(closest_frequency_index)):
+        predicted_osc = param_dict_to_synth['osc1_freq'][i]
+        closest_osc_index_from_below = closest_frequency_index[i] - 1
+        closest_osc_index_from_above = closest_frequency_index[i]
+        below_ratio = predicted_osc / OSC_FREQ_LIST[closest_osc_index_from_below.item()]
+        above_ratio = OSC_FREQ_LIST[closest_osc_index_from_above.item()] / predicted_osc
+        if below_ratio < above_ratio:
+            rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_below.item()]
+        else:
+            rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_above.item()]
+
+        target_osc = OSC_FREQ_DIC_INV[target_params_dic['classification_params']['osc1_freq'][i].item()]
+        if abs(rounded_predicted_freq - target_osc) < 1:
+            num_correct_predictions += 1
+
+    accuracy = num_correct_predictions / len(closest_frequency_index)
+    return accuracy
+
+
 class RMSLELoss(nn.Module):
     def __init__(self):
         super().__init__()

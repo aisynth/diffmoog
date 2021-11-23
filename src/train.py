@@ -53,6 +53,7 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
             if FREQ_PARAM_LOSS_TYPE == 'CE':
                 ce_loss = criterion_osc_freq(osc_logits_pred, osc_target_id)
                 loss = ce_loss
+
             elif FREQ_PARAM_LOSS_TYPE == 'MSE':
                 osc_target = torch.tensor([OSC_FREQ_DIC_INV[x.item()] for x in osc_target_id], device=device_arg)
                 osc_pred = output_dic['osc1_freq']
@@ -218,26 +219,7 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                 accuracy = correct / len(osc_logits_pred)
                 sum_epoch_accuracy += accuracy
             elif FREQ_PARAM_LOSS_TYPE == 'MSE':
-                osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, device=device_arg)
-                param_dict_to_synth = normalizer.denormalize(output_dic)
-                closest_frequency_index = torch.searchsorted(osc_freq_tensor, param_dict_to_synth['osc1_freq'])
-                num_correct_predictions = 0
-                for i in range(len(closest_frequency_index)):
-                    predicted_osc = param_dict_to_synth['osc1_freq'][i]
-                    closest_osc_index_from_below = closest_frequency_index[i] - 1
-                    closest_osc_index_from_above = closest_frequency_index[i]
-                    below_ratio = predicted_osc / OSC_FREQ_LIST[closest_osc_index_from_below.item()]
-                    above_ratio = OSC_FREQ_LIST[closest_osc_index_from_above.item()] / predicted_osc
-                    if below_ratio < above_ratio:
-                        rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_below.item()]
-                    else:
-                        rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_above.item()]
-
-                    target_osc = OSC_FREQ_DIC_INV[target_params_dic['classification_params']['osc1_freq'][i].item()]
-                    if abs(rounded_predicted_freq - target_osc) < 1:
-                        num_correct_predictions += 1
-
-                accuracy = num_correct_predictions / len(closest_frequency_index)
+                accuracy = helper.regression_freq_accuracy(output_dic, target_params_dic, device_arg)
                 sum_epoch_accuracy += accuracy
 
             # Sanity check - generate synth sounds with the resulted frequencies and compare spectrograms
@@ -267,25 +249,7 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                                         ylabel='mel freq')
 
         if LOSS_MODE == 'FULL' or LOSS_MODE == 'SPECTROGRAM_ONLY':
-            osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, device=device_arg)
-            closest_frequency_index = torch.searchsorted(osc_freq_tensor, param_dict_to_synth['osc1_freq'])
-            num_correct_predictions = 0
-            for i in range(len(closest_frequency_index)):
-                predicted_osc = param_dict_to_synth['osc1_freq'][i]
-                closest_osc_index_from_below = closest_frequency_index[i] - 1
-                closest_osc_index_from_above = closest_frequency_index[i]
-                below_ratio = predicted_osc / OSC_FREQ_LIST[closest_osc_index_from_below.item()]
-                above_ratio = OSC_FREQ_LIST[closest_osc_index_from_above.item()] / predicted_osc
-                if below_ratio < above_ratio:
-                    rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_below.item()]
-                else:
-                    rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_above.item()]
-
-                target_osc = OSC_FREQ_DIC_INV[target_params_dic['classification_params']['osc1_freq'][i].item()]
-                if abs(rounded_predicted_freq - target_osc) < 1:
-                    num_correct_predictions += 1
-
-            accuracy = num_correct_predictions / len(closest_frequency_index)
+            accuracy = helper.regression_freq_accuracy(output_dic, target_params_dic, device_arg)
             sum_epoch_accuracy += accuracy
 
         end = time.time()
