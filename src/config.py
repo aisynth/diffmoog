@@ -30,11 +30,12 @@ elif OS == 'LINUX':
 BATCH_SIZE = 256
 EPOCHS = 20
 LEARNING_RATE = 0.001
-LOSS_TYPE = 'MSE' # MSE or LSD (log spectral distance)
+SPECTROGRAM_LOSS_TYPE = 'MSE'    # MSE or LSD (Log Spectral Distance)
+FREQ_PARAM_LOSS_TYPE = 'MSE'      # MSE or CE (Cross Entropy)
 USE_LOADED_MODEL = False
 if OS == 'WINDOWS':
     SAVE_MODEL_PATH = "..\\trained_models\\trained_synth_net.pth"
-    LOAD_MODEL_PATH = path_parent + "\\trained_models\\synth_net_epoch9.pth"
+    LOAD_MODEL_PATH = path_parent + "\\trained_models\\synth_net_epoch0.pth"
 elif OS == 'LINUX':
     SAVE_MODEL_PATH = "../trained_models/trained_synth_net.pth"
     LOAD_MODEL_PATH = "../trained_models/synth_net_epoch2.pth"
@@ -43,6 +44,7 @@ LOSS_MODE = 'PARAMETERS_ONLY'  # SPECTROGRAM_ONLY, PARAMETERS_ONLY or FULL (Spec
 # LOSS_MODE = 'FULL'  # SPECTROGRAM_ONLY or FULL (Spectrogram + parameters)
 REGRESSION_LOSS_FACTOR = 1e-1
 SPECTROGRAM_LOSS_FACTOR = 1e-5
+FREQ_MSE_LOSS_FACTOR = 1e3
 
 # Synth configs
 SAMPLE_RATE = 44100

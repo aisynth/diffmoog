@@ -7,6 +7,7 @@ import librosa
 from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE, SYNTH_TYPE
 from synth_config import *
 from torch.utils.data import DataLoader
+from torch import nn
 
 
 def get_device():
@@ -303,6 +304,7 @@ class LogNormaliser:
         array = torch.exp(norm_array) - 1e-10
         return array
 
+
 def create_data_loader(train_data, batch_size):
     train_dataloader = DataLoader(train_data, batch_size=batch_size)
     return train_dataloader
@@ -352,3 +354,12 @@ def lsd_loss(input_spectrogram: Tensor, ouput_spectrogram: Tensor) -> Tensor:
     """
     log_spectral_distance = torch.sum(torch.square(10 * torch.log10(input_spectrogram / ouput_spectrogram)))
     return log_spectral_distance
+
+
+class RMSLELoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.mse = nn.MSELoss()
+
+    def forward(self, pred, actual):
+        return torch.sqrt(self.mse(torch.log(pred + 1), torch.log(actual + 1)))

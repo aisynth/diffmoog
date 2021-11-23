@@ -130,14 +130,12 @@ class SynthNetwork(nn.Module):
         output_dic = {}
         if SYNTH_TYPE == 'OSC_ONLY':
             x = self.linear(x)
-            if LOSS_MODE == 'PARAMETERS_ONLY':  # Return logits of frequencies to be used by CrossEntropy Loss
-                logits = x
-                output_dic['osc1_freq'] = logits
-                return output_dic
-            elif LOSS_MODE == 'SPECTROGRAM_ONLY':
-                probabilities = self.softmax(x)     # Return predicted frequency to be used by the Synth. Differentiable
-                osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())
-                output_dic['osc1_freq'] = torch.matmul(probabilities, osc_freq_tensor)
+            logits = x
+            probabilities = self.softmax(logits)
+            osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())
+            output_dic['osc1_freq'] = torch.matmul(probabilities, osc_freq_tensor)
+
+            return output_dic, logits
 
         if SYNTH_TYPE == 'SYNTH_BASIC':
             for out_name, lin in self.classification_params.items():

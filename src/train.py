@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from torch import nn
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOSS_FACTOR, \
     SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, LOSS_MODE, SAVE_MODEL_PATH, DATASET_MODE, DATASET_TYPE, SYNTH_TYPE, \
-    LOSS_TYPE, LOAD_MODEL_PATH, USE_LOADED_MODEL
+    SPECTROGRAM_LOSS_TYPE, LOAD_MODEL_PATH, USE_LOADED_MODEL, FREQ_PARAM_LOSS_TYPE, FREQ_MSE_LOSS_FACTOR
 from ai_synth_dataset import AiSynthDataset, AiSynthSingleOscDataset
 from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, OS, PLOT_SPEC
 from synth_model import SynthNetwork
@@ -16,10 +16,12 @@ import os
 
 
 def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
-
     # Initializations
     criterion_spectrogram = nn.MSELoss()
-    criterion_osc_freq = nn.CrossEntropyLoss()
+    if FREQ_PARAM_LOSS_TYPE == 'CE':
+        criterion_osc_freq = nn.CrossEntropyLoss()
+    elif FREQ_PARAM_LOSS_TYPE == 'MSE':
+        criterion_osc_freq = nn.MSELoss()
     normalizer = helper.Normalizer()
     torch.autograd.set_detect_anomaly(True)
 
@@ -38,15 +40,34 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
         # -----------Run Model-----------------
         # -------------------------------------
         # signal_log_mel_spec.requires_grad = True
-        output_dic = model(signal_mel_spec)
+
+        if SYNTH_TYPE == 'OSC_ONLY':
+            output_dic, osc_logits_pred = model(signal_mel_spec)
+        else:
+            output_dic = model(signal_mel_spec)
 
         # helper.map_classification_params_from_ints(predicted_dic)
 
         if LOSS_MODE == 'PARAMETERS_ONLY':
-            osc_logits_pred = output_dic['osc1_freq']
-            osc_target = target_params_dic['classification_params']['osc1_freq']
-            ce_loss = criterion_osc_freq(osc_logits_pred, osc_target)
-            loss = ce_loss
+            osc_target_id = target_params_dic['classification_params']['osc1_freq']
+            if FREQ_PARAM_LOSS_TYPE == 'CE':
+                ce_loss = criterion_osc_freq(osc_logits_pred, osc_target_id)
+                loss = ce_loss
+            elif FREQ_PARAM_LOSS_TYPE == 'MSE':
+                osc_target = torch.tensor([OSC_FREQ_DIC_INV[x.item()] for x in osc_target_id], device=device_arg)
+                osc_pred = output_dic['osc1_freq']
+                frequency_mse_loss = criterion_osc_freq(osc_pred, osc_target)
+
+                criterion = helper.RMSLELoss()
+                frequency_mse_loss = criterion(osc_pred, osc_target)
+
+                # DEBUG print
+                # for i in range(len(osc_target)):
+                #     print(f"Predicted freq: {osc_pred[i].item()}, True freq: {osc_target[i].item()}")
+
+                loss = FREQ_MSE_LOSS_FACTOR * frequency_mse_loss
+            else:
+                raise ValueError("Provided FREQ_PARAM_LOSS_TYPE is not recognized")
 
         if LOSS_MODE == 'FULL' or LOSS_MODE == 'SPECTROGRAM_ONLY':
             denormalized_output_dic = normalizer.denormalize(output_dic)
@@ -88,8 +109,8 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                                         title="MelSpectrogram (dB)",
                                         ylabel='mel freq')
 
-            mse_loss = criterion_spectrogram(predicted_mel_spec_sound_signal,
-                                             signal_mel_spec)
+            spectrogram_mse_loss = criterion_spectrogram(predicted_mel_spec_sound_signal,
+                                                         signal_mel_spec)
             lsd_loss = helper.lsd_loss(signal_mel_spec, predicted_mel_spec_sound_signal)
 
             # todo: remove the individual synth inference code
@@ -110,7 +131,8 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                     synth_obj.signal = helper.move_to(synth_obj.signal, device_arg)
                     predicted_log_mel_spec_sound_signal = helper.log_mel_spec_transform(synth_obj.signal)
 
-                    predicted_log_mel_spec_sound_signal = helper.move_to(predicted_log_mel_spec_sound_signal, device_arg)
+                    predicted_log_mel_spec_sound_signal = helper.move_to(predicted_log_mel_spec_sound_signal,
+                                                                         device_arg)
 
                     signal_mel_spec = torch.squeeze(signal_mel_spec)
                     predicted_log_mel_spec_sound_signal = torch.squeeze(predicted_log_mel_spec_sound_signal)
@@ -155,8 +177,9 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                 regression_target_parameters_tensor = helper.move_to(regression_target_parameters_tensor, device_arg)
                 for key, value in regression_target_parameters.items():
                     regression_target_parameters_tensor = \
-                        torch.cat([regression_target_parameters_tensor, regression_target_parameters[key].unsqueeze(dim=1)],
-                                  dim=1)
+                        torch.cat(
+                            [regression_target_parameters_tensor, regression_target_parameters[key].unsqueeze(dim=1)],
+                            dim=1)
                 regression_target_parameters_tensor = regression_target_parameters_tensor[:, 1:]
                 regression_target_parameters_tensor = regression_target_parameters_tensor.float()
 
@@ -174,9 +197,9 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                     + SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total
 
             if LOSS_MODE == 'SPECTROGRAM_ONLY':
-                if LOSS_TYPE == 'MSE':
-                    loss = SPECTROGRAM_LOSS_FACTOR * mse_loss
-                elif LOSS_TYPE == 'LSD':
+                if SPECTROGRAM_LOSS_TYPE == 'MSE':
+                    loss = SPECTROGRAM_LOSS_FACTOR * spectrogram_mse_loss
+                elif SPECTROGRAM_LOSS_TYPE == 'LSD':
                     loss = SPECTROGRAM_LOSS_FACTOR * lsd_loss
                 else:
                     raise ValueError("Provided LOSS_TYPE is not recognized")
@@ -189,10 +212,33 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
 
         # Check Accuracy
         if LOSS_MODE == 'PARAMETERS_ONLY':
-            correct = 0
-            correct += (osc_logits_pred.argmax(1) == osc_target).type(torch.float).sum().item()
-            accuracy = correct / len(osc_logits_pred)
-            sum_epoch_accuracy += accuracy
+            if FREQ_PARAM_LOSS_TYPE == 'CE':
+                correct = 0
+                correct += (osc_logits_pred.argmax(1) == osc_target_id).type(torch.float).sum().item()
+                accuracy = correct / len(osc_logits_pred)
+                sum_epoch_accuracy += accuracy
+            elif FREQ_PARAM_LOSS_TYPE == 'MSE':
+                osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, device=device_arg)
+                param_dict_to_synth = normalizer.denormalize(output_dic)
+                closest_frequency_index = torch.searchsorted(osc_freq_tensor, param_dict_to_synth['osc1_freq'])
+                num_correct_predictions = 0
+                for i in range(len(closest_frequency_index)):
+                    predicted_osc = param_dict_to_synth['osc1_freq'][i]
+                    closest_osc_index_from_below = closest_frequency_index[i] - 1
+                    closest_osc_index_from_above = closest_frequency_index[i]
+                    below_ratio = predicted_osc / OSC_FREQ_LIST[closest_osc_index_from_below.item()]
+                    above_ratio = OSC_FREQ_LIST[closest_osc_index_from_above.item()] / predicted_osc
+                    if below_ratio < above_ratio:
+                        rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_below.item()]
+                    else:
+                        rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_above.item()]
+
+                    target_osc = OSC_FREQ_DIC_INV[target_params_dic['classification_params']['osc1_freq'][i].item()]
+                    if abs(rounded_predicted_freq - target_osc) < 1:
+                        num_correct_predictions += 1
+
+                accuracy = num_correct_predictions / len(closest_frequency_index)
+                sum_epoch_accuracy += accuracy
 
             # Sanity check - generate synth sounds with the resulted frequencies and compare spectrograms
             freq_ints_dict = {'osc1_freq': osc_logits_pred.argmax(1)}
@@ -209,8 +255,16 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
             signal_mel_spec = torch.squeeze(signal_mel_spec)
             predicted_mel_spec_sound_signal = torch.squeeze(predicted_mel_spec_sound_signal)
 
-            mse_loss = criterion_spectrogram(predicted_mel_spec_sound_signal,
-                                             signal_mel_spec)
+            spectrogram_mse_loss = criterion_spectrogram(predicted_mel_spec_sound_signal, signal_mel_spec)
+
+            if PLOT_SPEC:
+                helper.plot_spectrogram(signal_mel_spec[0].cpu(),
+                                        title="True MelSpectrogram (dB)",
+                                        ylabel='mel freq')
+
+                helper.plot_spectrogram(predicted_mel_spec_sound_signal[0].cpu().detach().numpy(),
+                                        title="Predicted MelSpectrogram (dB)",
+                                        ylabel='mel freq')
 
         if LOSS_MODE == 'FULL' or LOSS_MODE == 'SPECTROGRAM_ONLY':
             osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, device=device_arg)
@@ -259,10 +313,10 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
 
             if LOSS_MODE == 'PARAMETERS_ONLY':
                 print(
-                    f"CE loss: {round(loss.item(), 2)},\t"
-                    f"accuracy: {round(accuracy * 100, 2)}%,\t"
-                    f"batch processing time: {round(end - start, 2)}s, \t"
-                    f"MSE of spectrograms: {SPECTROGRAM_LOSS_FACTOR * mse_loss.item()}")
+                    f"Frequency {FREQ_PARAM_LOSS_TYPE} loss: {round(loss.item(), 2)},\t\t"
+                    f"Accuracy: {round(accuracy * 100, 2)}%,\t"
+                    f"Batch processing time: {round(end - start, 2)}s, \t"
+                    f"MSE of spectrograms: {round(SPECTROGRAM_LOSS_FACTOR * spectrogram_mse_loss.item(), 2)}")
 
         if DEBUG_MODE:
             print("osc1_freq",
