@@ -29,10 +29,14 @@ elif OS == 'LINUX':
 # Model configs
 BATCH_SIZE = 256
 EPOCHS = 20
-LEARNING_RATE = 0.001
-SPECTROGRAM_LOSS_TYPE = 'MSE'    # MSE or LSD (Log Spectral Distance)
+LEARNING_RATE = 0.0001
+
+LOSS_MODE = 'SPECTROGRAM_ONLY'  # SPECTROGRAM_ONLY, PARAMETERS_ONLY or FULL (Spectrogram + parameters)
+SPECTROGRAM_LOSS_TYPE = 'MSE'    # MSE or LSD or KL (Log Spectral Distance)
 FREQ_PARAM_LOSS_TYPE = 'MSE'      # MSE or CE (Cross Entropy)
+
 USE_LOADED_MODEL = False
+# USE_LOADED_MODEL = False
 if OS == 'WINDOWS':
     SAVE_MODEL_PATH = "..\\trained_models\\trained_synth_net.pth"
     LOAD_MODEL_PATH = path_parent + "\\trained_models\\synth_net_epoch0.pth"
@@ -40,8 +44,7 @@ elif OS == 'LINUX':
     SAVE_MODEL_PATH = "../trained_models/trained_synth_net.pth"
     LOAD_MODEL_PATH = "../trained_models/synth_net_epoch2.pth"
 
-LOSS_MODE = 'PARAMETERS_ONLY'  # SPECTROGRAM_ONLY, PARAMETERS_ONLY or FULL (Spectrogram + parameters)
-# LOSS_MODE = 'FULL'  # SPECTROGRAM_ONLY or FULL (Spectrogram + parameters)
+
 REGRESSION_LOSS_FACTOR = 1e-1
 SPECTROGRAM_LOSS_FACTOR = 1e-5
 FREQ_MSE_LOSS_FACTOR = 1e3
@@ -54,4 +57,9 @@ SIGNAL_DURATION_SEC = 1.0
 DEBUG_MODE = False
 PLOT_SPEC = False
 PRINT_TRAIN_STATS = True
+
+LOG_SPECTROGRAM_MSE_LOSS = False
+
+if LOG_SPECTROGRAM_MSE_LOSS == True:
+    SPECTROGRAM_LOSS_FACTOR = 1000
 
