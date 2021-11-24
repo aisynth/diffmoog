@@ -32,9 +32,10 @@ elif OS == 'LINUX':
     TEST_AUDIO_DIR = path_parent + "/ai_synth/dataset/test/wav_files"
 
 # Model configs
+CNN_NETWORK = 'BIG'     # 'BIG' or 'SMALL' - one of 2 possible network architectures
 BATCH_SIZE = 256
-EPOCHS = 20
-LEARNING_RATE = 0.0001
+EPOCHS = 2000
+LEARNING_RATE = 0.00001
 
 LOSS_MODE = 'SPECTROGRAM_ONLY'  # SPECTROGRAM_ONLY, PARAMETERS_ONLY or FULL (Spectrogram + parameters)
 SPECTROGRAM_LOSS_TYPE = 'MSE'    # MSE or LSD or KL (Log Spectral Distance)
@@ -44,7 +45,7 @@ USE_LOADED_MODEL = False
 # USE_LOADED_MODEL = False
 if OS == 'WINDOWS':
     SAVE_MODEL_PATH = "..\\trained_models\\trained_synth_net.pth"
-    LOAD_MODEL_PATH = path_parent + "\\trained_models\\synth_net_epoch0.pth"
+    LOAD_MODEL_PATH = path_parent + "\\trained_models\\synth_net_epoch901.pth"
 elif OS == 'LINUX':
     SAVE_MODEL_PATH = "../trained_models/trained_synth_net.pth"
     LOAD_MODEL_PATH = "../trained_models/synth_net_epoch2.pth"

@@ -1,7 +1,7 @@
 import torch
 import helper
 from torch import nn
-from synth_model import SynthNetwork
+from synth_model import SmallSynthNetwork
 from ai_synth_dataset import AiSynthDataset
 from sound_generator import SynthBasicFlow
 from config import TEST_PARAMETERS_FILE, TEST_AUDIO_DIR, BATCH_SIZE, LEARNING_RATE, LOAD_MODEL_PATH, \
@@ -224,7 +224,7 @@ def predict(model, test_data_loader, device_arg):
 if __name__ == "__main__":
     # load back the model
     device = helper.get_device()
-    synth_net = SynthNetwork().to(device)
+    synth_net = SmallSynthNetwork().to(device)
     optimizer = torch.optim.Adam(synth_net.parameters(), lr=LEARNING_RATE)
 
     checkpoint = torch.load(LOAD_MODEL_PATH)

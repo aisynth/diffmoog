@@ -4,10 +4,10 @@ from torch import nn
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOSS_FACTOR, \
     SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, LOSS_MODE, SAVE_MODEL_PATH, DATASET_MODE, DATASET_TYPE, SYNTH_TYPE, \
     SPECTROGRAM_LOSS_TYPE, LOAD_MODEL_PATH, USE_LOADED_MODEL, FREQ_PARAM_LOSS_TYPE, FREQ_MSE_LOSS_FACTOR, \
-    LOG_SPECTROGRAM_MSE_LOSS, ONLY_OSC_DATASET
+    LOG_SPECTROGRAM_MSE_LOSS, ONLY_OSC_DATASET, CNN_NETWORK
 from ai_synth_dataset import AiSynthDataset, AiSynthSingleOscDataset
 from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, OS, PLOT_SPEC
-from synth_model import SynthNetwork
+from synth_model import SmallSynthNetwork, BigSynthNetwork
 from sound_generator import SynthBasicFlow, SynthOscOnly
 from synth_config import OSC_FREQ_LIST, OSC_FREQ_DIC_INV
 import synth
@@ -397,7 +397,10 @@ if __name__ == "__main__":
     train_dataloader = helper.create_data_loader(ai_synth_dataset, BATCH_SIZE)
 
     # construct model and assign it to device
-    synth_net = SynthNetwork().to(device)
+    if CNN_NETWORK == 'SMALL':
+        synth_net = SmallSynthNetwork().to(device)
+    elif CNN_NETWORK == 'BIG':
+        synth_net = BigSynthNetwork().to(device)
 
     # initialize optimizer
     optimizer = torch.optim.Adam(synth_net.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
