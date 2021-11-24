@@ -45,6 +45,11 @@ def move_to(obj, device):
 #         dict.__setitem__(self, key, value)
 #         dict.__setitem__(self, value, key)
 
+spectrogram_transform = torchaudio.transforms.Spectrogram(
+    # win_length default = n_fft. hop_length default = win_length / 2
+    n_fft=512,
+    power=2.0
+).to(get_device())
 
 mel_spectrogram_transform = torchaudio.transforms.MelSpectrogram(
     sample_rate=SAMPLE_RATE,
@@ -352,7 +357,7 @@ def lsd_loss(input_spectrogram: Tensor, ouput_spectrogram: Tensor) -> Tensor:
     """ Log Spectral Density loss
     https://en.wikipedia.org/wiki/Log-spectral_distance
     """
-    log_spectral_distance = torch.sum(torch.square(10 * torch.log10((input_spectrogram + 1) / (ouput_spectrogram + 1)))
+    log_spectral_distance = torch.sum(torch.square(10 * torch.log10((input_spectrogram + 1) / (ouput_spectrogram + 1))))
     return log_spectral_distance
 
 

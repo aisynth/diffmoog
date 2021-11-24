@@ -4,7 +4,7 @@ from torch import nn
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOSS_FACTOR, \
     SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, LOSS_MODE, SAVE_MODEL_PATH, DATASET_MODE, DATASET_TYPE, SYNTH_TYPE, \
     SPECTROGRAM_LOSS_TYPE, LOAD_MODEL_PATH, USE_LOADED_MODEL, FREQ_PARAM_LOSS_TYPE, FREQ_MSE_LOSS_FACTOR, \
-    LOG_SPECTROGRAM_MSE_LOSS, ONLY_OSC_DATASET, CNN_NETWORK
+    LOG_SPECTROGRAM_MSE_LOSS, ONLY_OSC_DATASET, CNN_NETWORK, TRANSFORM
 from ai_synth_dataset import AiSynthDataset, AiSynthSingleOscDataset
 from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, OS, PLOT_SPEC
 from synth_model import SmallSynthNetwork, BigSynthNetwork
@@ -16,7 +16,8 @@ import time
 import os
 
 
-def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
+def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg):
+
     # Initializations
     criterion_spectrogram = nn.MSELoss()
     criterion_kl = nn.KLDivLoss()
@@ -31,7 +32,7 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
     sum_epoch_accuracy = 0
     num_of_mini_batches = 0
 
-    for signal_mel_spec, target_params_dic in data_loader:
+    for transformed_signal, target_params_dic in data_loader:
         start = time.time()
 
         # set_to_none as advised in page 6:
@@ -44,9 +45,9 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
         # signal_log_mel_spec.requires_grad = True
 
         if SYNTH_TYPE == 'OSC_ONLY':
-            output_dic, osc_logits_pred = model(signal_mel_spec)
+            output_dic, osc_logits_pred = model(transformed_signal)
         else:
-            output_dic = model(signal_mel_spec)
+            output_dic = model(transformed_signal)
 
         # helper.map_classification_params_from_ints(predicted_dic)
 
@@ -82,7 +83,7 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                 # -----------Run Synth-----------------
                 # -------------------------------------
                 overall_synth_obj = SynthOscOnly(parameters_dict=param_dict_to_synth,
-                                                 num_sounds=len(signal_mel_spec))
+                                                 num_sounds=len(transformed_signal))
 
             elif SYNTH_TYPE == 'SYNTH_BASIC':
                 param_dict_to_synth = helper.clamp_regression_params(denormalized_output_dic)
@@ -91,37 +92,37 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                 # -----------Run Synth-----------------
                 # -------------------------------------
                 overall_synth_obj = SynthBasicFlow(parameters_dict=param_dict_to_synth,
-                                                   num_sounds=len(signal_mel_spec))
+                                                   num_sounds=len(transformed_signal))
 
             else:
                 raise ValueError("Provided SYNTH_TYPE is not recognized")
 
             overall_synth_obj.signal = helper.move_to(overall_synth_obj.signal, device_arg)
 
-            predicted_mel_spec_sound_signal = helper.mel_spectrogram_transform(overall_synth_obj.signal)
-            predicted_mel_spec_sound_signal = helper.move_to(predicted_mel_spec_sound_signal, device_arg)
+            predicted_transformed_signal = transform(overall_synth_obj.signal)
+            predicted_transformed_signal = helper.move_to(predicted_transformed_signal, device_arg)
 
-            signal_mel_spec = torch.squeeze(signal_mel_spec)
-            predicted_mel_spec_sound_signal = torch.squeeze(predicted_mel_spec_sound_signal)
+            transformed_signal = torch.squeeze(transformed_signal)
+            predicted_transformed_signal = torch.squeeze(predicted_transformed_signal)
 
             if PLOT_SPEC:
-                helper.plot_spectrogram(signal_mel_spec[0].cpu(),
+                helper.plot_spectrogram(transformed_signal[0].cpu(),
                                         title=f"True MelSpectrogram (dB) for frequency {osc_target[0]}",
                                         ylabel='mel freq')
 
-                helper.plot_spectrogram(predicted_mel_spec_sound_signal[0].cpu().detach().numpy(),
+                helper.plot_spectrogram(predicted_transformed_signal[0].cpu().detach().numpy(),
                                         title=f"Predicted MelSpectrogram (dB) {osc_pred[0]}",
                                         ylabel='mel freq')
 
             if LOG_SPECTROGRAM_MSE_LOSS:
-                spectrogram_mse_loss = criterion_spectrogram(torch.log(predicted_mel_spec_sound_signal+1),
-                                                             torch.log(signal_mel_spec+1))
+                spectrogram_mse_loss = criterion_spectrogram(torch.log(predicted_transformed_signal+1),
+                                                             torch.log(transformed_signal + 1))
             else:
-                spectrogram_mse_loss = criterion_spectrogram(predicted_mel_spec_sound_signal, signal_mel_spec)
+                spectrogram_mse_loss = criterion_spectrogram(predicted_transformed_signal, transformed_signal)
 
-            lsd_loss = helper.lsd_loss(signal_mel_spec, predicted_mel_spec_sound_signal)
+            lsd_loss = helper.lsd_loss(transformed_signal, predicted_transformed_signal)
 
-            kl_loss = criterion_kl(signal_mel_spec, predicted_mel_spec_sound_signal)
+            kl_loss = criterion_kl(transformed_signal, predicted_transformed_signal)
 
             # todo: remove the individual synth inference code
             # -----------------------------------------------
@@ -131,7 +132,7 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
             if False:
                 loss_spectrogram_total = 0
                 current_predicted_dic = {}
-                for i in range(len(signal_mel_spec)):
+                for i in range(len(transformed_signal)):
                     for key, value in output_dic.items():
                         current_predicted_dic[key] = output_dic[key][i]
 
@@ -139,19 +140,19 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                     synth_obj = SynthBasicFlow(parameters_dict=current_predicted_dic)
 
                     synth_obj.signal = helper.move_to(synth_obj.signal, device_arg)
-                    predicted_log_mel_spec_sound_signal = helper.log_mel_spec_transform(synth_obj.signal)
+                    predicted_log_mel_spec_sound_signal = transform(synth_obj.signal)
 
                     predicted_log_mel_spec_sound_signal = helper.move_to(predicted_log_mel_spec_sound_signal,
                                                                          device_arg)
 
-                    signal_mel_spec = torch.squeeze(signal_mel_spec)
+                    transformed_signal = torch.squeeze(transformed_signal)
                     predicted_log_mel_spec_sound_signal = torch.squeeze(predicted_log_mel_spec_sound_signal)
-                    target_log_mel_spec_sound_signal = signal_mel_spec[i]
+                    target_log_mel_spec_sound_signal = transformed_signal[i]
                     current_loss_spectrogram = criterion_spectrogram(predicted_log_mel_spec_sound_signal,
                                                                      target_log_mel_spec_sound_signal)
                     loss_spectrogram_total = loss_spectrogram_total + current_loss_spectrogram
 
-                loss_spectrogram_total = loss_spectrogram_total / len(signal_mel_spec)
+                loss_spectrogram_total = loss_spectrogram_total / len(transformed_signal)
 
             # -----------------------------------------------
             #          -----------End Part----------
@@ -237,25 +238,24 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
             freq_ints_dict = {'osc1_freq': osc_logits_pred.argmax(1)}
             freq_hz_dict = helper.map_classification_params_from_ints(freq_ints_dict)
 
-            overall_synth_obj = SynthOscOnly(parameters_dict=freq_hz_dict,
-                                             num_sounds=len(signal_mel_spec))
+            overall_synth_obj = SynthOscOnly(parameters_dict=freq_hz_dict, num_sounds=len(transformed_signal))
 
             overall_synth_obj.signal = helper.move_to(overall_synth_obj.signal, device_arg)
 
-            predicted_mel_spec_sound_signal = helper.mel_spectrogram_transform(overall_synth_obj.signal)
-            predicted_mel_spec_sound_signal = helper.move_to(predicted_mel_spec_sound_signal, device_arg)
+            predicted_transformed_signal = transform(overall_synth_obj.signal)
+            predicted_transformed_signal = helper.move_to(predicted_transformed_signal, device_arg)
 
-            signal_mel_spec = torch.squeeze(signal_mel_spec)
-            predicted_mel_spec_sound_signal = torch.squeeze(predicted_mel_spec_sound_signal)
+            transformed_signal = torch.squeeze(transformed_signal)
+            predicted_transformed_signal = torch.squeeze(predicted_transformed_signal)
 
-            spectrogram_mse_loss = criterion_spectrogram(predicted_mel_spec_sound_signal, signal_mel_spec)
+            spectrogram_mse_loss = criterion_spectrogram(predicted_transformed_signal, transformed_signal)
 
             if PLOT_SPEC:
-                helper.plot_spectrogram(signal_mel_spec[0].cpu(),
+                helper.plot_spectrogram(transformed_signal[0].cpu(),
                                         title=f"True MelSpectrogram (dB) for frequency {osc_target[0]}",
                                         ylabel='mel freq')
 
-                helper.plot_spectrogram(predicted_mel_spec_sound_signal[0].cpu().detach().numpy(),
+                helper.plot_spectrogram(predicted_transformed_signal[0].cpu().detach().numpy(),
                                         title=f"Predicted MelSpectrogram (dB) {osc_pred[0]}",
                                         ylabel='mel freq')
 
@@ -263,10 +263,10 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
                 #     print("Spec diff:", criterion_spectrogram(predicted_mel_spec_sound_signal[i], signal_mel_spec[i]).item())
 
                 print("Spec diff of graphs:",
-                      criterion_spectrogram(predicted_mel_spec_sound_signal[0], signal_mel_spec[0]).item())
+                      criterion_spectrogram(predicted_transformed_signal[0], transformed_signal[0]).item())
 
                 print("Spec diff of graphs:",
-                      criterion_spectrogram(torch.log(predicted_mel_spec_sound_signal[0]+1), torch.log(signal_mel_spec[0]+1)).item())
+                      criterion_spectrogram(torch.log(predicted_transformed_signal[0]+1), torch.log(transformed_signal[0] + 1)).item())
 
         if LOSS_MODE == 'FULL' or LOSS_MODE == 'SPECTROGRAM_ONLY':
             accuracy = helper.regression_freq_accuracy(output_dic, target_params_dic, device_arg)
@@ -325,16 +325,19 @@ def train_single_epoch(model, data_loader, optimizer_arg, device_arg):
     return avg_epoch_loss, avg_epoch_accuracy
 
 
-def train(model, data_loader, optimiser_arg, device_arg, cur_epoch, num_epochs):
+def train(model, data_loader, transform, optimiser_arg, device_arg, cur_epoch, num_epochs):
     model.train()
     path_parent = os.path.dirname(os.getcwd())
+
     loss_list = []
     accuracy_list = []
     for i in range(num_epochs):
         if not ONLY_OSC_DATASET or i % 100 == 0:
             print(f"Epoch {cur_epoch} start")
 
-        avg_epoch_loss, avg_epoch_accuracy = train_single_epoch(model, data_loader, optimiser_arg, device_arg)
+        avg_epoch_loss, avg_epoch_accuracy = \
+            train_single_epoch(model, data_loader, transform, optimiser_arg, device_arg)
+
         cur_epoch += 1
         if not ONLY_OSC_DATASET or (i % 100 == 0 and i != 0):
             print("--------------------------------------")
@@ -375,12 +378,20 @@ def train(model, data_loader, optimiser_arg, device_arg, cur_epoch, num_epochs):
 if __name__ == "__main__":
     device = helper.get_device()
 
+    if TRANSFORM == 'MEL_SPECTROGRAM':
+        transform = helper.mel_spectrogram_transform
+    elif TRANSFORM == 'SPECTROGRAM':
+        transform = helper.spectrogram_transform
+    else:
+        transform = None
+        ValueError(f"{TRANSFORM} is an unidentified TRANSFORM")
+
     if SYNTH_TYPE == 'OSC_ONLY':
         ai_synth_dataset = AiSynthSingleOscDataset(DATASET_MODE,
                                                    DATASET_TYPE,
                                                    TRAIN_PARAMETERS_FILE,
                                                    TRAIN_AUDIO_DIR,
-                                                   helper.mel_spectrogram_transform,
+                                                   transform,
                                                    synth.SAMPLE_RATE,
                                                    device
                                                    )
@@ -389,10 +400,13 @@ if __name__ == "__main__":
                                           DATASET_TYPE,
                                           TRAIN_PARAMETERS_FILE,
                                           TRAIN_AUDIO_DIR,
-                                          helper.mel_spectrogram_transform,
+                                          transform,
                                           synth.SAMPLE_RATE,
                                           device
                                           )
+    else:
+        ai_synth_dataset = None
+        ValueError(f"{SYNTH_TYPE} is an unidentified SYNTH_TYPE")
 
     train_dataloader = helper.create_data_loader(ai_synth_dataset, BATCH_SIZE)
 
@@ -401,6 +415,9 @@ if __name__ == "__main__":
         synth_net = SmallSynthNetwork().to(device)
     elif CNN_NETWORK == 'BIG':
         synth_net = BigSynthNetwork().to(device)
+    else:
+        synth_net = None
+        ValueError(f"{CNN_NETWORK} is an unidentified CNN_NETWORK")
 
     # initialize optimizer
     optimizer = torch.optim.Adam(synth_net.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
@@ -416,7 +433,7 @@ if __name__ == "__main__":
         cur_epoch = 0
 
     # train model
-    train(synth_net, train_dataloader, optimizer, device, cur_epoch=cur_epoch, num_epochs=EPOCHS)
+    train(synth_net, train_dataloader, transform, optimizer, device, cur_epoch=cur_epoch, num_epochs=EPOCHS)
 
     path_parent = os.path.dirname(os.getcwd())
 

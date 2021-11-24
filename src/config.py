@@ -8,6 +8,10 @@ PI = 3.141592653589793
 TWO_PI = 2 * PI
 NUM_OF_OSC_FREQUENCIES = 49
 
+# Synth configs
+SAMPLE_RATE = 44100
+SIGNAL_DURATION_SEC = 1.0
+
 # Synth architecture. OSC_ONLY or SYNTH_BASIC
 SYNTH_TYPE = 'OSC_ONLY'
 
@@ -41,6 +45,8 @@ LOSS_MODE = 'SPECTROGRAM_ONLY'  # SPECTROGRAM_ONLY, PARAMETERS_ONLY or FULL (Spe
 SPECTROGRAM_LOSS_TYPE = 'MSE'    # MSE or LSD or KL (Log Spectral Distance)
 FREQ_PARAM_LOSS_TYPE = 'MSE'      # MSE or CE (Cross Entropy)
 
+TRANSFORM = 'SPECTROGRAM'   # MEL_SPECTROGRAM or SPECTROGRAM - to be used in the data loader and at the synth output
+
 USE_LOADED_MODEL = False
 # USE_LOADED_MODEL = False
 if OS == 'WINDOWS':
@@ -50,14 +56,9 @@ elif OS == 'LINUX':
     SAVE_MODEL_PATH = "../trained_models/trained_synth_net.pth"
     LOAD_MODEL_PATH = "../trained_models/synth_net_epoch2.pth"
 
-
 REGRESSION_LOSS_FACTOR = 1e-1
 SPECTROGRAM_LOSS_FACTOR = 1e-5
 FREQ_MSE_LOSS_FACTOR = 1e3
-
-# Synth configs
-SAMPLE_RATE = 44100
-SIGNAL_DURATION_SEC = 1.0
 
 # Debug
 DEBUG_MODE = False
