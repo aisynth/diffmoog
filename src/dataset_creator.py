@@ -4,7 +4,8 @@ import scipy.io.wavfile
 import torch
 import helper
 from sound_generator import SynthBasicFlow, SynthOscOnly
-from config import DATASET_SIZE, DATASET_TYPE, DATASET_MODE, OS, SYNTH_TYPE
+from config import DATASET_SIZE, DATASET_TYPE, DATASET_MODE, OS, SYNTH_TYPE, ONLY_OSC_DATASET
+from synth_config import OSC_FREQ_LIST
 
 """
 Create a dataset by randomizing synthesizer parameters and generating sound.
@@ -39,11 +40,13 @@ if __name__ == "__main__":
 
     for i in range(DATASET_SIZE):
         file_name = f"sound_{i}"
-
         if SYNTH_TYPE == 'SYNTH_BASIC':
             synth_obj = SynthBasicFlow(file_name)
         elif SYNTH_TYPE == 'OSC_ONLY':
-            synth_obj = SynthOscOnly(file_name)
+            if ONLY_OSC_DATASET:
+                synth_obj = SynthOscOnly(file_name, parameters_dict={'osc1_freq': OSC_FREQ_LIST[i]})
+            else:
+                synth_obj = SynthOscOnly(file_name, parameters_dict=None)
         else:
             raise ValueError("Provided SYNTH_TYPE is not recognized")
 

@@ -6,12 +6,17 @@ OS = 'WINDOWS'
 # Definitions
 PI = 3.141592653589793
 TWO_PI = 2 * PI
+NUM_OF_OSC_FREQUENCIES = 49
 
 # Synth architecture. OSC_ONLY or SYNTH_BASIC
 SYNTH_TYPE = 'OSC_ONLY'
 
 # Dataset configs
-DATASET_SIZE = 50000
+ONLY_OSC_DATASET = True
+if ONLY_OSC_DATASET:
+    DATASET_SIZE = NUM_OF_OSC_FREQUENCIES
+else:
+    DATASET_SIZE = 50000
 DATASET_TYPE = 'TRAIN'  # TRAIN or TEST
 DATASET_MODE = 'WAV'  # WAV or MEL_SPEC
 path_parent = os.path.dirname(os.getcwd())
