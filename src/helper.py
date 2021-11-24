@@ -374,6 +374,10 @@ def regression_freq_accuracy(output_dic, target_params_dic, device_arg):
 
         target_osc = OSC_FREQ_DIC_INV[target_params_dic['classification_params']['osc1_freq'][i].item()]
         if abs(rounded_predicted_freq - target_osc) < 1:
+
+            # Print ID of correctly identified frequencies
+            # print("predicted: \t", OSC_FREQ_DIC[round(rounded_predicted_freq, 4)])
+            # print("target: \t", OSC_FREQ_DIC[round(target_osc, 4)])
             num_correct_predictions += 1
 
     accuracy = num_correct_predictions / len(closest_frequency_index)
