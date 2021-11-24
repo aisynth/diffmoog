@@ -352,7 +352,7 @@ def lsd_loss(input_spectrogram: Tensor, ouput_spectrogram: Tensor) -> Tensor:
     """ Log Spectral Density loss
     https://en.wikipedia.org/wiki/Log-spectral_distance
     """
-    log_spectral_distance = torch.sum(torch.square(10 * torch.log10(input_spectrogram / ouput_spectrogram)))
+    log_spectral_distance = torch.sum(torch.square(10 * torch.log10((input_spectrogram + 1) / (ouput_spectrogram + 1)))
     return log_spectral_distance
 
 
