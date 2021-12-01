@@ -451,7 +451,7 @@ class Synth:
     def signal_values_sanity_check(amp, freq, waveform):
         """Check signal properties are reasonable."""
         if isinstance(freq, float):
-            if freq < 0 or freq > 2000:
+            if freq < 0 or freq > 20000:
                 raise ValueError("Provided frequency is not in range [0, 20000]")
         elif isinstance(freq, list):
             if any(element < 0 or element > 2000 for element in freq):

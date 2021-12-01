@@ -4,7 +4,8 @@ from torch import nn
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOSS_FACTOR, \
     SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, LOSS_MODE, SAVE_MODEL_PATH, DATASET_MODE, DATASET_TYPE, SYNTH_TYPE, \
     SPECTROGRAM_LOSS_TYPE, LOAD_MODEL_PATH, USE_LOADED_MODEL, FREQ_PARAM_LOSS_TYPE, FREQ_MSE_LOSS_FACTOR, \
-    LOG_SPECTROGRAM_MSE_LOSS, ONLY_OSC_DATASET, CNN_NETWORK, TRANSFORM
+    LOG_SPECTROGRAM_MSE_LOSS, ONLY_OSC_DATASET, CNN_NETWORK, TRANSFORM, MODEL_FREQUENCY_OUTPUT, \
+    NUM_EPOCHS_TO_PRINT_STATS
 from ai_synth_dataset import AiSynthDataset, AiSynthSingleOscDataset
 from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, OS, PLOT_SPEC
 from synth_model import SmallSynthNetwork, BigSynthNetwork
@@ -20,7 +21,6 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
 
     # Initializations
     criterion_spectrogram = nn.MSELoss()
-    criterion_kl = nn.KLDivLoss()
     if FREQ_PARAM_LOSS_TYPE == 'CE':
         criterion_osc_freq = nn.CrossEntropyLoss()
     elif FREQ_PARAM_LOSS_TYPE == 'MSE':
@@ -30,6 +30,16 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
 
     sum_epoch_loss = 0
     sum_epoch_accuracy = 0
+    sum_stats = []
+    for i in range(len(OSC_FREQ_LIST)):
+        dict_record = {
+            'frequency_id': i,
+            'frequency(Hz)': round(OSC_FREQ_LIST[i], 3),
+            'prediction_success': 0,
+            'predicted_frequency': 0,
+            'frequency_model_output': 0
+        }
+        sum_stats.append(dict_record)
     num_of_mini_batches = 0
 
     for transformed_signal, target_params_dic in data_loader:
@@ -60,11 +70,47 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
                 ce_loss = criterion_osc_freq(osc_logits_pred, osc_target_id)
                 loss = ce_loss
 
+                # Sanity check - generate synth sounds with the resulted frequencies and compare spectrograms
+                freq_ints_dict = {'osc1_freq': osc_logits_pred.argmax(1)}
+                freq_hz_dict = helper.map_classification_params_from_ints(freq_ints_dict)
+
+                overall_synth_obj = SynthOscOnly(parameters_dict=freq_hz_dict, num_sounds=len(transformed_signal))
+
+                overall_synth_obj.signal = helper.move_to(overall_synth_obj.signal, device_arg)
+
+                predicted_transformed_signal = transform(overall_synth_obj.signal)
+                predicted_transformed_signal = helper.move_to(predicted_transformed_signal, device_arg)
+
+                transformed_signal = torch.squeeze(transformed_signal)
+                predicted_transformed_signal = torch.squeeze(predicted_transformed_signal)
+
+                spectrogram_mse_loss = criterion_spectrogram(predicted_transformed_signal, transformed_signal)
+
+                if PLOT_SPEC:
+                    for i in range(49):
+                        helper.plot_spectrogram(transformed_signal[i].cpu(),
+                                                title=f"True MelSpectrogram (dB) for frequency {osc_target[i]}",
+                                                ylabel='mel freq')
+
+                        helper.plot_spectrogram(predicted_transformed_signal[i].cpu().detach().numpy(),
+                                                title=f"Predicted MelSpectrogram (dB) {osc_pred[i]}",
+                                                ylabel='mel freq')
+
+                    # for i in range(len(signal_mel_spec)):
+                    #     print("Spec diff:", criterion_spectrogram(predicted_mel_spec_sound_signal[i], signal_mel_spec[i]).item())
+
+                    print("Spec diff of graphs:",
+                          criterion_spectrogram(predicted_transformed_signal[0], transformed_signal[0]).item())
+
+                    print("Spec diff of graphs:",
+                          criterion_spectrogram(torch.log(predicted_transformed_signal[0] + 1),
+                                                torch.log(transformed_signal[0] + 1)).item())
+
             elif FREQ_PARAM_LOSS_TYPE == 'MSE':
                 frequency_mse_loss = criterion_osc_freq(osc_pred, osc_target)
 
-                criterion = helper.RMSLELoss()
-                frequency_mse_loss = criterion(osc_pred, osc_target)
+                # criterion = helper.RMSLELoss()
+                # frequency_mse_loss = criterion(osc_pred, osc_target)
 
                 # DEBUG print
                 # for i in range(len(osc_target)):
@@ -74,8 +120,12 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
             else:
                 raise ValueError("Provided FREQ_PARAM_LOSS_TYPE is not recognized")
 
-        if LOSS_MODE == 'FULL' or LOSS_MODE == 'SPECTROGRAM_ONLY':
+        # if MODEL_FREQUENCY_OUTPUT == 'SINGLE', Spectrograms are compared just as accuracy measure, without training
+        if (LOSS_MODE == 'FULL' or LOSS_MODE == 'SPECTROGRAM_ONLY') or MODEL_FREQUENCY_OUTPUT == 'SINGLE':
+
             denormalized_output_dic = normalizer.denormalize(output_dic)
+            denormalized_output_dic['osc1_freq'] = torch.clamp(denormalized_output_dic['osc1_freq'], min=0, max=20000)
+
             if SYNTH_TYPE == 'OSC_ONLY':
                 param_dict_to_synth = denormalized_output_dic
 
@@ -106,13 +156,14 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
             predicted_transformed_signal = torch.squeeze(predicted_transformed_signal)
 
             if PLOT_SPEC:
-                helper.plot_spectrogram(transformed_signal[0].cpu(),
-                                        title=f"True MelSpectrogram (dB) for frequency {osc_target[0]}",
-                                        ylabel='mel freq')
+                for i in range(20, 49):
+                    helper.plot_spectrogram(transformed_signal[i].cpu(),
+                                            title=f"True MelSpectrogram (dB) for frequency {osc_target[i]}",
+                                            ylabel='mel freq')
 
-                helper.plot_spectrogram(predicted_transformed_signal[0].cpu().detach().numpy(),
-                                        title=f"Predicted MelSpectrogram (dB) {osc_pred[0]}",
-                                        ylabel='mel freq')
+                    helper.plot_spectrogram(predicted_transformed_signal[i].cpu().detach().numpy(),
+                                            title=f"Predicted MelSpectrogram (dB) {osc_pred[i]}",
+                                            ylabel='mel freq')
 
             if LOG_SPECTROGRAM_MSE_LOSS:
                 spectrogram_mse_loss = criterion_spectrogram(torch.log(predicted_transformed_signal+1),
@@ -122,7 +173,7 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
 
             lsd_loss = helper.lsd_loss(transformed_signal, predicted_transformed_signal)
 
-            kl_loss = criterion_kl(transformed_signal, predicted_transformed_signal)
+            kl_loss = helper.kullback_leibler(predicted_transformed_signal, transformed_signal)
 
             # todo: remove the individual synth inference code
             # -----------------------------------------------
@@ -215,7 +266,7 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
                 elif SPECTROGRAM_LOSS_TYPE == 'KL':
                     loss = kl_loss
                 else:
-                    raise ValueError("Provided LOSS_TYPE is not recognized")
+                    raise ValueError("Unknown LOSS_TYPE")
                 # loss.requires_grad = True
 
         num_of_mini_batches += 1
@@ -230,47 +281,22 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
                 correct += (osc_logits_pred.argmax(1) == osc_target_id).type(torch.float).sum().item()
                 accuracy = correct / len(osc_logits_pred)
                 sum_epoch_accuracy += accuracy
+
             elif FREQ_PARAM_LOSS_TYPE == 'MSE':
-                accuracy = helper.regression_freq_accuracy(output_dic, target_params_dic, device_arg)
+                accuracy, stats = helper.regression_freq_accuracy(output_dic, target_params_dic, device_arg)
                 sum_epoch_accuracy += accuracy
-
-            # Sanity check - generate synth sounds with the resulted frequencies and compare spectrograms
-            freq_ints_dict = {'osc1_freq': osc_logits_pred.argmax(1)}
-            freq_hz_dict = helper.map_classification_params_from_ints(freq_ints_dict)
-
-            overall_synth_obj = SynthOscOnly(parameters_dict=freq_hz_dict, num_sounds=len(transformed_signal))
-
-            overall_synth_obj.signal = helper.move_to(overall_synth_obj.signal, device_arg)
-
-            predicted_transformed_signal = transform(overall_synth_obj.signal)
-            predicted_transformed_signal = helper.move_to(predicted_transformed_signal, device_arg)
-
-            transformed_signal = torch.squeeze(transformed_signal)
-            predicted_transformed_signal = torch.squeeze(predicted_transformed_signal)
-
-            spectrogram_mse_loss = criterion_spectrogram(predicted_transformed_signal, transformed_signal)
-
-            if PLOT_SPEC:
-                helper.plot_spectrogram(transformed_signal[0].cpu(),
-                                        title=f"True MelSpectrogram (dB) for frequency {osc_target[0]}",
-                                        ylabel='mel freq')
-
-                helper.plot_spectrogram(predicted_transformed_signal[0].cpu().detach().numpy(),
-                                        title=f"Predicted MelSpectrogram (dB) {osc_pred[0]}",
-                                        ylabel='mel freq')
-
-                # for i in range(len(signal_mel_spec)):
-                #     print("Spec diff:", criterion_spectrogram(predicted_mel_spec_sound_signal[i], signal_mel_spec[i]).item())
-
-                print("Spec diff of graphs:",
-                      criterion_spectrogram(predicted_transformed_signal[0], transformed_signal[0]).item())
-
-                print("Spec diff of graphs:",
-                      criterion_spectrogram(torch.log(predicted_transformed_signal[0]+1), torch.log(transformed_signal[0] + 1)).item())
+                for i in range(len(OSC_FREQ_LIST)):
+                    sum_stats[i]['prediction_success'] += stats[i]['prediction_success']
+                    sum_stats[i]['predicted_frequency'] += stats[i]['predicted_frequency']
+                    sum_stats[i]['frequency_model_output'] += stats[i]['frequency_model_output']
 
         if LOSS_MODE == 'FULL' or LOSS_MODE == 'SPECTROGRAM_ONLY':
-            accuracy = helper.regression_freq_accuracy(output_dic, target_params_dic, device_arg)
+            accuracy, stats = helper.regression_freq_accuracy(output_dic, target_params_dic, device_arg)
             sum_epoch_accuracy += accuracy
+            for i in range(len(OSC_FREQ_LIST)):
+                sum_stats[i]['prediction_success'] += stats[i]['prediction_success']
+                sum_stats[i]['predicted_frequency'] += stats[i]['predicted_frequency']
+                sum_stats[i]['frequency_model_output'] += stats[i]['frequency_model_output']
 
         end = time.time()
 
@@ -291,16 +317,16 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
 
             if LOSS_MODE == 'SPECTROGRAM_ONLY':
                 print(
-                    f"MSE loss: {round(loss.item(), 2)},\t"
+                    f"MSE loss: {round(loss.item(), 3)},\t"
                     f"accuracy: {round(accuracy * 100, 2)}%,\t"
                     f"batch processing time: {round(end - start, 2)}s")
 
             if LOSS_MODE == 'PARAMETERS_ONLY':
                 print(
-                    f"Frequency {FREQ_PARAM_LOSS_TYPE} loss: {round(loss.item(), 2)},\t\t"
+                    f"Frequency {FREQ_PARAM_LOSS_TYPE} loss: {round(loss.item(), 6)},\t\t"
                     f"Accuracy: {round(accuracy * 100, 2)}%,\t"
-                    f"Batch processing time: {round(end - start, 2)}s, \t"
-                    f"MSE of spectrograms: {round(SPECTROGRAM_LOSS_FACTOR * spectrogram_mse_loss.item(), 2)}")
+                    f"MSE of spectrograms: {round(SPECTROGRAM_LOSS_FACTOR * spectrogram_mse_loss.item(), 3)}, \t"
+                    f"Batch processing time: {round(end - start, 2)}s")
 
         if DEBUG_MODE:
             print("osc1_freq",
@@ -322,55 +348,92 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
 
     avg_epoch_loss = sum_epoch_loss / num_of_mini_batches
     avg_epoch_accuracy = sum_epoch_accuracy / num_of_mini_batches
-    return avg_epoch_loss, avg_epoch_accuracy
+    avg_stats = sum_stats
+    for i in range(len(OSC_FREQ_LIST)):
+        avg_stats[i]['prediction_success'] = sum_stats[i]['prediction_success'] / num_of_mini_batches
+        avg_stats[i]['predicted_frequency'] = sum_stats[i]['predicted_frequency'] / num_of_mini_batches
+        avg_stats[i]['frequency_model_output'] = sum_stats[i]['frequency_model_output'] / num_of_mini_batches
+
+    return avg_epoch_loss, avg_epoch_accuracy, avg_stats
 
 
 def train(model, data_loader, transform, optimiser_arg, device_arg, cur_epoch, num_epochs):
     model.train()
-    path_parent = os.path.dirname(os.getcwd())
 
     loss_list = []
     accuracy_list = []
+
+    multi_epoch_avg_loss, multi_epoch_avg_accuracy, multi_epoch_stats = helper.reset_multi_epoch_stats()
+
     for i in range(num_epochs):
         if not ONLY_OSC_DATASET or i % 100 == 0:
             print(f"Epoch {cur_epoch} start")
 
-        avg_epoch_loss, avg_epoch_accuracy = \
+        avg_epoch_loss, avg_epoch_accuracy, avg_epoch_stats = \
             train_single_epoch(model, data_loader, transform, optimiser_arg, device_arg)
 
+        # Sum stats over multiple epochs
+        multi_epoch_avg_loss += avg_epoch_loss
+        multi_epoch_avg_accuracy += avg_epoch_accuracy
+        for j in range(len(OSC_FREQ_LIST)):
+            multi_epoch_stats[j]['prediction_success'] += avg_epoch_stats[j]['prediction_success']
+            multi_epoch_stats[j]['predicted_frequency'] += avg_epoch_stats[j]['predicted_frequency']
+            multi_epoch_stats[j]['frequency_model_output'] += avg_epoch_stats[j]['frequency_model_output']
+
         cur_epoch += 1
-        if not ONLY_OSC_DATASET or (i % 100 == 0 and i != 0):
+
+        if ONLY_OSC_DATASET and (i % NUM_EPOCHS_TO_PRINT_STATS == 0 and i != 0):
+
+            # Average stats over multiple epochs
+            multi_epoch_avg_loss /= NUM_EPOCHS_TO_PRINT_STATS
+            multi_epoch_avg_accuracy /= NUM_EPOCHS_TO_PRINT_STATS
+            for k in range(len(OSC_FREQ_LIST)):
+                multi_epoch_stats[k]['prediction_success'] /= NUM_EPOCHS_TO_PRINT_STATS
+                multi_epoch_stats[k]['predicted_frequency'] /= NUM_EPOCHS_TO_PRINT_STATS
+                multi_epoch_stats[k]['frequency_model_output'] /= NUM_EPOCHS_TO_PRINT_STATS
+
+                multi_epoch_stats[k]['prediction_success'] *= 100
+                multi_epoch_stats[k]['predicted_frequency'] = round(multi_epoch_stats[k]['predicted_frequency'], 3)
+                multi_epoch_stats[k]['frequency_model_output'] = round(multi_epoch_stats[k]['frequency_model_output'], 3)
+
+            print("--------------------------------------\n")
+            print(f"Epoch {cur_epoch} end")
+            print(f"Average Loss for last {NUM_EPOCHS_TO_PRINT_STATS} epochs:", round(multi_epoch_avg_loss, 6))
+            print(f"Average Accuracy for last {NUM_EPOCHS_TO_PRINT_STATS} epochs:"
+                  f" {round(multi_epoch_avg_accuracy * 100, 2)}%\n")
+
+            fmt = [
+                ('Frequency ID', 'frequency_id', 13),
+                ('Frequency (Hz)', 'frequency(Hz)', 17),
+                ('AVG Prediction %', 'prediction_success', 20),
+                ('AVG Predicted Frequency ', 'predicted_frequency', 20),
+                ('AVG Frequency Model Out', 'frequency_model_output', 20),
+            ]
+
+            print(helper.TablePrinter(fmt, ul='=')(multi_epoch_stats))
+            print("--------------------------------------\n")
+
+            multi_epoch_avg_loss, multi_epoch_avg_accuracy, multi_epoch_stats = helper.reset_multi_epoch_stats()
+
+            loss_list.append(avg_epoch_loss)
+            accuracy_list.append(avg_epoch_accuracy * 100)
+
+            # save model checkpoint
+            helper.save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, accuracy_list)
+
+        elif not ONLY_OSC_DATASET:
+
             print("--------------------------------------")
             print(f"Epoch {cur_epoch} end")
             print(f"Average Epoch{cur_epoch} Loss:", round(avg_epoch_loss, 2))
             print(f"Average Epoch{cur_epoch} Accuracy: {round(avg_epoch_accuracy * 100, 2)}%")
             print("--------------------------------------\n")
 
-            # save model checkpoint
-            if OS == 'WINDOWS':
-                model_checkpoint = path_parent + f"\\trained_models\\synth_net_epoch{cur_epoch}.pth"
-                plot_path = path_parent + f"\\trained_models\\loss_graphs\\end_epoch{cur_epoch}_loss_graph.png"
-                txt_path = path_parent + f"\\trained_models\\loss_list.txt"
-            elif OS == 'LINUX':
-                model_checkpoint = path_parent + f"/ai_synth/trained_models/synth_net_epoch{cur_epoch}.pth"
-                plot_path = path_parent + f"/ai_synth/trained_models/loss_graphs/end_epoch{cur_epoch}_loss_graph.png"
-                txt_path = path_parent + f"/ai_synth/trained_models/loss_list.txt"
-
-            torch.save({
-                'epoch': cur_epoch,
-                'model_state_dict': synth_net.state_dict(),
-                'optimizer_state_dict': optimiser_arg.state_dict(),
-                'loss': avg_epoch_loss
-            }, model_checkpoint)
-
             loss_list.append(avg_epoch_loss)
             accuracy_list.append(avg_epoch_accuracy * 100)
-            plt.savefig(plot_path)
 
-            text_file = open(txt_path, "w")
-            for j in range(len(loss_list)):
-                text_file.write("loss: " + str(loss_list[j]) + " " + "accuracy: " + str(accuracy_list[j]) + "\n")
-            text_file.close()
+            # save model checkpoint
+            helper.save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, accuracy_list)
 
     print("Finished training")
 

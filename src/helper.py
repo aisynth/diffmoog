@@ -4,10 +4,12 @@ import torchaudio
 import synth
 import matplotlib.pyplot as plt
 import librosa
-from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE, SYNTH_TYPE
+from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE, SYNTH_TYPE, PRINT_ACCURACY_STATS, OS
 from synth_config import *
 from torch.utils.data import DataLoader
 from torch import nn
+import os
+
 
 
 def get_device():
@@ -366,27 +368,65 @@ def regression_freq_accuracy(output_dic, target_params_dic, device_arg):
     param_dict_to_synth = output_dic
     closest_frequency_index = torch.searchsorted(osc_freq_tensor, param_dict_to_synth['osc1_freq'])
     num_correct_predictions = 0
-    for i in range(len(closest_frequency_index)):
+
+    frequency_id = list(range(len(OSC_FREQ_LIST)))
+    frequency_list = OSC_FREQ_LIST
+    prediction_success = []
+    frequency_predictions = []
+    frequency_model_output = []
+
+    for i in range(len(param_dict_to_synth['osc1_freq'])):
         predicted_osc = param_dict_to_synth['osc1_freq'][i]
+        frequency_model_output.append(predicted_osc.item())
         closest_osc_index_from_below = closest_frequency_index[i] - 1
         closest_osc_index_from_above = closest_frequency_index[i]
-        below_ratio = predicted_osc / OSC_FREQ_LIST[closest_osc_index_from_below.item()]
-        above_ratio = OSC_FREQ_LIST[closest_osc_index_from_above.item()] / predicted_osc
-        if below_ratio < above_ratio:
-            rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_below.item()]
+        if closest_osc_index_from_below == -1:
+            rounded_predicted_freq = OSC_FREQ_LIST[0]
+        elif closest_osc_index_from_above == len(OSC_FREQ_LIST):
+            rounded_predicted_freq = OSC_FREQ_LIST[len(OSC_FREQ_LIST) - 1]
         else:
-            rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_above.item()]
+            below_ratio = predicted_osc / OSC_FREQ_LIST[closest_osc_index_from_below.item()]
+            above_ratio = OSC_FREQ_LIST[closest_osc_index_from_above.item()] / predicted_osc
 
+            if below_ratio < above_ratio:
+                rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_below.item()]
+            else:
+                rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_above.item()]
+
+        frequency_predictions.append(rounded_predicted_freq)
         target_osc = OSC_FREQ_DIC_INV[target_params_dic['classification_params']['osc1_freq'][i].item()]
-        if abs(rounded_predicted_freq - target_osc) < 1:
 
-            # Print ID of correctly identified frequencies
-            # print("predicted: \t", OSC_FREQ_DIC[round(rounded_predicted_freq, 4)])
-            # print("target: \t", OSC_FREQ_DIC[round(target_osc, 4)])
+        if abs(rounded_predicted_freq - target_osc) < 3:
+            prediction_success.append(1)
             num_correct_predictions += 1
 
+        else:
+            prediction_success.append(0)
+
+    stats = []
+    for i in range(len(param_dict_to_synth['osc1_freq'])):
+        dict_record = {
+            'frequency_id': frequency_id[i],
+            'frequency(Hz)': round(frequency_list[i], 3),
+            'prediction_success': prediction_success[i],
+            'predicted_frequency': round(frequency_predictions[i], 3),
+            'frequency_model_output': round(frequency_model_output[i], 3)
+        }
+        stats.append(dict_record)
+
+    if PRINT_ACCURACY_STATS:
+        fmt = [
+            ('Frequency ID',            'frequency_id',             13),
+            ('Frequency (Hz)',          'frequency(Hz)',            17),
+            ('Prediction Status',       'prediction_success',       20),
+            ('Predicted Frequency ',    'predicted_frequency',      20),
+            ('Frequency Model Out',     'frequency_model_output',   20),
+        ]
+
+        print(TablePrinter(fmt, ul='=')(stats))
+
     accuracy = num_correct_predictions / len(closest_frequency_index)
-    return accuracy
+    return accuracy, stats
 
 
 class RMSLELoss(nn.Module):
@@ -396,3 +436,93 @@ class RMSLELoss(nn.Module):
 
     def forward(self, pred, actual):
         return torch.sqrt(self.mse(torch.log(pred + 1), torch.log(actual + 1)))
+
+
+class TablePrinter(object):
+    "Print a list of dicts as a table"
+    def __init__(self, fmt, sep=' ', ul=None):
+        """
+        @param fmt: list of tuple(heading, key, width)
+                        heading: str, column label
+                        key: dictionary key to value to print
+                        width: int, column width in chars
+        @param sep: string, separation between columns
+        @param ul: string, character to underline column label, or None for no underlining
+        """
+        super(TablePrinter,self).__init__()
+        self.fmt   = str(sep).join('{lb}{0}:{1}{rb}'.format(key, width, lb='{', rb='}') for heading,key,width in fmt)
+        self.head  = {key:heading for heading,key,width in fmt}
+        self.ul    = {key:str(ul)*width for heading,key,width in fmt} if ul else None
+        self.width = {key:width for heading,key,width in fmt}
+
+    def row(self, data):
+        return self.fmt.format(**{ k:str(data.get(k,''))[:w] for k,w in self.width.items() })
+
+    def __call__(self, dataList):
+        _r = self.row
+        res = [_r(data) for data in dataList]
+        res.insert(0, _r(self.head))
+        if self.ul:
+            res.insert(1, _r(self.ul))
+        return '\n'.join(res)
+
+
+def kullback_leibler(y_hat, y):
+    """Generalized Kullback Leibler divergence.
+    :param y_hat: The predicted distribution.
+    :type y_hat: torch.Tensor
+    :param y: The true distribution.
+    :type y: torch.Tensor
+    :return: The generalized Kullback Leibler divergence\
+             between predicted and true distributions.
+    :rtype: torch.Tensor
+    """
+    return (y * (y.add(1e-6).log() - y_hat.add(1e-6).log()) + (y_hat - y)).sum(dim=-1).mean()
+
+
+def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, accuracy_list):
+    path_parent = os.path.dirname(os.getcwd())
+
+    # save model checkpoint
+    if OS == 'WINDOWS':
+        model_checkpoint = path_parent + f"\\trained_models\\synth_net_epoch{cur_epoch}.pth"
+        plot_path = path_parent + f"\\trained_models\\loss_graphs\\end_epoch{cur_epoch}_loss_graph.png"
+        txt_path = path_parent + f"\\trained_models\\loss_list.txt"
+    elif OS == 'LINUX':
+        model_checkpoint = path_parent + f"/ai_synth/trained_models/synth_net_epoch{cur_epoch}.pth"
+        plot_path = path_parent + f"/ai_synth/trained_models/loss_graphs/end_epoch{cur_epoch}_loss_graph.png"
+        txt_path = path_parent + f"/ai_synth/trained_models/loss_list.txt"
+    else:
+        ValueError("Unknown OS")
+
+    torch.save({
+        'epoch': cur_epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimiser_arg.state_dict(),
+        'loss': avg_epoch_loss
+    }, model_checkpoint)
+
+    plt.savefig(plot_path)
+
+    text_file = open(txt_path, "w")
+    for j in range(len(loss_list)):
+        text_file.write("loss: " + str(loss_list[j]) + " " + "accuracy: " + str(accuracy_list[j]) + "\n")
+    text_file.close()
+
+
+def reset_multi_epoch_stats():
+    multi_epoch_avg_loss = 0
+    multi_epoch_avg_accuracy = 0
+    multi_epoch_stats = []
+    for j in range(len(OSC_FREQ_LIST)):
+        dict_record = {
+            'frequency_id': j,
+            'frequency(Hz)': round(OSC_FREQ_LIST[j], 3),
+            'prediction_success': 0,
+            'predicted_frequency': 0,
+            'frequency_model_output': 0
+        }
+        multi_epoch_stats.append(dict_record)
+
+    return multi_epoch_avg_loss, multi_epoch_avg_accuracy, multi_epoch_stats
+

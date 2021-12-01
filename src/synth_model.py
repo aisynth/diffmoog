@@ -3,7 +3,7 @@ import torch
 import helper
 from torchsummary import summary
 from synth import REGRESSION_PARAM_LIST, CLASSIFICATION_PARAM_LIST, WAVE_TYPE_DIC, FILTER_TYPE_DIC, OSC_FREQ_LIST
-from config import SYNTH_TYPE, LOSS_MODE
+from config import SYNTH_TYPE, LOSS_MODE, MODEL_FREQUENCY_OUTPUT
 
 # todo: this is value from Valerio Tutorial. has to check
 # LINEAR_IN_CHANNELS = 128 * 5 * 4
@@ -234,7 +234,10 @@ class BigSynthNetwork(nn.Module):
         )
         self.flatten = nn.Flatten()
         if SYNTH_TYPE == 'OSC_ONLY':
-            self.linear = nn.Linear(BIG_LINEAR_IN_CHANNELS, len(OSC_FREQ_LIST))
+            if MODEL_FREQUENCY_OUTPUT == 'SINGLE':
+                self.linear = nn.Linear(BIG_LINEAR_IN_CHANNELS, 1)
+            else:
+                self.linear = nn.Linear(BIG_LINEAR_IN_CHANNELS, len(OSC_FREQ_LIST))
 
         elif SYNTH_TYPE == 'SYNTH_BASIC':
             self.classification_params = nn.ModuleDict([
@@ -276,16 +279,25 @@ class BigSynthNetwork(nn.Module):
         if SYNTH_TYPE == 'OSC_ONLY':
             x = self.linear(x)
             logits = x
-            probabilities = self.softmax(logits)
-            osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())
-            output_dic['osc1_freq'] = torch.matmul(probabilities, osc_freq_tensor)
+            # x = torch.square(x)
+            # x = torch.sqrt(x)
+
+            if MODEL_FREQUENCY_OUTPUT == 'WEIGHTED':
+                probabilities = self.softmax(logits)
+                osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())
+                output_dic['osc1_freq'] = torch.matmul(probabilities, osc_freq_tensor)
+            elif MODEL_FREQUENCY_OUTPUT == 'LOGITS':
+                output_dic['osc1_freq'] = logits
+            elif MODEL_FREQUENCY_OUTPUT == 'SINGLE':
+                output_dic['osc1_freq'] = torch.squeeze(x)
+            else:
+                ValueError("MODEL_FREQUENCY_OUTPUT is not known")
 
             return output_dic, logits
 
         if SYNTH_TYPE == 'SYNTH_BASIC':
             for out_name, lin in self.classification_params.items():
                 # -----> do not use softmax if using CrossEntropyLoss()
-                x = lin(x)
                 probabilities = self.softmax(x)
                 if out_name == 'osc1_freq' or out_name == 'osc2_freq':
                     osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())
