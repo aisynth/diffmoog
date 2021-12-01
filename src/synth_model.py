@@ -3,7 +3,9 @@ import torch
 import helper
 from torchsummary import summary
 from synth import REGRESSION_PARAM_LIST, CLASSIFICATION_PARAM_LIST, WAVE_TYPE_DIC, FILTER_TYPE_DIC, OSC_FREQ_LIST
-from config import SYNTH_TYPE, LOSS_MODE, MODEL_FREQUENCY_OUTPUT
+from config import SYNTH_TYPE, ARCHITECTURE, MODEL_FREQUENCY_OUTPUT
+from sound_generator import SynthOscOnly
+
 
 # todo: this is value from Valerio Tutorial. has to check
 # LINEAR_IN_CHANNELS = 128 * 5 * 4
@@ -279,21 +281,30 @@ class BigSynthNetwork(nn.Module):
         if SYNTH_TYPE == 'OSC_ONLY':
             x = self.linear(x)
             logits = x
+            probabilities = self.softmax(logits)
             # x = torch.square(x)
             # x = torch.sqrt(x)
 
-            if MODEL_FREQUENCY_OUTPUT == 'WEIGHTED':
-                probabilities = self.softmax(logits)
-                osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())
-                output_dic['osc1_freq'] = torch.matmul(probabilities, osc_freq_tensor)
-            elif MODEL_FREQUENCY_OUTPUT == 'LOGITS':
-                output_dic['osc1_freq'] = logits
-            elif MODEL_FREQUENCY_OUTPUT == 'SINGLE':
-                output_dic['osc1_freq'] = torch.squeeze(x)
-            else:
-                ValueError("MODEL_FREQUENCY_OUTPUT is not known")
+            if ARCHITECTURE == 'SPEC_NO_SYNTH':
+                freq_dict = {'osc1_freq': torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())}
+                synth_obj = SynthOscOnly(file_name=None, parameters_dict=freq_dict, num_sounds=len(OSC_FREQ_LIST))
+                spectrograms = helper.mel_spectrogram_transform(synth_obj.signal)
+                weighted_avg_spectrograms = torch.einsum("ik,klm->ilm", probabilities, spectrograms)
+                output_dic['osc1_freq'] = weighted_avg_spectrograms
 
-            return output_dic, logits
+                return output_dic, logits
+            else:
+                if MODEL_FREQUENCY_OUTPUT == 'WEIGHTED':
+                    osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())
+                    output_dic['osc1_freq'] = torch.matmul(probabilities, osc_freq_tensor)
+                elif MODEL_FREQUENCY_OUTPUT == 'LOGITS':
+                    output_dic['osc1_freq'] = logits
+                elif MODEL_FREQUENCY_OUTPUT == 'SINGLE':
+                    output_dic['osc1_freq'] = torch.squeeze(x)
+                else:
+                    ValueError("MODEL_FREQUENCY_OUTPUT is not known")
+
+                return output_dic, logits
 
         if SYNTH_TYPE == 'SYNTH_BASIC':
             for out_name, lin in self.classification_params.items():

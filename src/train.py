@@ -2,10 +2,10 @@ import torch
 import matplotlib.pyplot as plt
 from torch import nn
 from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOSS_FACTOR, \
-    SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, LOSS_MODE, SAVE_MODEL_PATH, DATASET_MODE, DATASET_TYPE, SYNTH_TYPE, \
+    SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, ARCHITECTURE, SAVE_MODEL_PATH, DATASET_MODE, DATASET_TYPE, SYNTH_TYPE, \
     SPECTROGRAM_LOSS_TYPE, LOAD_MODEL_PATH, USE_LOADED_MODEL, FREQ_PARAM_LOSS_TYPE, FREQ_MSE_LOSS_FACTOR, \
     LOG_SPECTROGRAM_MSE_LOSS, ONLY_OSC_DATASET, CNN_NETWORK, TRANSFORM, MODEL_FREQUENCY_OUTPUT, \
-    NUM_EPOCHS_TO_PRINT_STATS
+    NUM_EPOCHS_TO_PRINT_STATS, PRINT_ACCURACY_STATS_MULTIPLE_EPOCHS
 from ai_synth_dataset import AiSynthDataset, AiSynthSingleOscDataset
 from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, OS, PLOT_SPEC
 from synth_model import SmallSynthNetwork, BigSynthNetwork
@@ -65,7 +65,13 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
         osc_target = torch.tensor([OSC_FREQ_DIC_INV[x.item()] for x in osc_target_id], device=device_arg)
         osc_pred = output_dic['osc1_freq']
 
-        if LOSS_MODE == 'PARAMETERS_ONLY':
+        if ARCHITECTURE == 'SPEC_NO_SYNTH':
+            if SPECTROGRAM_LOSS_TYPE == 'MSE':
+                transformed_signal = torch.squeeze(transformed_signal)
+                spectrogram_mse_loss = criterion_spectrogram(osc_pred, transformed_signal)
+                loss = SPECTROGRAM_LOSS_FACTOR * spectrogram_mse_loss
+
+        elif ARCHITECTURE == 'PARAMETERS_ONLY':
             if FREQ_PARAM_LOSS_TYPE == 'CE':
                 ce_loss = criterion_osc_freq(osc_logits_pred, osc_target_id)
                 loss = ce_loss
@@ -121,7 +127,7 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
                 raise ValueError("Provided FREQ_PARAM_LOSS_TYPE is not recognized")
 
         # if MODEL_FREQUENCY_OUTPUT == 'SINGLE', Spectrograms are compared just as accuracy measure, without training
-        if (LOSS_MODE == 'FULL' or LOSS_MODE == 'SPECTROGRAM_ONLY') or MODEL_FREQUENCY_OUTPUT == 'SINGLE':
+        if (ARCHITECTURE == 'FULL' or ARCHITECTURE == 'SPECTROGRAM_ONLY') or MODEL_FREQUENCY_OUTPUT == 'SINGLE' or MODEL_FREQUENCY_OUTPUT == 'WEIGHTED':
 
             denormalized_output_dic = normalizer.denormalize(output_dic)
             denormalized_output_dic['osc1_freq'] = torch.clamp(denormalized_output_dic['osc1_freq'], min=0, max=20000)
@@ -209,7 +215,7 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
             #          -----------End Part----------
             # -----------------------------------------------
 
-            if LOSS_MODE == "FULL":
+            if ARCHITECTURE == "FULL":
                 classification_target_params = target_params_dic['classification_params']
                 regression_target_parameters = target_params_dic['regression_params']
                 helper.map_classification_params_to_ints(classification_target_params)
@@ -258,7 +264,7 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
                     + REGRESSION_LOSS_FACTOR * loss_regression_params \
                     + SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total
 
-            if LOSS_MODE == 'SPECTROGRAM_ONLY':
+            elif ARCHITECTURE == 'SPECTROGRAM_ONLY':
                 if SPECTROGRAM_LOSS_TYPE == 'MSE':
                     loss = SPECTROGRAM_LOSS_FACTOR * spectrogram_mse_loss
                 elif SPECTROGRAM_LOSS_TYPE == 'LSD':
@@ -275,33 +281,28 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
         optimizer_arg.step()
 
         # Check Accuracy
-        if LOSS_MODE == 'PARAMETERS_ONLY':
-            if FREQ_PARAM_LOSS_TYPE == 'CE':
-                correct = 0
-                correct += (osc_logits_pred.argmax(1) == osc_target_id).type(torch.float).sum().item()
-                accuracy = correct / len(osc_logits_pred)
-                sum_epoch_accuracy += accuracy
+        if ARCHITECTURE == 'SPEC_NO_SYNTH' or \
+                (ARCHITECTURE == 'PARAMETERS_ONLY' and MODEL_FREQUENCY_OUTPUT == 'LOGITS'):
+            correct = 0
+            correct += (osc_logits_pred.argmax(1) == osc_target_id).type(torch.float).sum().item()
+            accuracy = correct / len(osc_logits_pred)
+            sum_epoch_accuracy += accuracy
 
-            elif FREQ_PARAM_LOSS_TYPE == 'MSE':
-                accuracy, stats = helper.regression_freq_accuracy(output_dic, target_params_dic, device_arg)
-                sum_epoch_accuracy += accuracy
-                for i in range(len(OSC_FREQ_LIST)):
-                    sum_stats[i]['prediction_success'] += stats[i]['prediction_success']
-                    sum_stats[i]['predicted_frequency'] += stats[i]['predicted_frequency']
-                    sum_stats[i]['frequency_model_output'] += stats[i]['frequency_model_output']
-
-        if LOSS_MODE == 'FULL' or LOSS_MODE == 'SPECTROGRAM_ONLY':
+        if ARCHITECTURE == 'FULL' or ARCHITECTURE == 'SPECTROGRAM_ONLY' or \
+                (ARCHITECTURE == 'PARAMETERS_ONLY' and FREQ_PARAM_LOSS_TYPE == 'MSE'):
             accuracy, stats = helper.regression_freq_accuracy(output_dic, target_params_dic, device_arg)
             sum_epoch_accuracy += accuracy
             for i in range(len(OSC_FREQ_LIST)):
                 sum_stats[i]['prediction_success'] += stats[i]['prediction_success']
                 sum_stats[i]['predicted_frequency'] += stats[i]['predicted_frequency']
                 sum_stats[i]['frequency_model_output'] += stats[i]['frequency_model_output']
+        else:
+            ValueError("Unknown architecture")
 
         end = time.time()
 
         if PRINT_TRAIN_STATS:
-            if LOSS_MODE == 'FULL':
+            if ARCHITECTURE == 'FULL':
                 print("-----Classification params-----")
                 print('loss_osc1_freq', loss_osc1_freq)
                 print('loss_osc1_wave', loss_osc1_wave)
@@ -315,18 +316,20 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
                 print('loss_spectrogram_total', SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total)
                 print('\n')
 
-            if LOSS_MODE == 'SPECTROGRAM_ONLY':
+            elif ARCHITECTURE == 'SPECTROGRAM_ONLY' or ARCHITECTURE == 'SPEC_NO_SYNTH':
                 print(
                     f"MSE loss: {round(loss.item(), 3)},\t"
                     f"accuracy: {round(accuracy * 100, 2)}%,\t"
                     f"batch processing time: {round(end - start, 2)}s")
 
-            if LOSS_MODE == 'PARAMETERS_ONLY':
+            elif ARCHITECTURE == 'PARAMETERS_ONLY':
                 print(
                     f"Frequency {FREQ_PARAM_LOSS_TYPE} loss: {round(loss.item(), 6)},\t\t"
                     f"Accuracy: {round(accuracy * 100, 2)}%,\t"
                     f"MSE of spectrograms: {round(SPECTROGRAM_LOSS_FACTOR * spectrogram_mse_loss.item(), 3)}, \t"
                     f"Batch processing time: {round(end - start, 2)}s")
+            else:
+                ValueError("Unknown architecture")
 
         if DEBUG_MODE:
             print("osc1_freq",
@@ -409,8 +412,8 @@ def train(model, data_loader, transform, optimiser_arg, device_arg, cur_epoch, n
                 ('AVG Predicted Frequency ', 'predicted_frequency', 20),
                 ('AVG Frequency Model Out', 'frequency_model_output', 20),
             ]
-
-            print(helper.TablePrinter(fmt, ul='=')(multi_epoch_stats))
+            if PRINT_ACCURACY_STATS_MULTIPLE_EPOCHS:
+                print(helper.TablePrinter(fmt, ul='=')(multi_epoch_stats))
             print("--------------------------------------\n")
 
             multi_epoch_avg_loss, multi_epoch_avg_accuracy, multi_epoch_stats = helper.reset_multi_epoch_stats()
@@ -485,7 +488,7 @@ if __name__ == "__main__":
     # initialize optimizer
     optimizer = torch.optim.Adam(synth_net.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
 
-    print(f"Training model with: \n LOSS_MODE: {LOSS_MODE} \n SYNTH_TYPE: {SYNTH_TYPE}")
+    print(f"Training model with: \n LOSS_MODE: {ARCHITECTURE} \n SYNTH_TYPE: {SYNTH_TYPE}")
     if USE_LOADED_MODEL:
         checkpoint = torch.load(LOAD_MODEL_PATH)
         synth_net.load_state_dict(checkpoint['model_state_dict'])

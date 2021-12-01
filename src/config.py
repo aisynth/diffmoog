@@ -12,8 +12,10 @@ NUM_OF_OSC_FREQUENCIES = 49
 SAMPLE_RATE = 44100
 SIGNAL_DURATION_SEC = 1.0
 
-# Synth architecture. OSC_ONLY or SYNTH_BASIC
-SYNTH_TYPE = 'OSC_ONLY'
+" Mode - define a common configuration for the whole system     "
+"   0 -                     Use custom configurations           "
+"   Any other number -      Use predefined configuration preset "
+MODE = 3
 
 # Dataset configs
 ONLY_OSC_DATASET = True
@@ -41,9 +43,18 @@ elif OS == 'LINUX':
 CNN_NETWORK = 'BIG'  # 'BIG' or 'SMALL' - one of 2 possible network architectures
 BATCH_SIZE = 256
 EPOCHS = 2000
-LEARNING_RATE = 0.001
+LEARNING_RATE = 0.0001
 
-LOSS_MODE = 'SPECTROGRAM_ONLY'  # SPECTROGRAM_ONLY, PARAMETERS_ONLY or FULL (Spectrogram + parameters)
+# Synth architecture. OSC_ONLY or SYNTH_BASIC
+SYNTH_TYPE = 'OSC_ONLY'
+
+" The architecture of the system, that defines the data flow and the loss functions:                     "
+"   1. SPECTROGRAM_ONLY (input -> CNN -> parameters -> Synth -> output; Loss over spectrograms)         "
+"   2. PARAMETERS_ONLY (input -> CNN -> parameters; Loss over parameters)                               "
+"   3. FULL - (input -> CNN -> parameters -> Synth -> output; Loss over spectrograms AND parameters)    "
+"   4. SPEC_NO_SYNTH (input -> CNN -> parameters; Output inner product <probabilities, spectrograms>;   "
+"      Loss over spectrograms)"
+ARCHITECTURE = 'SPECTROGRAM_ONLY'  # SPECTROGRAM_ONLY, PARAMETERS_ONLY, SPEC_NO_SYNTH or FULL (Spectrogram + parameters)
 SPECTROGRAM_LOSS_TYPE = 'MSE'  # MSE or LSD (Log Spectral Distance) or KL (Kullback-Leibler)
 FREQ_PARAM_LOSS_TYPE = 'MSE'  # MSE or CE (Cross Entropy)
 
@@ -57,11 +68,11 @@ if FREQ_PARAM_LOSS_TYPE == 'CE':
 
 TRANSFORM = 'MEL_SPECTROGRAM'  # MEL_SPECTROGRAM or SPECTROGRAM - to be used in the data loader and at the synth output
 
-USE_LOADED_MODEL = False
+USE_LOADED_MODEL = True
 # USE_LOADED_MODEL = False
 if OS == 'WINDOWS':
     SAVE_MODEL_PATH = "..\\trained_models\\trained_synth_net.pth"
-    LOAD_MODEL_PATH = path_parent + "\\trained_models\\synth_net_epoch301.pth"
+    LOAD_MODEL_PATH = path_parent + "\\trained_models\\synth_net_epoch201.pth"
 elif OS == 'LINUX':
     SAVE_MODEL_PATH = "../trained_models/trained_synth_net.pth"
     LOAD_MODEL_PATH = "../trained_models/synth_net_epoch2.pth"
@@ -75,8 +86,37 @@ DEBUG_MODE = False
 PLOT_SPEC = False
 PRINT_TRAIN_STATS = True
 PRINT_ACCURACY_STATS = False
+PRINT_ACCURACY_STATS_MULTIPLE_EPOCHS = True
 
 LOG_SPECTROGRAM_MSE_LOSS = False
 
 if LOG_SPECTROGRAM_MSE_LOSS:
     SPECTROGRAM_LOSS_FACTOR = 1000
+
+
+if MODE == 1:
+    SYNTH_TYPE = 'OSC_ONLY'
+    ARCHITECTURE = 'PARAMETERS_ONLY'
+    MODEL_FREQUENCY_OUTPUT = 'SINGLE'
+    FREQ_PARAM_LOSS_TYPE = 'MSE'
+elif MODE == 2:
+    SYNTH_TYPE = 'OSC_ONLY'
+    ARCHITECTURE = 'PARAMETERS_ONLY'
+    FREQ_PARAM_LOSS_TYPE = 'CE'
+    MODEL_FREQUENCY_OUTPUT = 'LOGITS'
+elif MODE == 3:
+    SYNTH_TYPE = 'OSC_ONLY'
+    ARCHITECTURE = 'PARAMETERS_ONLY'
+    MODEL_FREQUENCY_OUTPUT = 'WEIGHTED'
+    FREQ_PARAM_LOSS_TYPE = 'MSE'
+elif MODE == 4:
+    SYNTH_TYPE = 'OSC_ONLY'
+    ARCHITECTURE = 'SPECTROGRAM_ONLY'
+    SPECTROGRAM_LOSS_TYPE = 'MSE'
+    MODEL_FREQUENCY_OUTPUT = 'SINGLE'
+elif MODE == 5:
+    SYNTH_TYPE = 'OSC_ONLY'
+    ARCHITECTURE = 'SPEC_NO_SYNTH'
+    SPECTROGRAM_LOSS_TYPE = 'MSE'
+    MODEL_FREQUENCY_OUTPUT = 'WEIGHTED'
+
