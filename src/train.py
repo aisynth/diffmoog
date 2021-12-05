@@ -5,7 +5,8 @@ from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOS
     SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, ARCHITECTURE, SAVE_MODEL_PATH, DATASET_MODE, DATASET_TYPE, SYNTH_TYPE, \
     SPECTROGRAM_LOSS_TYPE, LOAD_MODEL_PATH, USE_LOADED_MODEL, FREQ_PARAM_LOSS_TYPE, FREQ_MSE_LOSS_FACTOR, \
     LOG_SPECTROGRAM_MSE_LOSS, ONLY_OSC_DATASET, CNN_NETWORK, TRANSFORM, MODEL_FREQUENCY_OUTPUT, \
-    NUM_EPOCHS_TO_PRINT_STATS, PRINT_ACCURACY_STATS_MULTIPLE_EPOCHS
+    NUM_EPOCHS_TO_PRINT_STATS, PRINT_PER_ACCURACY_STATS_MULTIPLE_EPOCHS, REINFORCE_REWARD_SPEC_MSE_THRESHOLD, \
+    NUM_EPOCHS_TO_SAVE_MODEL, FREQ_REINFORCE_LOSS_FACTOR
 from ai_synth_dataset import AiSynthDataset, AiSynthSingleOscDataset
 from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, OS, PLOT_SPEC
 from synth_model import SmallSynthNetwork, BigSynthNetwork
@@ -28,18 +29,7 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
     normalizer = helper.Normalizer()
     torch.autograd.set_detect_anomaly(True)
 
-    sum_epoch_loss = 0
-    sum_epoch_accuracy = 0
-    sum_stats = []
-    for i in range(len(OSC_FREQ_LIST)):
-        dict_record = {
-            'frequency_id': i,
-            'frequency(Hz)': round(OSC_FREQ_LIST[i], 3),
-            'prediction_success': 0,
-            'predicted_frequency': 0,
-            'frequency_model_output': 0
-        }
-        sum_stats.append(dict_record)
+    sum_epoch_loss, sum_epoch_accuracy, sum_stats = helper.reset_stats()
     num_of_mini_batches = 0
 
     for transformed_signal, target_params_dic in data_loader:
@@ -54,10 +44,7 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
         # -------------------------------------
         # signal_log_mel_spec.requires_grad = True
 
-        if SYNTH_TYPE == 'OSC_ONLY':
-            output_dic, osc_logits_pred = model(transformed_signal)
-        else:
-            output_dic = model(transformed_signal)
+        output_dic, osc_logits_pred = model(transformed_signal)
 
         # helper.map_classification_params_from_ints(predicted_dic)
 
@@ -125,6 +112,40 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
                 loss = FREQ_MSE_LOSS_FACTOR * frequency_mse_loss
             else:
                 raise ValueError("Provided FREQ_PARAM_LOSS_TYPE is not recognized")
+
+        elif ARCHITECTURE == 'REINFORCE':
+            " REINFORCE as implemented in https://pytorch.org/docs/stable/distributions.html" \
+            " and in video at 56:30: https://www.youtube.com/watch?v=cQfOQcpYRzE "
+
+            policy_distributions = torch.distributions.Categorical(logits=osc_logits_pred)
+
+            # Sample actions i.e choose the frequency prediction from the output logits (distribution) of the model.
+            actions = policy_distributions.sample()
+            # Replace line above with line below to directly sample the correct actions (Environment is well-known)
+            # actions = torch.arange(start=0, end=49, device=device_arg)
+            param_dict_to_synth = helper.map_classification_params_from_ints({'osc1_freq': actions})
+
+            # Step Environment i.e feed the synthesizer with the chosen frequency and acquire signal
+            overall_synth_obj = SynthOscOnly(parameters_dict=param_dict_to_synth, num_sounds=len(transformed_signal))
+            predicted_transformed_signal = transform(overall_synth_obj.signal)
+
+            # Calculate reward based on the difference between input and output spectrograms
+            transformed_signal = torch.squeeze(transformed_signal)
+            predicted_transformed_signal = torch.squeeze(predicted_transformed_signal)
+
+            rewards = []
+            for i in range(len(transformed_signal)):
+                spectrogram_mse_loss = criterion_spectrogram(predicted_transformed_signal[i], transformed_signal[i])
+                if SPECTROGRAM_LOSS_FACTOR * spectrogram_mse_loss < REINFORCE_REWARD_SPEC_MSE_THRESHOLD:
+                    reward = 1
+                else:
+                    reward = -0.1
+                rewards.append(reward)
+            rewards = torch.tensor(rewards, device=helper.get_device())
+
+            log_probs = policy_distributions.log_prob(actions)
+            loss = -(log_probs * rewards).sum() / len(transformed_signal)
+            loss = FREQ_REINFORCE_LOSS_FACTOR * loss
 
         # if MODEL_FREQUENCY_OUTPUT == 'SINGLE', Spectrograms are compared just as accuracy measure, without training
         if (ARCHITECTURE == 'FULL' or ARCHITECTURE == 'SPECTROGRAM_ONLY') or MODEL_FREQUENCY_OUTPUT == 'SINGLE' or MODEL_FREQUENCY_OUTPUT == 'WEIGHTED':
@@ -281,8 +302,9 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
         optimizer_arg.step()
 
         # Check Accuracy
-        if ARCHITECTURE == 'SPEC_NO_SYNTH' or \
-                (ARCHITECTURE == 'PARAMETERS_ONLY' and MODEL_FREQUENCY_OUTPUT == 'LOGITS'):
+        if ARCHITECTURE == 'SPEC_NO_SYNTH' \
+                or (MODEL_FREQUENCY_OUTPUT == 'LOGITS'
+                    and (ARCHITECTURE == 'PARAMETERS_ONLY' or ARCHITECTURE == 'REINFORCE')):
             correct = 0
             correct += (osc_logits_pred.argmax(1) == osc_target_id).type(torch.float).sum().item()
             accuracy = correct / len(osc_logits_pred)
@@ -366,7 +388,7 @@ def train(model, data_loader, transform, optimiser_arg, device_arg, cur_epoch, n
     loss_list = []
     accuracy_list = []
 
-    multi_epoch_avg_loss, multi_epoch_avg_accuracy, multi_epoch_stats = helper.reset_multi_epoch_stats()
+    multi_epoch_avg_loss, multi_epoch_avg_accuracy, multi_epoch_stats = helper.reset_stats()
 
     for i in range(num_epochs):
         if not ONLY_OSC_DATASET or i % 100 == 0:
@@ -401,9 +423,9 @@ def train(model, data_loader, transform, optimiser_arg, device_arg, cur_epoch, n
 
             print("--------------------------------------\n")
             print(f"Epoch {cur_epoch} end")
-            print(f"Average Loss for last {NUM_EPOCHS_TO_PRINT_STATS} epochs:", round(multi_epoch_avg_loss, 6))
+            print(f"Average Loss for last {NUM_EPOCHS_TO_PRINT_STATS} epochs:", round(multi_epoch_avg_loss, 10))
             print(f"Average Accuracy for last {NUM_EPOCHS_TO_PRINT_STATS} epochs:"
-                  f" {round(multi_epoch_avg_accuracy * 100, 2)}%\n")
+                  f" {round(multi_epoch_avg_accuracy * 100, 5)}%\n")
 
             fmt = [
                 ('Frequency ID', 'frequency_id', 13),
@@ -412,23 +434,25 @@ def train(model, data_loader, transform, optimiser_arg, device_arg, cur_epoch, n
                 ('AVG Predicted Frequency ', 'predicted_frequency', 20),
                 ('AVG Frequency Model Out', 'frequency_model_output', 20),
             ]
-            if PRINT_ACCURACY_STATS_MULTIPLE_EPOCHS:
+            if PRINT_PER_ACCURACY_STATS_MULTIPLE_EPOCHS:
                 print(helper.TablePrinter(fmt, ul='=')(multi_epoch_stats))
             print("--------------------------------------\n")
 
-            multi_epoch_avg_loss, multi_epoch_avg_accuracy, multi_epoch_stats = helper.reset_multi_epoch_stats()
+            multi_epoch_avg_loss, multi_epoch_avg_accuracy, multi_epoch_stats = helper.reset_stats()
 
             loss_list.append(avg_epoch_loss)
             accuracy_list.append(avg_epoch_accuracy * 100)
 
-            # save model checkpoint
+         # save model checkpoint
+        if (i % NUM_EPOCHS_TO_SAVE_MODEL) == 0 and i != 0:
             helper.save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, accuracy_list)
+
 
         elif not ONLY_OSC_DATASET:
 
             print("--------------------------------------")
             print(f"Epoch {cur_epoch} end")
-            print(f"Average Epoch{cur_epoch} Loss:", round(avg_epoch_loss, 2))
+            print(f"Average Epoch{cur_epoch} Loss:", round(avg_epoch_loss, 5))
             print(f"Average Epoch{cur_epoch} Accuracy: {round(avg_epoch_accuracy * 100, 2)}%")
             print("--------------------------------------\n")
 

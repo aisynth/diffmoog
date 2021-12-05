@@ -11,7 +11,6 @@ from torch import nn
 import os
 
 
-
 def get_device():
     if torch.cuda.is_available():
         device = "cuda"
@@ -485,11 +484,11 @@ def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, accur
 
     # save model checkpoint
     if OS == 'WINDOWS':
-        model_checkpoint = path_parent + f"\\trained_models\\synth_net_epoch{cur_epoch}.pth"
+        model_checkpoint = path_parent + f"\\trained_models\\synth_net_epoch{cur_epoch}.pt"
         plot_path = path_parent + f"\\trained_models\\loss_graphs\\end_epoch{cur_epoch}_loss_graph.png"
         txt_path = path_parent + f"\\trained_models\\loss_list.txt"
     elif OS == 'LINUX':
-        model_checkpoint = path_parent + f"/ai_synth/trained_models/synth_net_epoch{cur_epoch}.pth"
+        model_checkpoint = path_parent + f"/ai_synth/trained_models/synth_net_epoch{cur_epoch}.pt"
         plot_path = path_parent + f"/ai_synth/trained_models/loss_graphs/end_epoch{cur_epoch}_loss_graph.png"
         txt_path = path_parent + f"/ai_synth/trained_models/loss_list.txt"
     else:
@@ -510,10 +509,10 @@ def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, accur
     text_file.close()
 
 
-def reset_multi_epoch_stats():
-    multi_epoch_avg_loss = 0
-    multi_epoch_avg_accuracy = 0
-    multi_epoch_stats = []
+def reset_stats():
+    avg_loss = 0
+    avg_accuracy = 0
+    stats = []
     for j in range(len(OSC_FREQ_LIST)):
         dict_record = {
             'frequency_id': j,
@@ -522,7 +521,7 @@ def reset_multi_epoch_stats():
             'predicted_frequency': 0,
             'frequency_model_output': 0
         }
-        multi_epoch_stats.append(dict_record)
+        stats.append(dict_record)
 
-    return multi_epoch_avg_loss, multi_epoch_avg_accuracy, multi_epoch_stats
+    return avg_loss, avg_accuracy, stats
 

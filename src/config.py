@@ -15,13 +15,14 @@ SIGNAL_DURATION_SEC = 1.0
 " Mode - define a common configuration for the whole system     "
 "   0 -                     Use custom configurations           "
 "   Any other number -      Use predefined configuration preset "
-MODE = 3
+MODE = 6
 
 # Dataset configs
 ONLY_OSC_DATASET = True
 if ONLY_OSC_DATASET:
     DATASET_SIZE = NUM_OF_OSC_FREQUENCIES
-    NUM_EPOCHS_TO_PRINT_STATS = 20
+    NUM_EPOCHS_TO_PRINT_STATS = 1
+    NUM_EPOCHS_TO_SAVE_MODEL = 50
 
 else:
     DATASET_SIZE = 50000
@@ -43,17 +44,19 @@ elif OS == 'LINUX':
 CNN_NETWORK = 'BIG'  # 'BIG' or 'SMALL' - one of 2 possible network architectures
 BATCH_SIZE = 256
 EPOCHS = 2000
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.00001
 
 # Synth architecture. OSC_ONLY or SYNTH_BASIC
 SYNTH_TYPE = 'OSC_ONLY'
 
-" The architecture of the system, that defines the data flow and the loss functions:                     "
+" The architecture of the system, that defines the data flow and the loss functions:                    "
 "   1. SPECTROGRAM_ONLY (input -> CNN -> parameters -> Synth -> output; Loss over spectrograms)         "
 "   2. PARAMETERS_ONLY (input -> CNN -> parameters; Loss over parameters)                               "
 "   3. FULL - (input -> CNN -> parameters -> Synth -> output; Loss over spectrograms AND parameters)    "
-"   4. SPEC_NO_SYNTH (input -> CNN -> parameters; Output inner product <probabilities, spectrograms>;   "
-"      Loss over spectrograms)"
+"   4. SPEC_NO_SYNTH (input -> CNN -> parameters); Output inner product <probabilities, spectrograms>;   "
+"      Loss over spectrograms)                                                                          "
+"   5. REINFORCE - (input -> CNN -> parameters); Loss is computed to maximize rewards for correct       "
+"       classification. Using the classical REINFORCE algorithm                                         "
 ARCHITECTURE = 'SPECTROGRAM_ONLY'  # SPECTROGRAM_ONLY, PARAMETERS_ONLY, SPEC_NO_SYNTH or FULL (Spectrogram + parameters)
 SPECTROGRAM_LOSS_TYPE = 'MSE'  # MSE or LSD (Log Spectral Distance) or KL (Kullback-Leibler)
 FREQ_PARAM_LOSS_TYPE = 'MSE'  # MSE or CE (Cross Entropy)
@@ -68,11 +71,13 @@ if FREQ_PARAM_LOSS_TYPE == 'CE':
 
 TRANSFORM = 'MEL_SPECTROGRAM'  # MEL_SPECTROGRAM or SPECTROGRAM - to be used in the data loader and at the synth output
 
+REINFORCE_REWARD_SPEC_MSE_THRESHOLD = 6
+
 USE_LOADED_MODEL = True
 # USE_LOADED_MODEL = False
 if OS == 'WINDOWS':
-    SAVE_MODEL_PATH = "..\\trained_models\\trained_synth_net.pth"
-    LOAD_MODEL_PATH = path_parent + "\\trained_models\\synth_net_epoch201.pth"
+    SAVE_MODEL_PATH = "..\\trained_models\\trained_synth_net.pt"
+    LOAD_MODEL_PATH = path_parent + "\\trained_models\\synth_net_epoch401.pt"
 elif OS == 'LINUX':
     SAVE_MODEL_PATH = "../trained_models/trained_synth_net.pth"
     LOAD_MODEL_PATH = "../trained_models/synth_net_epoch2.pth"
@@ -80,13 +85,14 @@ elif OS == 'LINUX':
 REGRESSION_LOSS_FACTOR = 1e-1
 SPECTROGRAM_LOSS_FACTOR = 1e-5
 FREQ_MSE_LOSS_FACTOR = 1e-3
+FREQ_REINFORCE_LOSS_FACTOR = 1e5
 
 # Debug
 DEBUG_MODE = False
 PLOT_SPEC = False
 PRINT_TRAIN_STATS = True
 PRINT_ACCURACY_STATS = False
-PRINT_ACCURACY_STATS_MULTIPLE_EPOCHS = True
+PRINT_PER_ACCURACY_STATS_MULTIPLE_EPOCHS = False
 
 LOG_SPECTROGRAM_MSE_LOSS = False
 
@@ -119,4 +125,9 @@ elif MODE == 5:
     ARCHITECTURE = 'SPEC_NO_SYNTH'
     SPECTROGRAM_LOSS_TYPE = 'MSE'
     MODEL_FREQUENCY_OUTPUT = 'WEIGHTED'
+elif MODE == 6:
+    SYNTH_TYPE = 'OSC_ONLY'
+    ARCHITECTURE = 'REINFORCE'
+    SPECTROGRAM_LOSS_TYPE = 'MSE'
+    MODEL_FREQUENCY_OUTPUT = 'LOGITS'
 

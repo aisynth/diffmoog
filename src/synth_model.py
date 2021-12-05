@@ -160,7 +160,7 @@ class SmallSynthNetwork(nn.Module):
             for index, param in enumerate(REGRESSION_PARAM_LIST):
                 output_dic[param] = x[:, index]
 
-        return output_dic
+        return output_dic, None
 
 class BigSynthNetwork(nn.Module):
     """
@@ -273,6 +273,13 @@ class BigSynthNetwork(nn.Module):
         # nn.init.kaiming_normal_(self.classification_params, mode='fan_in', nonlinearity='relu')
 
     def forward(self, input_data):
+        """
+        :param input_data: Spectrograms batch
+        :return: 1st argument: output_dic - dictionary containing all the model predictions
+                 2st argument: logits - frequency logits prediction when SYNTH_TYPE == 'OSC_ONLY'
+                                None - when SYNTH_TYPE != 'OSC_ONLY'
+        """
+
         x = self.conv1(input_data)
         x = self.conv2(x)
         x = self.conv3(x)
@@ -293,7 +300,6 @@ class BigSynthNetwork(nn.Module):
                 weighted_avg_spectrograms = torch.einsum("ik,klm->ilm", probabilities, SPECTROGRAMS_TENSOR)
                 output_dic['osc1_freq'] = weighted_avg_spectrograms
 
-                return output_dic, logits
             else:
                 if MODEL_FREQUENCY_OUTPUT == 'WEIGHTED':
                     osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())
@@ -305,7 +311,7 @@ class BigSynthNetwork(nn.Module):
                 else:
                     ValueError("MODEL_FREQUENCY_OUTPUT is not known")
 
-                return output_dic, logits
+            return output_dic, logits
 
         if SYNTH_TYPE == 'SYNTH_BASIC':
             for out_name, lin in self.classification_params.items():
@@ -323,7 +329,7 @@ class BigSynthNetwork(nn.Module):
             for index, param in enumerate(REGRESSION_PARAM_LIST):
                 output_dic[param] = x[:, index]
 
-        return output_dic
+        return output_dic, None
 
 
 if __name__ == "__main__":
