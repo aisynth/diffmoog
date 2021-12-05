@@ -14,6 +14,9 @@ BIG_LINEAR_IN_CHANNELS = 17920
 # LINEAR_IN_CHANNELS = 8064
 HIDDEN_IN_CHANNELS = 1000
 
+freq_dict = {'osc1_freq': torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())}
+synth_obj = SynthOscOnly(file_name=None, parameters_dict=freq_dict, num_sounds=len(OSC_FREQ_LIST))
+SPECTROGRAMS_TENSOR = helper.mel_spectrogram_transform(synth_obj.signal)
 
 class SmallSynthNetwork(nn.Module):
     """
@@ -286,10 +289,8 @@ class BigSynthNetwork(nn.Module):
             # x = torch.sqrt(x)
 
             if ARCHITECTURE == 'SPEC_NO_SYNTH':
-                freq_dict = {'osc1_freq': torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())}
-                synth_obj = SynthOscOnly(file_name=None, parameters_dict=freq_dict, num_sounds=len(OSC_FREQ_LIST))
-                spectrograms = helper.mel_spectrogram_transform(synth_obj.signal)
-                weighted_avg_spectrograms = torch.einsum("ik,klm->ilm", probabilities, spectrograms)
+                # inner product between probabilities and all Spectrograms
+                weighted_avg_spectrograms = torch.einsum("ik,klm->ilm", probabilities, SPECTROGRAMS_TENSOR)
                 output_dic['osc1_freq'] = weighted_avg_spectrograms
 
                 return output_dic, logits
