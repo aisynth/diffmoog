@@ -6,12 +6,13 @@ from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOS
     SPECTROGRAM_LOSS_TYPE, LOAD_MODEL_PATH, USE_LOADED_MODEL, FREQ_PARAM_LOSS_TYPE, FREQ_MSE_LOSS_FACTOR, \
     LOG_SPECTROGRAM_MSE_LOSS, ONLY_OSC_DATASET, CNN_NETWORK, TRANSFORM, MODEL_FREQUENCY_OUTPUT, \
     NUM_EPOCHS_TO_PRINT_STATS, PRINT_PER_ACCURACY_STATS_MULTIPLE_EPOCHS, REINFORCE_REWARD_SPEC_MSE_THRESHOLD, \
-    NUM_EPOCHS_TO_SAVE_MODEL, FREQ_REINFORCE_LOSS_FACTOR
+    NUM_EPOCHS_TO_SAVE_MODEL, FREQ_REINFORCE_LOSS_FACTOR, REINFORCEMENT_EPSILON
 from ai_synth_dataset import AiSynthDataset, AiSynthSingleOscDataset
 from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, OS, PLOT_SPEC
 from synth_model import SmallSynthNetwork, BigSynthNetwork
 from sound_generator import SynthBasicFlow, SynthOscOnly
 from synth_config import OSC_FREQ_LIST, OSC_FREQ_DIC_INV
+from torch.distributions import Categorical
 import synth
 import helper
 import time
@@ -117,10 +118,26 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
             " REINFORCE as implemented in https://pytorch.org/docs/stable/distributions.html" \
             " and in video at 56:30: https://www.youtube.com/watch?v=cQfOQcpYRzE "
 
-            policy_distributions = torch.distributions.Categorical(logits=osc_logits_pred)
+            if not MODEL_FREQUENCY_OUTPUT == 'PROBS':
+                AssertionError("REINFORCE must use frequency probabilities as output from model")
+
+            probabilities = osc_pred
+            policy_distributions = Categorical(probabilities)
+
+            # logits = torch.ones(49, device=device_arg)
+            # uniform_distributions = Categorical(logits=logits)
 
             # Sample actions i.e choose the frequency prediction from the output logits (distribution) of the model.
-            actions = policy_distributions.sample()
+            p = torch.rand(1)
+            if p.item() > 0.15:
+                actions = policy_distributions.sample()
+                # log_probs = policy_distributions.log_prob(actions)
+
+            else:
+                actions = torch.randint(high=49, size=(49,), device=device_arg)
+                # log_probs = uniform_distributions.log_prob(actions)
+
+                # actions = torch.arange(start=0, end=49, device=device_arg)
             # Replace line above with line below to directly sample the correct actions (Environment is well-known)
             # actions = torch.arange(start=0, end=49, device=device_arg)
             param_dict_to_synth = helper.map_classification_params_from_ints({'osc1_freq': actions})
@@ -133,17 +150,16 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
             transformed_signal = torch.squeeze(transformed_signal)
             predicted_transformed_signal = torch.squeeze(predicted_transformed_signal)
 
-            rewards = []
-            for i in range(len(transformed_signal)):
-                spectrogram_mse_loss = criterion_spectrogram(predicted_transformed_signal[i], transformed_signal[i])
-                if SPECTROGRAM_LOSS_FACTOR * spectrogram_mse_loss < REINFORCE_REWARD_SPEC_MSE_THRESHOLD:
-                    reward = 1
-                else:
-                    reward = -0.1
-                rewards.append(reward)
-            rewards = torch.tensor(rewards, device=helper.get_device())
+            mse_criterion_non_reduced = nn.MSELoss(reduction='none')
+            spectrogram_mse_non_reduced = mse_criterion_non_reduced(predicted_transformed_signal, transformed_signal)
+            spectrogram_mse_per_example = torch.mean(spectrogram_mse_non_reduced, dim=(1, 2))
+            positive_reward = torch.tensor([1], device=device_arg)
+            negative_reward = torch.tensor([-1], device=device_arg)
+            condition = torch.tensor(SPECTROGRAM_LOSS_FACTOR * spectrogram_mse_per_example < REINFORCE_REWARD_SPEC_MSE_THRESHOLD)
+            rewards = torch.where(condition, positive_reward, negative_reward)
 
             log_probs = policy_distributions.log_prob(actions)
+            # print("avg reward", torch.Tensor.float(rewards).mean().item())
             loss = -(log_probs * rewards).sum() / len(transformed_signal)
             loss = FREQ_REINFORCE_LOSS_FACTOR * loss
 
@@ -303,8 +319,8 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, device_arg)
 
         # Check Accuracy
         if ARCHITECTURE == 'SPEC_NO_SYNTH' \
-                or (MODEL_FREQUENCY_OUTPUT == 'LOGITS'
-                    and (ARCHITECTURE == 'PARAMETERS_ONLY' or ARCHITECTURE == 'REINFORCE')):
+                or (MODEL_FREQUENCY_OUTPUT == 'LOGITS' and ARCHITECTURE == 'PARAMETERS_ONLY') \
+                or (MODEL_FREQUENCY_OUTPUT == 'PROBS' and ARCHITECTURE == 'REINFORCE'):
             correct = 0
             correct += (osc_logits_pred.argmax(1) == osc_target_id).type(torch.float).sum().item()
             accuracy = correct / len(osc_logits_pred)
@@ -421,11 +437,8 @@ def train(model, data_loader, transform, optimiser_arg, device_arg, cur_epoch, n
                 multi_epoch_stats[k]['predicted_frequency'] = round(multi_epoch_stats[k]['predicted_frequency'], 3)
                 multi_epoch_stats[k]['frequency_model_output'] = round(multi_epoch_stats[k]['frequency_model_output'], 3)
 
-            print("--------------------------------------\n")
-            print(f"Epoch {cur_epoch} end")
-            print(f"Average Loss for last {NUM_EPOCHS_TO_PRINT_STATS} epochs:", round(multi_epoch_avg_loss, 10))
-            print(f"Average Accuracy for last {NUM_EPOCHS_TO_PRINT_STATS} epochs:"
-                  f" {round(multi_epoch_avg_accuracy * 100, 5)}%\n")
+            # print("--------------------------------------\n")
+            print(f"Epoch {cur_epoch} end. Average values over {NUM_EPOCHS_TO_PRINT_STATS} epochs: \t\tLoss:", round(multi_epoch_avg_loss, 10), f"\tAccuracy: {round(multi_epoch_avg_accuracy * 100, 5)}%")
 
             fmt = [
                 ('Frequency ID', 'frequency_id', 13),
@@ -436,7 +449,7 @@ def train(model, data_loader, transform, optimiser_arg, device_arg, cur_epoch, n
             ]
             if PRINT_PER_ACCURACY_STATS_MULTIPLE_EPOCHS:
                 print(helper.TablePrinter(fmt, ul='=')(multi_epoch_stats))
-            print("--------------------------------------\n")
+            # print("--------------------------------------\n")
 
             multi_epoch_avg_loss, multi_epoch_avg_accuracy, multi_epoch_stats = helper.reset_stats()
 

@@ -22,7 +22,7 @@ ONLY_OSC_DATASET = True
 if ONLY_OSC_DATASET:
     DATASET_SIZE = NUM_OF_OSC_FREQUENCIES
     NUM_EPOCHS_TO_PRINT_STATS = 1
-    NUM_EPOCHS_TO_SAVE_MODEL = 50
+    NUM_EPOCHS_TO_SAVE_MODEL = 100
 
 else:
     DATASET_SIZE = 50000
@@ -43,8 +43,10 @@ elif OS == 'LINUX':
 # Model configs
 CNN_NETWORK = 'BIG'  # 'BIG' or 'SMALL' - one of 2 possible network architectures
 BATCH_SIZE = 256
-EPOCHS = 2000
+EPOCHS = 50000
 LEARNING_RATE = 0.00001
+
+REINFORCEMENT_EPSILON = 0.15
 
 # Synth architecture. OSC_ONLY or SYNTH_BASIC
 SYNTH_TYPE = 'OSC_ONLY'
@@ -63,8 +65,9 @@ FREQ_PARAM_LOSS_TYPE = 'MSE'  # MSE or CE (Cross Entropy)
 
 " The model can output the oscillator frequency as:                                 "
 "   1. LOGITS (size is num of frequencies, for cross entropy loss)                  "
-"   2. WEIGHTED - inner product of <probabilities, original frequencies>. size is 1 "
-"   3. SINGLE - linear layer outputs single neuron. size is 1                       "
+"   2. PROBS (same as LOGITS, but softmax is applied)                               "
+"   3. WEIGHTED - inner product of <probabilities, original frequencies>. size is 1 "
+"   4. SINGLE - linear layer outputs single neuron. size is 1                       "
 MODEL_FREQUENCY_OUTPUT = 'SINGLE'
 if FREQ_PARAM_LOSS_TYPE == 'CE':
     MODEL_FREQUENCY_OUTPUT = 'LOGITS'
@@ -73,7 +76,7 @@ TRANSFORM = 'MEL_SPECTROGRAM'  # MEL_SPECTROGRAM or SPECTROGRAM - to be used in 
 
 REINFORCE_REWARD_SPEC_MSE_THRESHOLD = 6
 
-USE_LOADED_MODEL = True
+USE_LOADED_MODEL = False
 # USE_LOADED_MODEL = False
 if OS == 'WINDOWS':
     SAVE_MODEL_PATH = "..\\trained_models\\trained_synth_net.pt"
@@ -129,5 +132,5 @@ elif MODE == 6:
     SYNTH_TYPE = 'OSC_ONLY'
     ARCHITECTURE = 'REINFORCE'
     SPECTROGRAM_LOSS_TYPE = 'MSE'
-    MODEL_FREQUENCY_OUTPUT = 'LOGITS'
+    MODEL_FREQUENCY_OUTPUT = 'PROBS'
 

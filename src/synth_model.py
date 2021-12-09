@@ -279,7 +279,6 @@ class BigSynthNetwork(nn.Module):
                  2st argument: logits - frequency logits prediction when SYNTH_TYPE == 'OSC_ONLY'
                                 None - when SYNTH_TYPE != 'OSC_ONLY'
         """
-
         x = self.conv1(input_data)
         x = self.conv2(x)
         x = self.conv3(x)
@@ -306,6 +305,8 @@ class BigSynthNetwork(nn.Module):
                     output_dic['osc1_freq'] = torch.matmul(probabilities, osc_freq_tensor)
                 elif MODEL_FREQUENCY_OUTPUT == 'LOGITS':
                     output_dic['osc1_freq'] = logits
+                elif MODEL_FREQUENCY_OUTPUT == 'PROBS':
+                    output_dic['osc1_freq'] = probabilities
                 elif MODEL_FREQUENCY_OUTPUT == 'SINGLE':
                     output_dic['osc1_freq'] = torch.squeeze(x)
                 else:
