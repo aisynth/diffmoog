@@ -2,9 +2,9 @@
 <module type="PYTHON_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
-      <sourceFolder url="file://$MODULE_DIR$/neuralnet-pytorch" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/neuralnet_pytorch" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/julius" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/trained_models" />
       <excludeFolder url="file://$MODULE_DIR$/dataset" />
     </content>
