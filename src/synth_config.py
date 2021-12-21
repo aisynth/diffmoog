@@ -35,6 +35,7 @@ SEMITONES_MAX_OFFSET = 24
 MIDDLE_C_FREQ = 261.6255653005985
 semitones_list = [*range(-SEMITONES_MAX_OFFSET, SEMITONES_MAX_OFFSET + 1)]
 OSC_FREQ_LIST = [MIDDLE_C_FREQ * (2 ** (1 / 12)) ** x for x in semitones_list]
+# OSC_FREQ_LIST = OSC_FREQ_LIST1[39:]
 OSC_FREQ_DIC = {round(key, 4): value for value, key in enumerate(OSC_FREQ_LIST)}
 OSC_FREQ_DIC_INV = {v: k for k, v in OSC_FREQ_DIC.items()}
 

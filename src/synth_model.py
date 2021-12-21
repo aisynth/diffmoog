@@ -10,9 +10,11 @@ from sound_generator import SynthOscOnly
 # todo: this is value from Valerio Tutorial. has to check
 # LINEAR_IN_CHANNELS = 128 * 5 * 4
 SMALL_LINEAR_IN_CHANNELS = 4480
-BIG_LINEAR_IN_CHANNELS = 17920
+# BIG_LINEAR_IN_CHANNELS = 17920
+BIG_LINEAR_IN_CHANNELS = 32256
+# BIG_LINEAR_IN_CHANNELS = 60928
 # LINEAR_IN_CHANNELS = 8064
-HIDDEN_IN_CHANNELS = 1000
+HIDDEN_IN_CHANNELS = 20
 
 freq_dict = {'osc1_freq': torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())}
 synth_obj = SynthOscOnly(file_name=None, parameters_dict=freq_dict, num_sounds=len(OSC_FREQ_LIST))
@@ -240,7 +242,11 @@ class BigSynthNetwork(nn.Module):
         self.flatten = nn.Flatten()
         if SYNTH_TYPE == 'OSC_ONLY':
             if MODEL_FREQUENCY_OUTPUT == 'SINGLE':
-                self.linear = nn.Linear(BIG_LINEAR_IN_CHANNELS, 1)
+                # self.linear = nn.Linear(BIG_LINEAR_IN_CHANNELS, 1)
+                self.linear_sequential = nn.Sequential(
+                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
+                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
+                )
             else:
                 self.linear = nn.Linear(BIG_LINEAR_IN_CHANNELS, len(OSC_FREQ_LIST))
 
@@ -288,7 +294,7 @@ class BigSynthNetwork(nn.Module):
         # Apply different heads to predict each synth parameter
         output_dic = {}
         if SYNTH_TYPE == 'OSC_ONLY':
-            x = self.linear(x)
+            x = self.linear_sequential(x)
             logits = x
             probabilities = self.softmax(logits)
             # x = torch.square(x)
@@ -308,6 +314,8 @@ class BigSynthNetwork(nn.Module):
                 elif MODEL_FREQUENCY_OUTPUT == 'PROBS':
                     output_dic['osc1_freq'] = probabilities
                 elif MODEL_FREQUENCY_OUTPUT == 'SINGLE':
+                    x = torch.square(x)
+                    x = torch.sqrt(x)
                     output_dic['osc1_freq'] = torch.squeeze(x)
                 else:
                     ValueError("MODEL_FREQUENCY_OUTPUT is not known")

@@ -56,7 +56,7 @@ mel_spectrogram_transform = torchaudio.transforms.MelSpectrogram(
     sample_rate=SAMPLE_RATE,
     n_fft=1024,
     hop_length=512,
-    n_mels=64,
+    n_mels=128,
     power=2.0,
     f_min=50,
     f_max=1100
@@ -261,11 +261,11 @@ class Normalizer:
         return denormalized_params_dict
 
 
-def plot_spectrogram(spec, scale='linear', title=None, ylabel='freq_bin', aspect='auto', xmax=None):
+def plot_spectrogram(spec, scale='linear', title=None, x_label='frame', ylabel='freq_bin', aspect='auto', xmax=None):
     fig, axs = plt.subplots(1, 1)
     axs.set_title(title or 'Spectrogram (db)')
     axs.set_ylabel(ylabel)
-    axs.set_xlabel('frame')
+    axs.set_xlabel(x_label)
     if scale == 'linear':
         im = axs.imshow(spec, origin='lower', aspect=aspect)
     elif scale == 'dB:':
@@ -395,7 +395,7 @@ def regression_freq_accuracy(output_dic, target_params_dic, device_arg):
         frequency_predictions.append(rounded_predicted_freq)
         target_osc = OSC_FREQ_DIC_INV[target_params_dic['classification_params']['osc1_freq'][i].item()]
 
-        if abs(rounded_predicted_freq - target_osc) < 3:
+        if abs(rounded_predicted_freq - target_osc) < 1:
             prediction_success.append(1)
             num_correct_predictions += 1
 

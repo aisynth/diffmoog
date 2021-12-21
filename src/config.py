@@ -14,14 +14,14 @@ SIGNAL_DURATION_SEC = 1.0
 
 " Mode - define a common configuration for the whole system     "
 "   0 -                     Use custom configurations           "
-"   Any other number -      Use predefined configuration preset "
-MODE = 6
+"   Any other number -      Use predefined configuration preset. See below "
+MODE = 4
 
 # Dataset configs
 ONLY_OSC_DATASET = True
 if ONLY_OSC_DATASET:
     DATASET_SIZE = NUM_OF_OSC_FREQUENCIES
-    NUM_EPOCHS_TO_PRINT_STATS = 1
+    NUM_EPOCHS_TO_PRINT_STATS = 100
     NUM_EPOCHS_TO_SAVE_MODEL = 100
 
 else:
@@ -44,7 +44,7 @@ elif OS == 'LINUX':
 CNN_NETWORK = 'BIG'  # 'BIG' or 'SMALL' - one of 2 possible network architectures
 BATCH_SIZE = 256
 EPOCHS = 50000
-LEARNING_RATE = 0.00001
+LEARNING_RATE = 0.0001
 
 REINFORCEMENT_EPSILON = 0.15
 
@@ -77,10 +77,11 @@ TRANSFORM = 'MEL_SPECTROGRAM'  # MEL_SPECTROGRAM or SPECTROGRAM - to be used in 
 REINFORCE_REWARD_SPEC_MSE_THRESHOLD = 6
 
 USE_LOADED_MODEL = False
-# USE_LOADED_MODEL = False
+OVERRIDE_OPTIMIZER = True
+
 if OS == 'WINDOWS':
     SAVE_MODEL_PATH = "..\\trained_models\\trained_synth_net.pt"
-    LOAD_MODEL_PATH = path_parent + "\\trained_models\\synth_net_epoch401.pt"
+    LOAD_MODEL_PATH = path_parent + "\\trained_models\\synth_net_epoch1300.pt"
 elif OS == 'LINUX':
     SAVE_MODEL_PATH = "../trained_models/trained_synth_net.pth"
     LOAD_MODEL_PATH = "../trained_models/synth_net_epoch2.pth"
@@ -95,7 +96,7 @@ DEBUG_MODE = False
 PLOT_SPEC = False
 PRINT_TRAIN_STATS = True
 PRINT_ACCURACY_STATS = False
-PRINT_PER_ACCURACY_STATS_MULTIPLE_EPOCHS = False
+PRINT_PER_ACCURACY_STATS_MULTIPLE_EPOCHS = True
 
 LOG_SPECTROGRAM_MSE_LOSS = False
 
