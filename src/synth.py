@@ -291,11 +291,10 @@ class Synth:
             sustain_num_samples = int(self.sample_rate * sustain_t)
             release_num_samples = int(self.sample_rate * release_t)
         else:
-
-            attack_num_samples = [torch.floor(self.sample_rate * attack_t[i]) for i in range(num_sounds)]
-            decay_num_samples = [torch.floor(self.sample_rate * decay_t[i]) for i in range(num_sounds)]
-            sustain_num_samples = [torch.floor(self.sample_rate * sustain_t[i]) for i in range(num_sounds)]
-            release_num_samples = [torch.floor(self.sample_rate * release_t[i]) for i in range(num_sounds)]
+            attack_num_samples = [torch.floor(torch.tensor(self.sample_rate * attack_t[k])) for k in range(num_sounds)]
+            decay_num_samples = [torch.floor(torch.tensor(self.sample_rate * decay_t[k])) for k in range(num_sounds)]
+            sustain_num_samples = [torch.floor(torch.tensor(self.sample_rate * sustain_t[k])) for k in range(num_sounds)]
+            release_num_samples = [torch.floor(torch.tensor(self.sample_rate * release_t[k])) for k in range(num_sounds)]
             attack_num_samples = torch.stack(attack_num_samples)
             decay_num_samples = torch.stack(decay_num_samples)
             sustain_num_samples = torch.stack(sustain_num_samples)
@@ -320,8 +319,8 @@ class Synth:
                 release = torch.linspace(sustain_level, 0, release_num_samples)
             else:
                 attack = torch.linspace(0, 1, int(attack_num_samples[i].item()), device=helper.get_device())
-                decay = torch.linspace(1, int(sustain_level[i].item()), int(decay_num_samples[i].item()), device=helper.get_device())
-                sustain = torch.full((int(sustain_num_samples[i].item()),), int(sustain_level[i].item()), device=helper.get_device())
+                decay = torch.linspace(1, int(sustain_level[i]), int(decay_num_samples[i]), device=helper.get_device())
+                sustain = torch.full((int(sustain_num_samples[i].item()),), int(sustain_level[i]), device=helper.get_device())
                 release = torch.linspace(int(sustain_num_samples[i].item()), 0, int(release_num_samples[i].item()), device=helper.get_device())
 
                 # todo: make sure ADSR behavior is differentiable. linspace has to know to get tensors

@@ -216,27 +216,28 @@ class SynthOscOnly:
 
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
-    for i in OSC_FREQ_LIST:
-        a = SynthOscOnly('audio_example', {'osc1_freq': i}, num_sounds=1)
-        # signal = a.signal.squeeze().cpu().detach().numpy()
-        # plt.plot(signal)
-        # plt.show()
-        play_obj = sa.play_buffer(a.signal.detach().cpu().numpy(),
-                                  num_channels=1,
-                                  bytes_per_sample=4,
-                                  sample_rate=44100)
-        play_obj.wait_done()
+    # for i in OSC_FREQ_LIST:
+    #     a = SynthOscOnly('audio_example', {'osc1_freq': i}, num_sounds=1)
+    #     # signal = a.signal.squeeze().cpu().detach().numpy()
+    #     # plt.plot(signal)
+    #     # plt.show()
+    #     play_obj = sa.play_buffer(a.signal.detach().cpu().numpy(),
+    #                               num_channels=1,
+    #                               bytes_per_sample=4,
+    #                               sample_rate=44100)
+    #     play_obj.wait_done()
+    #
+    #     a = helper.mel_spectrogram_transform(a.signal).squeeze()
+    #
+    #     if PLOT_SPEC:
+    #         helper.plot_spectrogram(a.cpu().detach().numpy(),
+    #                                 scale='linear',
+    #                                 title="MelSpectrogram (dB)",
+    #                                 ylabel='mel freq')
 
-        a = helper.mel_spectrogram_transform(a.signal).squeeze()
-
-        if PLOT_SPEC:
-            helper.plot_spectrogram(a.cpu().detach().numpy(),
-                                    scale='linear',
-                                    title="MelSpectrogram (dB)",
-                                    ylabel='mel freq')
-
-    a = SynthOscOnly('audio_example', num_sounds=10)
-    a = SynthBasicFlow('audio_example', num_sounds=10)
+    # a = SynthOscOnly('audio_example', num_sounds=10)
+    num_sounds = 10
+    a = SynthBasicFlow('audio_example', num_sounds=num_sounds)
     b = torch.rand(10, 44100)
     b = helper.move_to(b, helper.get_device())
     criterion = nn.MSELoss()
@@ -245,8 +246,9 @@ if __name__ == "__main__":
     # plt.plot(a.signal.cpu())
     # plt.ylim([-1, 1])
     # plt.show()
-    play_obj = sa.play_buffer(a.signal.detach().cpu().numpy(),
-                              num_channels=1,
-                              bytes_per_sample=4,
-                              sample_rate=44100)
-    play_obj.wait_done()
+    for i in range(num_sounds):
+        play_obj = sa.play_buffer(a.signal[i].detach().cpu().numpy(),
+                                  num_channels=1,
+                                  bytes_per_sample=4,
+                                  sample_rate=44100)
+        play_obj.wait_done()

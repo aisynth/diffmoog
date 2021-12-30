@@ -13,7 +13,6 @@ from synth_model import SmallSynthNetwork, BigSynthNetwork
 from sound_generator import SynthBasicFlow, SynthOscOnly
 from synth_config import OSC_FREQ_LIST, OSC_FREQ_DIC_INV
 from torch.distributions import Categorical
-import neuralnet_pytorch
 import synth
 import helper
 import time
@@ -33,13 +32,14 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
     sum_epoch_loss, sum_epoch_accuracy, sum_stats = helper.reset_stats()
     num_of_mini_batches = 0
 
-    for transformed_signal, target_params_dic in data_loader:
+    for target_signal, target_params_dic in data_loader:
         start = time.time()
 
         # set_to_none as advised in page 6:
         # https://tigress-web.princeton.edu/~jdh4/PyTorchPerformanceTuningGuide_GTC2021.pdf
         model.zero_grad(set_to_none=True)
 
+        transformed_signal = transform(target_signal)
         # -------------------------------------
         # -----------Run Model-----------------
         # -------------------------------------
@@ -52,6 +52,8 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
         osc_target_id = target_params_dic['classification_params']['osc1_freq']
         osc_target = torch.tensor([OSC_FREQ_DIC_INV[x.item()] for x in osc_target_id], device=device_arg)
         osc_pred = output_dic['osc1_freq']
+        # print("osc_pred:", osc_pred[2].item())
+        # print("osc_target:", osc_target[2].item())
 
         if ARCHITECTURE == 'SPEC_NO_SYNTH':
             if SPECTROGRAM_LOSS_TYPE == 'MSE':
@@ -269,12 +271,6 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
             else:
                 spectrogram_mse_loss = criterion_spectrogram(predicted_transformed_signal, transformed_signal)
 
-            lsd_loss = helper.lsd_loss(transformed_signal, predicted_transformed_signal)
-
-            kl_loss = helper.kullback_leibler(predicted_transformed_signal, transformed_signal)
-
-            emd_loss = neuralnet_pytorch.emd_loss(predicted_transformed_signal, transformed_signal)
-
             # todo: remove the individual synth inference code
             # -----------------------------------------------
             # -----------Compute sound individually----------
@@ -362,9 +358,23 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
                 if SPECTROGRAM_LOSS_TYPE == 'MSE':
                     loss = SPECTROGRAM_LOSS_FACTOR * spectrogram_mse_loss
                 elif SPECTROGRAM_LOSS_TYPE == 'LSD':
+                    lsd_loss = helper.lsd_loss(transformed_signal, predicted_transformed_signal)
                     loss = SPECTROGRAM_LOSS_FACTOR * lsd_loss
                 elif SPECTROGRAM_LOSS_TYPE == 'KL':
+                    kl_loss = helper.kullback_leibler(predicted_transformed_signal, transformed_signal)
                     loss = kl_loss
+                elif SPECTROGRAM_LOSS_TYPE == 'EMD':
+                    # a = torch.tensor([1., 0., 0.])
+                    # b = torch.tensor([0., 1., 0.])
+                    # c = torch.tensor([0., 0., 1.])
+                    # emd1loss = helper.earth_mover_distance(a, b)
+                    # emd2loss = helper.earth_mover_distance(a, c)
+                    emd_loss = helper.earth_mover_distance(transformed_signal, predicted_transformed_signal)
+                    loss = emd_loss
+                elif SPECTROGRAM_LOSS_TYPE == 'MULTI-SPECTRAL':
+                    multi_spec_loss = helper.SpectralLoss()
+                    target_signal = target_signal.squeeze()
+                    loss = multi_spec_loss.call(target_signal, overall_synth_obj.signal)
                 else:
                     raise ValueError("Unknown LOSS_TYPE")
                 # loss.requires_grad = True
@@ -553,7 +563,6 @@ if __name__ == "__main__":
                                                    DATASET_TYPE,
                                                    TRAIN_PARAMETERS_FILE,
                                                    TRAIN_AUDIO_DIR,
-                                                   transform,
                                                    synth.SAMPLE_RATE,
                                                    device
                                                    )

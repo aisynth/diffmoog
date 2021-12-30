@@ -1,14 +1,16 @@
 import torch
+import os
 from torch import Tensor
 import torchaudio
 import synth
+import matplotlib
 import matplotlib.pyplot as plt
 import librosa
 from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE, SYNTH_TYPE, PRINT_ACCURACY_STATS, OS
 from synth_config import *
 from torch.utils.data import DataLoader
 from torch import nn
-import os
+from torch import nn
 
 
 def get_device():
@@ -58,7 +60,7 @@ mel_spectrogram_transform = torchaudio.transforms.MelSpectrogram(
     hop_length=512,
     n_mels=128,
     power=2.0,
-    f_min=50,
+    f_min=0,
     f_max=1100
 ).to(get_device())
 
@@ -132,7 +134,7 @@ def clamp_regression_params(parameters_dict: dict):
     sustain_t = torch.clamp(parameters_dict['release_t'], min=0, max=synth.SIGNAL_DURATION_SEC)
     release_t = torch.clamp(parameters_dict['release_t'], min=0, max=synth.SIGNAL_DURATION_SEC)
 
-    # clamp aggregated adsr parameters that are longer than signal duration
+    # clamp aggregated ADSR parameters that are longer than signal duration
     adsr_length_in_sec = attack_t + decay_t + sustain_t + release_t
 
     adsr_clamp_indices = torch.nonzero(adsr_length_in_sec >= synth.SIGNAL_DURATION_SEC, as_tuple=True)[0]
@@ -262,6 +264,7 @@ class Normalizer:
 
 
 def plot_spectrogram(spec, scale='linear', title=None, x_label='frame', ylabel='freq_bin', aspect='auto', xmax=None):
+    matplotlib.use('Qt5Agg')
     fig, axs = plt.subplots(1, 1)
     axs.set_title(title or 'Spectrogram (db)')
     axs.set_ylabel(ylabel)
@@ -342,7 +345,7 @@ def linspace(start: Tensor, stop: Tensor, num: Tensor):
 
     steps = arange_tensor2 / (num - 1)
 
-    # reshape the 'steps' tensor to [-1, *([1]*start.ndim)] to allow for broadcastings
+    # reshape the 'steps' tensor to [-1, *([1]*start.ndim)] to allow for broadcasting
     # - using 'steps.reshape([-1, *([1]*start.ndim)])' would be nice here but torchscript
     #   "cannot statically infer the expected size of a list in this contex", hence the code below
     for i in range(start.ndim):
@@ -415,17 +418,45 @@ def regression_freq_accuracy(output_dic, target_params_dic, device_arg):
 
     if PRINT_ACCURACY_STATS:
         fmt = [
-            ('Frequency ID',            'frequency_id',             13),
-            ('Frequency (Hz)',          'frequency(Hz)',            17),
-            ('Prediction Status',       'prediction_success',       20),
-            ('Predicted Frequency ',    'predicted_frequency',      20),
-            ('Frequency Model Out',     'frequency_model_output',   20),
+            ('Frequency ID', 'frequency_id', 13),
+            ('Frequency (Hz)', 'frequency(Hz)', 17),
+            ('Prediction Status', 'prediction_success', 20),
+            ('Predicted Frequency ', 'predicted_frequency', 20),
+            ('Frequency Model Out', 'frequency_model_output', 20),
         ]
 
         print(TablePrinter(fmt, ul='=')(stats))
 
     accuracy = num_correct_predictions / len(closest_frequency_index)
     return accuracy, stats
+
+
+def diff(x, axis=-1):
+    """DDSP code:
+    https://github.com/magenta/ddsp/blob/8536a366c7834908f418a6721547268e8f2083cc/ddsp/spectral_ops.py#L1"""
+    """Take the finite difference of a tensor along an axis.
+    Args:
+        x: Input tensor of any dimension.
+        axis: Axis on which to take the finite difference.
+    Returns:
+        d: Tensor with size less than x by 1 along the difference dimension.
+    Raises:
+        ValueError: Axis out of range for tensor.
+      """
+    shape = list(x.shape)
+    ndim = len(shape)
+    if axis >= ndim:
+        raise ValueError('Invalid axis index: %d for tensor with only %d axes.' % (axis, ndim))
+
+    begin_back = [0 for _ in range(ndim)]
+    begin_front = [0 for _ in range(ndim)]
+    begin_front[axis] = 1
+
+    shape[axis] -= 1
+    slice_front = x[begin_front[0]:begin_front[0] + shape[0], begin_front[1]:begin_front[1] + shape[1]]
+    slice_back = x[begin_back[0]:begin_back[0] + shape[0], begin_back[1]:begin_back[1] + shape[1]]
+    d = slice_front - slice_back
+    return d
 
 
 class RMSLELoss(nn.Module):
@@ -439,6 +470,7 @@ class RMSLELoss(nn.Module):
 
 class TablePrinter(object):
     "Print a list of dicts as a table"
+
     def __init__(self, fmt, sep=' ', ul=None):
         """
         @param fmt: list of tuple(heading, key, width)
@@ -448,14 +480,14 @@ class TablePrinter(object):
         @param sep: string, separation between columns
         @param ul: string, character to underline column label, or None for no underlining
         """
-        super(TablePrinter,self).__init__()
-        self.fmt   = str(sep).join('{lb}{0}:{1}{rb}'.format(key, width, lb='{', rb='}') for heading,key,width in fmt)
-        self.head  = {key:heading for heading,key,width in fmt}
-        self.ul    = {key:str(ul)*width for heading,key,width in fmt} if ul else None
-        self.width = {key:width for heading,key,width in fmt}
+        super(TablePrinter, self).__init__()
+        self.fmt = str(sep).join('{lb}{0}:{1}{rb}'.format(key, width, lb='{', rb='}') for heading, key, width in fmt)
+        self.head = {key: heading for heading, key, width in fmt}
+        self.ul = {key: str(ul) * width for heading, key, width in fmt} if ul else None
+        self.width = {key: width for heading, key, width in fmt}
 
     def row(self, data):
-        return self.fmt.format(**{ k:str(data.get(k,''))[:w] for k,w in self.width.items() })
+        return self.fmt.format(**{k: str(data.get(k, ''))[:w] for k, w in self.width.items()})
 
     def __call__(self, dataList):
         _r = self.row
@@ -477,6 +509,187 @@ def kullback_leibler(y_hat, y):
     :rtype: torch.Tensor
     """
     return (y * (y.add(1e-6).log() - y_hat.add(1e-6).log()) + (y_hat - y)).sum(dim=-1).mean()
+
+
+def earth_mover_distance(y_true, y_pred):
+    # y_pred_flatten = torch.flatten(y_pred, start_dim=1, end_dim=2)
+    # y_true_flatten = torch.flatten(y_true, start_dim=1, end_dim=2)
+    y_pred_cumsum0 = torch.cumsum(y_pred, dim=1)
+    y_true_cumsum0 = torch.cumsum(y_true, dim=1)
+    # y_pred_cumsum1 = torch.cumsum(y_pred, dim=1)
+    # y_true_cumsum1 = torch.cumsum(y_true, dim=1)
+
+    # plot_spectrogram(y_pred.cpu().detach().numpy(),
+    #                  title=f"spec_diffs",
+    #                  x_label='freq_id',
+    #                  ylabel='freq_id')
+    #
+    # plot_spectrogram(y_pred_cumsum0.cpu().detach().numpy(),
+    #                         title=f"spec_diffs",
+    #                         x_label='freq_id',
+    #                         ylabel='freq_id')
+
+    # y_pred_cumsum = (y_pred_cumsum0 + y_pred_cumsum1) / 2
+    # y_true_cumsum = (y_true_cumsum0 + y_true_cumsum1) / 2
+    square = torch.square(y_true_cumsum0 - y_pred_cumsum0)
+    final = torch.mean(square)
+    return final
+
+
+class SpectralLoss():
+    """From DDSP code:
+    https://github.com/magenta/ddsp/blob/8536a366c7834908f418a6721547268e8f2083cc/ddsp/losses.py#L144"""
+    """Multiscale spectrogram loss.
+    This loss is the bread-and-butter of comparing two audio signals. It offers
+    a range of options to compare spectrograms, many of which are redunant, but
+    emphasize different aspects of the signal. By far, the most common comparisons
+    are magnitudes (mag_weight) and log magnitudes (logmag_weight).
+    """
+
+    def __init__(self,
+                 fft_sizes=(4096, 2048, 1024, 512, 256, 128),
+                 loss_type='L1',
+                 mag_weight=1.0,
+                 delta_time_weight=0.0,
+                 delta_freq_weight=0.0,
+                 cumsum_freq_weight=1.0,
+                 logmag_weight=1000,
+                 loudness_weight=0.0,
+                 name='spectral_loss'):
+        """Constructor, set loss weights of various components.
+    Args:
+      fft_sizes: Compare spectrograms at each of this list of fft sizes. Each
+        spectrogram has a time-frequency resolution trade-off based on fft size,
+        so comparing multiple scales allows multiple resolutions.
+      loss_type: One of 'L1', 'L2', or 'COSINE'.
+      mag_weight: Weight to compare linear magnitudes of spectrograms. Core
+        audio similarity loss. More sensitive to peak magnitudes than log
+        magnitudes.
+      delta_time_weight: Weight to compare the first finite difference of
+        spectrograms in time. Emphasizes changes of magnitude in time, such as
+        at transients.
+      delta_freq_weight: Weight to compare the first finite difference of
+        spectrograms in frequency. Emphasizes changes of magnitude in frequency,
+        such as at the boundaries of a stack of harmonics.
+      cumsum_freq_weight: Weight to compare the cumulative sum of spectrograms
+        across frequency for each slice in time. Similar to a 1-D Wasserstein
+        loss, this hopefully provides a non-vanishing gradient to push two
+        non-overlapping sinusoids towards eachother.
+      logmag_weight: Weight to compare log magnitudes of spectrograms. Core
+        audio similarity loss. More sensitive to quiet magnitudes than linear
+        magnitudes.
+      loudness_weight: Weight to compare the overall perceptual loudness of two
+        signals. Very high-level loss signal that is a subset of mag and
+        logmag losses.
+      name: Name of the module.
+    """
+        self.fft_sizes = fft_sizes
+        self.loss_type = loss_type
+        self.mag_weight = mag_weight
+        self.delta_time_weight = delta_time_weight
+        self.delta_freq_weight = delta_freq_weight
+        self.cumsum_freq_weight = cumsum_freq_weight
+        self.logmag_weight = logmag_weight
+        self.loudness_weight = loudness_weight
+
+        self.spectrogram_ops = []
+        for size in self.fft_sizes:
+            # spectrogram_transform = torchaudio.transforms.Spectrogram(
+            #     # win_length default = n_fft. hop_length default = win_length / 2
+            #     n_fft=size,
+            #     power=2.0
+            # ).to(get_device())
+
+            mel_spec_transform = torchaudio.transforms.MelSpectrogram(
+                sample_rate=SAMPLE_RATE,
+                n_fft=size,
+                hop_length=int(size/2),
+                n_mels=256,
+                power=2.0,
+                f_min=0,
+                f_max=1100
+            ).to(get_device())
+            self.spectrogram_ops.append(mel_spec_transform)
+
+    def call(self, target_audio, audio, weights=None):
+        loss = 0.0
+
+        if self.loss_type == 'L1':
+            criterion = nn.L1Loss()
+        elif self.loss_type == 'L2':
+            criterion = nn.MSELoss()
+        else:
+            criterion = -1
+            ValueError("unknown loss type")
+        # Compute loss for each fft size.
+        for loss_op in self.spectrogram_ops:
+            target_mag = loss_op(target_audio)
+            value_mag = loss_op(audio)
+            #
+            freq_id = 2
+            # plot_spectrogram(target_mag[freq_id].cpu().detach().numpy(),
+            #                  title=f"Target MelSpectrogram (dB)",
+            #                  ylabel='mel freq')
+            # plot_spectrogram(value_mag[freq_id].cpu().detach().numpy(),
+            #                  title=f"Predicted MelSpectrogram (dB)",
+            #                  ylabel='mel freq')
+            # print(self.mag_weight * criterion(target_mag[freq_id], value_mag[freq_id]))
+
+            # Add magnitude loss.
+            if self.mag_weight > 0:
+                loss += self.mag_weight * criterion(target_mag, value_mag)
+
+            if self.delta_time_weight > 0:
+                target = diff(target_mag, axis=1)
+                value = diff(value_mag, axis=1)
+                loss += self.delta_time_weight * criterion(target, value)
+
+            if self.delta_freq_weight > 0:
+                target = diff(target_mag, axis=2)
+                value = diff(value_mag, axis=2)
+                loss += self.delta_freq_weight * criterion(target, value)
+
+            # TODO(kyriacos) normalize cumulative spectrogram
+            if self.cumsum_freq_weight > 0:
+                target = torch.cumsum(target_mag, dim=1)
+                # print(target_mag[2][0])
+                # print(target[2][0])
+                # print(target_mag[2][:, 0])
+                # print(target[2][:, 0])
+                value = torch.cumsum(value_mag, dim=1)
+                # freq_id = 13
+                # plot_spectrogram(target[freq_id].cpu().detach().numpy(),
+                #                  title=f"Target MelSpectrogram (dB) 86",
+                #                  ylabel='mel freq')
+                # plot_spectrogram(value[freq_id].cpu().detach().numpy(),
+                #                  title=f"Predicted MelSpectrogram (dB) 86",
+                #                  ylabel='mel freq')
+                # print(self.cumsum_freq_weight * criterion(target[freq_id], value[freq_id]))
+                loss += self.cumsum_freq_weight * criterion(target, value)
+
+            # Add logmagnitude loss, reusing spectrogram.
+            if self.logmag_weight > 0:
+                target = torch.log(target_mag + 1)
+                value = torch.log(value_mag + 1)
+
+                # freq_id = 13
+                # plot_spectrogram(target[freq_id].cpu().detach().numpy(),
+                #                  title=f"Target MelSpectrogram (dB) 86",
+                #                  ylabel='mel freq')
+                # plot_spectrogram(value[freq_id].cpu().detach().numpy(),
+                #                  title=f"Predicted MelSpectrogram (dB) 86",
+                #                  ylabel='mel freq')
+                # print(self.logmag_weight * criterion(target[freq_id], value[freq_id]))
+                loss += self.logmag_weight * criterion(target, value)
+
+        # if self.loudness_weight > 0:
+        #     target = spectral_ops.compute_loudness(target_audio, n_fft=2048,
+        #                                            use_tf=True)
+        #     value = spectral_ops.compute_loudness(audio, n_fft=2048, use_tf=True)
+        #     loss += self.loudness_weight * mean_difference(
+        #         target, value, self.loss_type, weights=weights)
+
+        return loss
 
 
 def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, accuracy_list):
@@ -524,4 +737,3 @@ def reset_stats():
         stats.append(dict_record)
 
     return avg_loss, avg_accuracy, stats
-

@@ -99,11 +99,10 @@ class AiSynthSingleOscDataset(Dataset):
     3. All data is saved as GPU tensors
     """
 
-    def __init__(self, dataset_mode, dataset_type, parameters_csv, audio_dir, transformation, target_sample_rate, device_arg):
+    def __init__(self, dataset_mode, dataset_type, parameters_csv, audio_dir, target_sample_rate, device_arg):
         self.params = pd.read_csv(parameters_csv)
         self.audio_dir = audio_dir
         self.device = device_arg
-        self.transformation = transformation.to(self.device)
         self.target_sample_rate = target_sample_rate
         self.dataset_mode = dataset_mode
         self.dataset_type = dataset_type
@@ -119,12 +118,11 @@ class AiSynthSingleOscDataset(Dataset):
         if self.dataset_mode == 'WAV':
             signal, _ = torchaudio.load(audio_path)
             signal = signal.to(self.device)
-            transformed_signal = self.transformation(signal)
 
         elif self.dataset_mode == 'MEL_SPEC':
-            transformed_signal = torch.load(audio_path)
+            signal = torch.load(audio_path)
 
-        return transformed_signal, params_dic
+        return signal, params_dic
 
     def _get_audio_path(self, index):
         if self.dataset_mode == 'WAV':

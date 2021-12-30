@@ -15,7 +15,7 @@ SIGNAL_DURATION_SEC = 1.0
 " Mode - define a common configuration for the whole system     "
 "   0 -                     Use custom configurations           "
 "   Any other number -      Use predefined configuration preset. See below "
-MODE = 4
+MODE = 7
 
 # Dataset configs
 ONLY_OSC_DATASET = True
@@ -44,7 +44,7 @@ elif OS == 'LINUX':
 CNN_NETWORK = 'BIG'  # 'BIG' or 'SMALL' - one of 2 possible network architectures
 BATCH_SIZE = 256
 EPOCHS = 50000
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.00001
 
 REINFORCEMENT_EPSILON = 0.15
 
@@ -60,7 +60,14 @@ SYNTH_TYPE = 'OSC_ONLY'
 "   5. REINFORCE - (input -> CNN -> parameters); Loss is computed to maximize rewards for correct       "
 "       classification. Using the classical REINFORCE algorithm                                         "
 ARCHITECTURE = 'SPECTROGRAM_ONLY'  # SPECTROGRAM_ONLY, PARAMETERS_ONLY, SPEC_NO_SYNTH or FULL (Spectrogram + parameters)
-SPECTROGRAM_LOSS_TYPE = 'MSE'  # MSE or LSD (Log Spectral Distance) or KL (Kullback-Leibler)
+
+" Spectrogram loss type options:" \
+    "1. MSE" \
+    "2. LSD (Log Spectral Distance)" \
+    "3. KL (Kullback-Leibler)" \
+    "4. EMD (earth movers distance)" \
+    "5. MULTI-SPECTRAL"
+SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
 FREQ_PARAM_LOSS_TYPE = 'MSE'  # MSE or CE (Cross Entropy)
 
 " The model can output the oscillator frequency as:                                 "
@@ -72,16 +79,16 @@ MODEL_FREQUENCY_OUTPUT = 'SINGLE'
 if FREQ_PARAM_LOSS_TYPE == 'CE':
     MODEL_FREQUENCY_OUTPUT = 'LOGITS'
 
-TRANSFORM = 'MEL_SPECTROGRAM'  # MEL_SPECTROGRAM or SPECTROGRAM - to be used in the data loader and at the synth output
+TRANSFORM = 'MEL_SPECTROGRAM'  # MEL_SPECTROGRAM or SPECTROGRAM- to be used in the data loader and at the synth output
 
 REINFORCE_REWARD_SPEC_MSE_THRESHOLD = 6
 
-USE_LOADED_MODEL = False
+USE_LOADED_MODEL = True
 OVERRIDE_OPTIMIZER = True
 
 if OS == 'WINDOWS':
     SAVE_MODEL_PATH = "..\\trained_models\\trained_synth_net.pt"
-    LOAD_MODEL_PATH = path_parent + "\\trained_models\\synth_net_epoch1300.pt"
+    LOAD_MODEL_PATH = path_parent + "\\trained_models\\synth_net_epoch1000.pt"
 elif OS == 'LINUX':
     SAVE_MODEL_PATH = "../trained_models/trained_synth_net.pth"
     LOAD_MODEL_PATH = "../trained_models/synth_net_epoch2.pth"
@@ -102,7 +109,6 @@ LOG_SPECTROGRAM_MSE_LOSS = False
 
 if LOG_SPECTROGRAM_MSE_LOSS:
     SPECTROGRAM_LOSS_FACTOR = 1000
-
 
 if MODE == 1:
     SYNTH_TYPE = 'OSC_ONLY'
@@ -134,4 +140,8 @@ elif MODE == 6:
     ARCHITECTURE = 'REINFORCE'
     SPECTROGRAM_LOSS_TYPE = 'MSE'
     MODEL_FREQUENCY_OUTPUT = 'PROBS'
-
+elif MODE == 7:
+    SYNTH_TYPE = 'OSC_ONLY'
+    ARCHITECTURE = 'SPECTROGRAM_ONLY'
+    SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
+    MODEL_FREQUENCY_OUTPUT = 'SINGLE'

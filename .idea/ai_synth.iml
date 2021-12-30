@@ -7,11 +7,12 @@
       <sourceFolder url="file://$MODULE_DIR$/julius" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/trained_models" />
       <excludeFolder url="file://$MODULE_DIR$/dataset" />
+      <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
     <content url="file://$MODULE_DIR$/julius">
       <sourceFolder url="file://$MODULE_DIR$/julius" isTestSource="false" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.9 (ai_audio_synth)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.9 (ai_synth)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
