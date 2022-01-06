@@ -44,3 +44,16 @@ MAX_MOD_INDEX = 100
 MAX_LFO_FREQ = 20
 MIN_FILTER_FREQ = 20
 MAX_FILTER_FREQ = 20000
+
+# Modular Synth attributes:
+NUM_CHANNELS = 4
+NUM_LAYERS = 5
+
+# Modular synth possible modules from synth_modules.py
+MODULAR_SYNTH_OPERATIONS = ['osc', 'fm', 'mix', 'filter', 'env_adsr']
+MODULAR_SYNTH_PARAMS = {'osc': ['amp', 'freq', 'waveform'],
+                        'fm': ['amp_c', 'freq_c', 'waveform', 'mod_index'],
+                        'mix': ['new_signal', 'factor'],
+                        'filter': ['filter_freq', 'filter_type'],
+                        'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']}
+

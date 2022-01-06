@@ -9,11 +9,11 @@ from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOS
     NUM_EPOCHS_TO_SAVE_MODEL, FREQ_REINFORCE_LOSS_FACTOR, REINFORCEMENT_EPSILON, OVERRIDE_OPTIMIZER
 from ai_synth_dataset import AiSynthDataset, AiSynthSingleOscDataset
 from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, OS, PLOT_SPEC
-from synth_model import SmallSynthNetwork, BigSynthNetwork
-from sound_generator import SynthBasicFlow, SynthOscOnly
+from model import SmallSynthNetwork, BigSynthNetwork
+from synth_architecture import SynthBasicFlow, SynthOscOnly
 from synth_config import OSC_FREQ_LIST, OSC_FREQ_DIC_INV
 from torch.distributions import Categorical
-import synth
+import synth_modules
 import helper
 import time
 import os

@@ -3,7 +3,7 @@ import pandas as pd
 import torchaudio
 import os
 import helper
-import synth
+import synth_modules
 from torch.utils.data import Dataset
 from src.config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, TEST_PARAMETERS_FILE, TEST_AUDIO_DIR, \
     DATASET_MODE, DATASET_TYPE, OS

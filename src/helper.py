@@ -2,7 +2,7 @@ import torch
 import os
 from torch import Tensor
 import torchaudio
-import synth
+import synth_modules
 import matplotlib
 import matplotlib.pyplot as plt
 import librosa

@@ -14,7 +14,7 @@ import julius
 from synth_config import *
 
 
-class Synth:
+class SynthModules:
     def __init__(self, num_sounds=1):
         self.sample_rate = SAMPLE_RATE
         self.sig_duration = SIGNAL_DURATION_SEC
@@ -49,6 +49,7 @@ class Synth:
 
             Raises:
                 ValueError: Provided variables are out of range
+                :rtype: object
             """
 
         self.signal_values_sanity_check(amp, freq, waveform)
@@ -106,18 +107,18 @@ class Synth:
             raise ValueError("Provided factor value is out of range [0, 1]")
         self.signal = factor * self.signal + (1 - factor) * new_signal
 
-    def fm_modulation_by_input_signal(self, input_signal, amp_c, freq_c, mod_index, waveform, num_sounds=1):
-        """FM modulation
+    def oscillator_fm(self, amp_c, freq_c, waveform, mod_index, modulator, num_sounds=1):
+        """Basic oscillator with FM modulation
 
-            Modulates the frequency of a signal with the given properties, with an input signal as modulator
+            Creates an oscillator and modulates its frequency by a given modulator
 
             Args:
                 self: Self object
-                input_signal: Modulator signal, to affect carrier frequency
                 amp_c: Amplitude in range [0, 1]
                 freq_c: Frequency in range [0, 22000]
-                mod_index: Modulation index, which affects the amount of modulation
                 waveform: One of [sine, square, triangle, sawtooth]
+                mod_index: Modulation index, which affects the amount of modulation
+                modulator: Modulator signal, to affect carrier frequency
                 num_sounds: number of sounds to process
 
             Returns:
@@ -136,12 +137,12 @@ class Synth:
                 amp_float = amp_c
                 mod_index_float = mod_index
                 freq_float = freq_c
-                input_signal_cur = input_signal
+                input_signal_cur = modulator
             else:
                 amp_float = amp_c[i]
                 mod_index_float = mod_index[i]
                 freq_float = freq_c[i]
-                input_signal_cur = input_signal[i]
+                input_signal_cur = modulator[i]
 
             fm_sine_wave = amp_float * torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur)
             fm_square_wave = amp_float * torch.sign(torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur))
@@ -222,7 +223,7 @@ class Synth:
 
         t = self.time_samples
         dc = 1
-        carrier = Synth()
+        carrier = SynthModules()
         carrier.oscillator(amp=amp_c, freq=freq_c, phase=0, waveform=waveform)
         modulator = amp_m * torch.sin(TWO_PI * freq_m * t)
         am_signal = (dc + modulator / amp_c) * carrier.signal
@@ -251,7 +252,7 @@ class Synth:
                 ValueError: Resulted Amplitude is out of range [-1, 1]
             """
         self.signal_values_sanity_check(amp_c, freq_c, waveform)
-        carrier = Synth()
+        carrier = SynthModules()
         carrier.oscillator(amp=1, freq=freq_c, phase=0, waveform=waveform)
         modulated_amplitude = (amp_c + modulation_factor * input_signal)
         if torch.max(modulated_amplitude).item() > 1 or torch.min(modulated_amplitude).item() < -1:
@@ -319,9 +320,9 @@ class Synth:
                 release = torch.linspace(sustain_level, 0, release_num_samples)
             else:
                 attack = torch.linspace(0, 1, int(attack_num_samples[i].item()), device=helper.get_device())
-                decay = torch.linspace(1, int(sustain_level[i]), int(decay_num_samples[i]), device=helper.get_device())
-                sustain = torch.full((int(sustain_num_samples[i].item()),), int(sustain_level[i]), device=helper.get_device())
-                release = torch.linspace(int(sustain_num_samples[i].item()), 0, int(release_num_samples[i].item()), device=helper.get_device())
+                decay = torch.linspace(1, sustain_level[i], int(decay_num_samples[i]), device=helper.get_device())
+                sustain = torch.full((int(sustain_num_samples[i].item()),), sustain_level[i], device=helper.get_device())
+                release = torch.linspace(sustain_level[i], 0, int(release_num_samples[i].item()), device=helper.get_device())
 
                 # todo: make sure ADSR behavior is differentiable. linspace has to know to get tensors
                 # attack_mod = helper.linspace(torch.tensor(0), torch.tensor(1), attack_num_samples[i])
@@ -330,6 +331,7 @@ class Synth:
                 # release_mod = helper.linspace(sustain_num_samples[i], torch.tensor(0), release_num_samples[i])
 
             envelope = torch.cat((attack, decay, sustain, release))
+
             # envelope = torch.cat((attack_mod, decay_mod, sustain_mod, release_mod))
 
             envelope_len = envelope.shape[0]
@@ -356,8 +358,8 @@ class Synth:
                     enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped_signal), dim=0).unsqueeze(dim=0)
                     first_time = False
             else:
-                filtered_signal = enveloped_signal.unsqueeze(dim=0)
-                enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, filtered_signal), dim=0)
+                enveloped = enveloped_signal.unsqueeze(dim=0)
+                enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped), dim=0)
 
             if DEBUG_MODE:
                 plt.plot(envelope.cpu())
@@ -543,10 +545,10 @@ So it is not used
 
 if __name__ == "__main__":
     print(len(OSC_FREQ_LIST))
-    a = Synth()
-    b = Synth()
+    a = SynthModules()
+    b = SynthModules()
     b.oscillator(1, 5, 0, 'sine')
-    a.fm_modulation_by_input_signal(b.signal, 1, 440, 10, 'sine')
+    a.oscillator_fm(amp_c=1, freq_c=440, waveform='sine', mod_index=10, modulator=b.signal)
     # a.oscillator(amp=1, freq=100, phase=0, waveform='sine')
     # a.adsr_envelope(attack_t=0.5, decay_t=0, sustain_t=0.5, sustain_level=0.5, release_t=0)
     # plt.plot(a.signal)

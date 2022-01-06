@@ -2,9 +2,9 @@ from torch import nn
 import torch
 import helper
 from torchsummary import summary
-from synth import REGRESSION_PARAM_LIST, CLASSIFICATION_PARAM_LIST, WAVE_TYPE_DIC, FILTER_TYPE_DIC, OSC_FREQ_LIST
+from synth_modules import REGRESSION_PARAM_LIST, CLASSIFICATION_PARAM_LIST, WAVE_TYPE_DIC, FILTER_TYPE_DIC, OSC_FREQ_LIST
 from config import SYNTH_TYPE, ARCHITECTURE, MODEL_FREQUENCY_OUTPUT
-from sound_generator import SynthOscOnly
+from synth_architecture import SynthOscOnly
 
 
 # todo: this is value from Valerio Tutorial. has to check
@@ -107,14 +107,13 @@ class SmallSynthNetwork(nn.Module):
                 ['osc2_wave', nn.Linear(SMALL_LINEAR_IN_CHANNELS, len(WAVE_TYPE_DIC))],
                 ['filter_type', nn.Linear(SMALL_LINEAR_IN_CHANNELS, len(FILTER_TYPE_DIC))],
             ])
-        else:
-            raise ValueError("Provided SYNTH_TYPE is not recognized")
 
-        if SYNTH_TYPE == 'SYNTH_BASIC':
             self.regression_params = nn.Sequential(
                 nn.Linear(SMALL_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
                 nn.Linear(HIDDEN_IN_CHANNELS, len(REGRESSION_PARAM_LIST))
-                )
+            )
+        else:
+            raise ValueError("Provided SYNTH_TYPE is not recognized")
 
         self.softmax = nn.Softmax(dim=1)
         self.sigmoid = nn.Sigmoid()
@@ -240,6 +239,7 @@ class BigSynthNetwork(nn.Module):
             nn.MaxPool2d(kernel_size=2)
         )
         self.flatten = nn.Flatten()
+
         if SYNTH_TYPE == 'OSC_ONLY':
             if MODEL_FREQUENCY_OUTPUT == 'SINGLE':
                 # self.linear = nn.Linear(BIG_LINEAR_IN_CHANNELS, 1)

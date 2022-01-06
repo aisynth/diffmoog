@@ -3,7 +3,7 @@ import os
 import scipy.io.wavfile
 import torch
 import helper
-from sound_generator import SynthBasicFlow, SynthOscOnly
+from synth_architecture import SynthBasicFlow, SynthOscOnly
 from config import DATASET_SIZE, DATASET_TYPE, DATASET_MODE, OS, SYNTH_TYPE, ONLY_OSC_DATASET
 from synth_config import OSC_FREQ_LIST
 
