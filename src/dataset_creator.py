@@ -3,9 +3,9 @@ import os
 import scipy.io.wavfile
 import torch
 import helper
-from synth_architecture import SynthBasicFlow, SynthOscOnly
+from synth_architecture import SynthBasicFlow, SynthOscOnly, SynthModular, SynthModularCell, BASIC_FLOW
 from config import DATASET_SIZE, DATASET_TYPE, DATASET_MODE, OS, SYNTH_TYPE, ONLY_OSC_DATASET
-from synth_config import OSC_FREQ_LIST
+from synth_config import OSC_FREQ_LIST, NUM_LAYERS, NUM_CHANNELS
 
 """
 Create a dataset by randomizing synthesizer parameters and generating sound.
@@ -47,13 +47,41 @@ if __name__ == "__main__":
                 synth_obj = SynthOscOnly(file_name, parameters_dict={'osc1_freq': OSC_FREQ_LIST[i]})
             else:
                 synth_obj = SynthOscOnly(file_name, parameters_dict=None)
+        elif SYNTH_TYPE == 'MODULAR':
+            # update_params = [
+            #     SynthModularCell(index=(0, 0), parameters={'amp': 1, 'freq': 3, 'waveform': 'sine'}),
+            #     SynthModularCell(index=(0, 1), parameters={'amp_c': 0.9, 'freq_c': 220, 'waveform': 'square',
+            #                                                'mod_index': 10}),
+            #     SynthModularCell(index=(1, 0), parameters={'amp': 1, 'freq': 1, 'waveform': 'sine'}),
+            #     SynthModularCell(index=(1, 1), parameters={'amp_c': 0.7, 'freq_c': 500, 'waveform': 'sine',
+            #                                                'mod_index': 10}),
+            #     SynthModularCell(index=(0, 2), parameters={'factor': 0}),
+            #     SynthModularCell(index=(0, 3), parameters={'filter_freq': 15000, 'filter_type': 'low_pass'}),
+            #     SynthModularCell(index=(0, 4), parameters={'attack_t': 0.25, 'decay_t': 0.25, 'sustain_t': 0.25,
+            #                                                'sustain_level': 0.3, 'release_t': 0.25})
+            # ]
+            synth_obj = SynthModular()
+            synth_obj.apply_architecture(BASIC_FLOW)
+            synth_obj.generate_random_parmas(num_sounds=1)
+            # synth_obj.update_cells(update_params)
+            synth_obj.generate_signal()
         else:
             raise ValueError("Provided SYNTH_TYPE is not recognized")
 
         audio = synth_obj.signal
-        parameters = synth_obj.params_dict
+        if SYNTH_TYPE == 'SYNTH_BASIC' or SYNTH_TYPE == 'OSC_ONLY':
+            parameters = synth_obj.params_dict
+            dataset.append(parameters)
+        elif SYNTH_TYPE == 'MODULAR':
+            params_dict = {}
+            for layer in range(NUM_LAYERS):
+                for channel in range(NUM_CHANNELS):
+                    cell = synth_obj.architecture[channel][layer]
+                    if cell.operation is not None:
+                        params_dict[cell.index] = [cell.operation, cell.parameters]
+            dataset.append(params_dict)
 
-        dataset.append(parameters)
+            # dataset = pd.concat([pd.DataFrame(l) for l in dataset], axis=1).T
 
         if DATASET_MODE == 'WAV':
             if OS == 'WINDOWS':

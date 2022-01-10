@@ -331,6 +331,7 @@ class SynthModules:
                 # release_mod = helper.linspace(sustain_num_samples[i], torch.tensor(0), release_num_samples[i])
 
             envelope = torch.cat((attack, decay, sustain, release))
+            envelope = helper.move_to(envelope, self.device)
 
             # envelope = torch.cat((attack_mod, decay_mod, sustain_mod, release_mod))
 
@@ -341,8 +342,6 @@ class SynthModules:
                 envelope = torch.cat((envelope, padding))
             else:
                 raise ValueError("Envelope length exceeds signal duration")
-
-            envelope = helper.move_to(envelope, self.device)
 
             if torch.is_tensor(input_signal) and num_sounds > 1:
                 signal_to_shape = input_signal[i]

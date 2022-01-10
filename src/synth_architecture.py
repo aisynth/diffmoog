@@ -233,7 +233,7 @@ class SynthModular:
         index = modular_synth_cell.index
         self.architecture[index[0]][index[1]] = modular_synth_cell
 
-    def update_multiple_cells(self, cell_list):
+    def update_cells(self, cell_list):
         for cell in cell_list:
             self.update_cell(cell.index, cell.input_list, cell.operation, cell.parameters, cell.signal, cell.output)
 
@@ -268,6 +268,75 @@ class SynthModular:
             if output_cell_index in output_cell.input_list:
                 output_cell.input_list.remove(output_cell_index)
             cell.output = output
+
+    def update_cell_parameters(self, index: tuple, parameters: dict):
+        cell = self.architecture[index[0]][index[1]]
+        for key in parameters:
+            if key not in MODULAR_SYNTH_PARAMS[cell.operation]:
+                ValueError("Illegal parameter for the provided operation")
+        cell.parameters = parameters
+
+    def generate_random_parmas(self, num_sounds=1):
+        for layer in range(NUM_LAYERS):
+            for channel in range(NUM_CHANNELS):
+                cell = self.architecture[channel][layer]
+                operation = cell.operation
+
+                if operation == 'osc':
+                    params = {'amp': np.random.random_sample(size=num_sounds),
+                              'freq': np.random.uniform(low=0, high=MAX_LFO_FREQ, size=num_sounds),
+                              'waveform': random.choices(list(WAVE_TYPE_DIC), k=num_sounds)}
+                elif operation == 'fm':
+                    params = {'amp_c': np.random.random_sample(size=num_sounds),
+                              'freq_c': random.choices(OSC_FREQ_LIST, k=num_sounds),
+                              'waveform': random.choices(list(WAVE_TYPE_DIC), k=num_sounds),
+                              'mod_index': np.random.uniform(low=0, high=MAX_MOD_INDEX, size=num_sounds)}
+                elif operation == 'mix':
+                    params = None
+                elif operation == 'filter':
+                    params = {'filter_type': random.choices(list(FILTER_TYPE_DIC), k=num_sounds),
+                              'filter_freq': np.random.uniform(low=MIN_FILTER_FREQ,
+                                                               high=MAX_FILTER_FREQ,
+                                                               size=num_sounds)}
+                elif operation == 'env_adsr':
+                    attack_t = np.random.random_sample(size=num_sounds)
+                    decay_t = np.random.random_sample(size=num_sounds)
+                    sustain_t = np.random.random_sample(size=num_sounds)
+                    release_t = np.random.random_sample(size=num_sounds)
+                    adsr_sum = attack_t + decay_t + sustain_t + release_t
+                    attack_t = attack_t / adsr_sum
+                    decay_t = decay_t / adsr_sum
+                    sustain_t = sustain_t / adsr_sum
+                    release_t = release_t / adsr_sum
+
+                    # fixing a numerical issue in case the ADSR times exceeds signal length
+                    adsr_aggregated_time = attack_t + decay_t + sustain_t + release_t
+                    overflow_indices = [idx for idx, val in enumerate(adsr_aggregated_time) if
+                                        val > SIGNAL_DURATION_SEC]
+                    attack_t[overflow_indices] -= 1e-6
+                    decay_t[overflow_indices] -= 1e-6
+                    sustain_t[overflow_indices] -= 1e-6
+                    release_t[overflow_indices] -= 1e-6
+
+                    params = {'attack_t': attack_t,
+                              'decay_t': decay_t,
+                              'sustain_t': sustain_t,
+                              'sustain_level': np.random.random_sample(size=num_sounds),
+                              'release_t': release_t}
+
+                elif operation is None:
+                    params = None
+
+                if params is not None:
+                    for key, val in params.items():
+                        if isinstance(val, numpy.ndarray):
+                            params[key] = val.tolist()
+
+                    if num_sounds == 1:
+                        for key, value in params.items():
+                            params[key] = value[0]
+
+                cell.parameters = params
 
     def generate_signal(self, num_sounds=1):
         synth_module = SynthModules(num_sounds)
@@ -352,7 +421,9 @@ class SynthModular:
                                                              release_t=cell.parameters['release_t'],
                                                              num_sounds=num_sounds)
 
-        final_signal = torch.zeros((int(SAMPLE_RATE * SIGNAL_DURATION_SEC)), requires_grad=True)
+        final_signal = torch.zeros((int(SAMPLE_RATE * SIGNAL_DURATION_SEC)),
+                                   requires_grad=True,
+                                   device=helper.get_device())
         num_active_channels = 0
         for channel in range(NUM_CHANNELS):
             signal = self.architecture[channel][NUM_LAYERS-1].signal
@@ -449,6 +520,20 @@ class SynthModularCell:
                     if key not in MODULAR_SYNTH_PARAMS[operation]:
                         ValueError("Illegal parameter for the provided operation")
 
+
+BASIC_FLOW = [
+    SynthModularCell(index=(0, 0), operation='osc', default_connection=True),
+    SynthModularCell(index=(0, 1), operation='fm', default_connection=True),
+    SynthModularCell(index=(1, 0), operation='osc', default_connection=True),
+    SynthModularCell(index=(1, 1), operation='fm', input_list=[[1, 0]], output=[0, 2]),
+    SynthModularCell(index=(1, 2), operation=None, input_list=None),
+    SynthModularCell(index=(0, 2),
+                     operation='mix',
+                     input_list=[[0, 1], [1, 1]]),
+    SynthModularCell(index=(0, 3), operation='filter', default_connection=True),
+    SynthModularCell(index=(0, 4), operation='env_adsr', default_connection=True),
+]
+
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
     # for i in OSC_FREQ_LIST:
@@ -499,7 +584,7 @@ if __name__ == "__main__":
                  ]
     a = SynthModular()
     a.apply_architecture(modular_synth_basic_flow)
-    a.update_multiple_cells(update_params)
+    a.update_cells(update_params)
     a.generate_signal()
     plt.plot(a.signal.detach().cpu().numpy())
     plt.ylim([-1, 1])

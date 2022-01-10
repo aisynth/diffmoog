@@ -17,6 +17,8 @@ elif SYNTH_TYPE == 'SYNTH_BASIC':
          'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']
     PARAM_LIST = [CLASSIFICATION_PARAM_LIST, REGRESSION_PARAM_LIST]
 
+elif SYNTH_TYPE == 'MODULAR':
+    pass
 else:
     raise ValueError("Provided SYNTH_TYPE is not recognized")
 
@@ -45,6 +47,10 @@ MAX_LFO_FREQ = 20
 MIN_FILTER_FREQ = 20
 MAX_FILTER_FREQ = 20000
 
+# --------------------------------------
+# -----------Modular Synth--------------
+# --------------------------------------
+
 # Modular Synth attributes:
 NUM_CHANNELS = 4
 NUM_LAYERS = 5
@@ -56,4 +62,5 @@ MODULAR_SYNTH_PARAMS = {'osc': ['amp', 'freq', 'waveform'],
                         'mix': ['new_signal', 'factor'],
                         'filter': ['filter_freq', 'filter_type'],
                         'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']}
+
 

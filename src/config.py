@@ -1,4 +1,5 @@
 import os
+# from synth_config import BASIC_FLOW
 
 # change this to either WINDOWS or LINUX
 OS = 'WINDOWS'
@@ -15,17 +16,17 @@ SIGNAL_DURATION_SEC = 1.0
 " Mode - define a common configuration for the whole system     "
 "   0 -                     Use custom configurations           "
 "   Any other number -      Use predefined configuration preset. See below "
-MODE = 7
+MODE = 8
 
 # Dataset configs
-ONLY_OSC_DATASET = True
+ONLY_OSC_DATASET = False
 if ONLY_OSC_DATASET:
     DATASET_SIZE = NUM_OF_OSC_FREQUENCIES
     NUM_EPOCHS_TO_PRINT_STATS = 100
     NUM_EPOCHS_TO_SAVE_MODEL = 100
 
 else:
-    DATASET_SIZE = 50000
+    DATASET_SIZE = 100
 DATASET_TYPE = 'TRAIN'  # TRAIN or TEST
 DATASET_MODE = 'WAV'  # WAV or MEL_SPEC
 path_parent = os.path.dirname(os.getcwd())
@@ -48,8 +49,8 @@ LEARNING_RATE = 0.00001
 
 REINFORCEMENT_EPSILON = 0.15
 
-# Synth architecture. OSC_ONLY or SYNTH_BASIC
-SYNTH_TYPE = 'OSC_ONLY'
+# Synth architecture. OSC_ONLY or SYNTH_BASIC or MODULAR
+SYNTH_TYPE = 'MODULAR'
 
 " The architecture of the system, that defines the data flow and the loss functions:                    "
 "   1. SPECTROGRAM_ONLY (input -> CNN -> parameters -> Synth -> output; Loss over spectrograms)         "
@@ -142,6 +143,11 @@ elif MODE == 6:
     MODEL_FREQUENCY_OUTPUT = 'PROBS'
 elif MODE == 7:
     SYNTH_TYPE = 'OSC_ONLY'
+    ARCHITECTURE = 'SPECTROGRAM_ONLY'
+    SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
+    MODEL_FREQUENCY_OUTPUT = 'SINGLE'
+elif MODE == 8:
+    SYNTH_TYPE = 'MODULAR'
     ARCHITECTURE = 'SPECTROGRAM_ONLY'
     SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
     MODEL_FREQUENCY_OUTPUT = 'SINGLE'
