@@ -102,7 +102,7 @@ class SynthModules:
 
     def mix_signal(self, new_signal, factor):
         """Signal superposition. factor balances the mix
-        0 - original signal only, 1 - new signal only, 0.5 evenly balanced. """
+        1 - original signal only, 0 - new signal only, 0.5 evenly balanced. """
         if factor < 0 or factor > 1:
             raise ValueError("Provided factor value is out of range [0, 1]")
         self.signal = factor * self.signal + (1 - factor) * new_signal

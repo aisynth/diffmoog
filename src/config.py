@@ -22,13 +22,15 @@ MODE = 8
 ONLY_OSC_DATASET = False
 if ONLY_OSC_DATASET:
     DATASET_SIZE = NUM_OF_OSC_FREQUENCIES
-    NUM_EPOCHS_TO_PRINT_STATS = 100
-    NUM_EPOCHS_TO_SAVE_MODEL = 100
-
 else:
     DATASET_SIZE = 100
+
+NUM_EPOCHS_TO_PRINT_STATS = 100
+NUM_EPOCHS_TO_SAVE_MODEL = 100
+
+
 DATASET_TYPE = 'TRAIN'  # TRAIN or TEST
-DATASET_MODE = 'WAV'  # WAV or MEL_SPEC
+DATASET_MODE = 'WAV'  # WAV or MEL_SPEC - represent the format to save and load the audio signal
 path_parent = os.path.dirname(os.getcwd())
 if OS == 'WINDOWS':
     TRAIN_PARAMETERS_FILE = path_parent + "\\dataset\\train\\dataset.csv"
@@ -84,7 +86,7 @@ TRANSFORM = 'MEL_SPECTROGRAM'  # MEL_SPECTROGRAM or SPECTROGRAM- to be used in t
 
 REINFORCE_REWARD_SPEC_MSE_THRESHOLD = 6
 
-USE_LOADED_MODEL = True
+USE_LOADED_MODEL = False
 OVERRIDE_OPTIMIZER = True
 
 if OS == 'WINDOWS':

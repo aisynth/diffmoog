@@ -9,7 +9,7 @@ import librosa
 from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE, SYNTH_TYPE, PRINT_ACCURACY_STATS, OS
 from synth_config import *
 from torch.utils.data import DataLoader
-from torch import nn
+import synth_config
 from torch import nn
 
 
@@ -73,19 +73,19 @@ def map_classification_params_to_ints(params_dic: dict):
     """ map classification params to ints, to input them for a neural network """
     mapped_params_dict = {}
     for key, val in params_dic.items():
-        if key in synth.CLASSIFICATION_PARAM_LIST:
+        if key in synth_config.CLASSIFICATION_PARAM_LIST:
             if key == "osc1_freq" or key == "osc2_freq":
                 # todo: inspect which of these are needed (i think only the middle one)
                 if torch.is_tensor(val):
-                    mapped_params_dict[key] = [synth.OSC_FREQ_DIC[round(x.item(), 4)] for x in val]
+                    mapped_params_dict[key] = [synth_config.OSC_FREQ_DIC[round(x.item(), 4)] for x in val]
                 if isinstance(val, float):
-                    mapped_params_dict[key] = synth.OSC_FREQ_DIC[round(val, 4)]
+                    mapped_params_dict[key] = synth_config.OSC_FREQ_DIC[round(val, 4)]
                 else:
-                    mapped_params_dict[key] = [synth.OSC_FREQ_DIC[round(x, 4)] for x in val]
+                    mapped_params_dict[key] = [synth_config.OSC_FREQ_DIC[round(x, 4)] for x in val]
             if "wave" in key:
-                mapped_params_dict[key] = synth.WAVE_TYPE_DIC[val]
+                mapped_params_dict[key] = synth_config.WAVE_TYPE_DIC[val]
             elif "filter_type" == key:
-                mapped_params_dict[key] = synth.FILTER_TYPE_DIC[val]
+                mapped_params_dict[key] = synth_config.FILTER_TYPE_DIC[val]
 
     return mapped_params_dict
 
@@ -95,14 +95,14 @@ def map_classification_params_from_ints(params_dic: dict):
 
     mapped_params_dict = {}
     for key, val in params_dic.items():
-        if key in synth.CLASSIFICATION_PARAM_LIST:
+        if key in synth_config.CLASSIFICATION_PARAM_LIST:
             if key == "osc1_freq" or key == "osc2_freq":
                 # classification_params_dic[key] = synth.OSC_FREQ_DIC[round(val, 4)]
-                mapped_params_dict[key] = torch.tensor([synth.OSC_FREQ_DIC_INV[x.item()] for x in val])
+                mapped_params_dict[key] = torch.tensor([synth_config.OSC_FREQ_DIC_INV[x.item()] for x in val])
             if "wave" in key:
-                mapped_params_dict[key] = [synth.WAVE_TYPE_DIC_INV[x.item()] for x in val]
+                mapped_params_dict[key] = [synth_config.WAVE_TYPE_DIC_INV[x.item()] for x in val]
             elif "filter_type" == key:
-                mapped_params_dict[key] = [synth.FILTER_TYPE_DIC_INV[x.item()] for x in val]
+                mapped_params_dict[key] = [synth_config.FILTER_TYPE_DIC_INV[x.item()] for x in val]
 
     return mapped_params_dict
 
@@ -116,28 +116,28 @@ def clamp_regression_params(parameters_dict: dict):
      'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']'''
 
     clamped_params_dict = {}
-    clamped_params_dict['osc1_amp'] = torch.clamp(parameters_dict['osc1_amp'], min=0, max=synth.MAX_AMP)
+    clamped_params_dict['osc1_amp'] = torch.clamp(parameters_dict['osc1_amp'], min=0, max=synth_config.MAX_AMP)
     clamped_params_dict['osc1_mod_index'] = torch.clamp(parameters_dict['osc1_mod_index'], min=0,
-                                                        max=synth.MAX_MOD_INDEX)
-    clamped_params_dict['lfo1_freq'] = torch.clamp(parameters_dict['lfo1_freq'], min=0, max=synth.MAX_LFO_FREQ)
-    clamped_params_dict['osc2_amp'] = torch.clamp(parameters_dict['osc2_amp'], min=0, max=synth.MAX_AMP)
+                                                        max=synth_config.MAX_MOD_INDEX)
+    clamped_params_dict['lfo1_freq'] = torch.clamp(parameters_dict['lfo1_freq'], min=0, max=synth_config.MAX_LFO_FREQ)
+    clamped_params_dict['osc2_amp'] = torch.clamp(parameters_dict['osc2_amp'], min=0, max=synth_config.MAX_AMP)
     clamped_params_dict['osc2_mod_index'] = torch.clamp(parameters_dict['osc2_mod_index'], min=0,
-                                                        max=synth.MAX_MOD_INDEX)
-    clamped_params_dict['lfo2_freq'] = torch.clamp(parameters_dict['lfo2_freq'], min=0, max=synth.MAX_LFO_FREQ)
+                                                        max=synth_config.MAX_MOD_INDEX)
+    clamped_params_dict['lfo2_freq'] = torch.clamp(parameters_dict['lfo2_freq'], min=0, max=synth_config.MAX_LFO_FREQ)
 
     clamped_params_dict['filter_freq'] = torch.clamp(parameters_dict['filter_freq'],
-                                                     min=synth.MIN_FILTER_FREQ,
-                                                     max=synth.MAX_FILTER_FREQ)
+                                                     min=synth_config.MIN_FILTER_FREQ,
+                                                     max=synth_config.MAX_FILTER_FREQ)
 
-    attack_t = torch.clamp(parameters_dict['attack_t'], min=0, max=synth.SIGNAL_DURATION_SEC)
-    decay_t = torch.clamp(parameters_dict['decay_t'], min=0, max=synth.SIGNAL_DURATION_SEC)
-    sustain_t = torch.clamp(parameters_dict['release_t'], min=0, max=synth.SIGNAL_DURATION_SEC)
-    release_t = torch.clamp(parameters_dict['release_t'], min=0, max=synth.SIGNAL_DURATION_SEC)
+    attack_t = torch.clamp(parameters_dict['attack_t'], min=0, max=synth_config.SIGNAL_DURATION_SEC)
+    decay_t = torch.clamp(parameters_dict['decay_t'], min=0, max=synth_config.SIGNAL_DURATION_SEC)
+    sustain_t = torch.clamp(parameters_dict['release_t'], min=0, max=synth_config.SIGNAL_DURATION_SEC)
+    release_t = torch.clamp(parameters_dict['release_t'], min=0, max=synth_config.SIGNAL_DURATION_SEC)
 
     # clamp aggregated ADSR parameters that are longer than signal duration
     adsr_length_in_sec = attack_t + decay_t + sustain_t + release_t
 
-    adsr_clamp_indices = torch.nonzero(adsr_length_in_sec >= synth.SIGNAL_DURATION_SEC, as_tuple=True)[0]
+    adsr_clamp_indices = torch.nonzero(adsr_length_in_sec >= synth_config.SIGNAL_DURATION_SEC, as_tuple=True)[0]
 
     normalized_attack_list = []
     normalized_decay_list = []
@@ -174,7 +174,7 @@ def clamp_regression_params(parameters_dict: dict):
     clamped_params_dict['sustain_t'] = normalized_sustain_tensor
     clamped_params_dict['release_t'] = normalized_release_tensor
 
-    clamped_params_dict['sustain_level'] = torch.clamp(parameters_dict['sustain_level'], min=0, max=synth.MAX_AMP)
+    clamped_params_dict['sustain_level'] = torch.clamp(parameters_dict['sustain_level'], min=0, max=synth_config.MAX_AMP)
 
     # Add Classification parameters as-is
     clamped_params_dict['osc1_freq'] = parameters_dict['osc1_freq']
@@ -197,12 +197,12 @@ class Normalizer:
         self.mod_index_normalizer = MinMaxNormaliser(target_min_val=0,
                                                      target_max_val=1,
                                                      original_min_val=0,
-                                                     original_max_val=synth.MAX_MOD_INDEX)
+                                                     original_max_val=synth_config.MAX_MOD_INDEX)
 
         self.lfo_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                     target_max_val=1,
                                                     original_min_val=0,
-                                                    original_max_val=synth.MAX_LFO_FREQ)
+                                                    original_max_val=synth_config.MAX_LFO_FREQ)
 
         self.lfo_phase_normalizer = MinMaxNormaliser(target_min_val=0,
                                                      target_max_val=1,
@@ -212,12 +212,12 @@ class Normalizer:
         self.adsr_normalizer = MinMaxNormaliser(target_min_val=0,
                                                 target_max_val=1,
                                                 original_min_val=0,
-                                                original_max_val=synth.SIGNAL_DURATION_SEC)
+                                                original_max_val=synth_config.SIGNAL_DURATION_SEC)
 
         self.filter_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                        target_max_val=1,
                                                        original_min_val=0,
-                                                       original_max_val=synth.MAX_FILTER_FREQ)
+                                                       original_max_val=synth_config.MAX_FILTER_FREQ)
 
     def normalize(self, parameters_dict: dict):
         normalized_params_dict = {

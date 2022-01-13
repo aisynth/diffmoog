@@ -2,7 +2,8 @@ from torch import nn
 import torch
 import helper
 from torchsummary import summary
-from synth_modules import REGRESSION_PARAM_LIST, CLASSIFICATION_PARAM_LIST, WAVE_TYPE_DIC, FILTER_TYPE_DIC, OSC_FREQ_LIST
+from synth_config import REGRESSION_PARAM_LIST, CLASSIFICATION_PARAM_LIST
+from synth_modules import WAVE_TYPE_DIC, FILTER_TYPE_DIC, OSC_FREQ_LIST
 from config import SYNTH_TYPE, ARCHITECTURE, MODEL_FREQUENCY_OUTPUT
 from synth_architecture import SynthOscOnly
 
@@ -258,6 +259,8 @@ class BigSynthNetwork(nn.Module):
                 ['osc2_wave', nn.Linear(SMALL_LINEAR_IN_CHANNELS, len(WAVE_TYPE_DIC))],
                 ['filter_type', nn.Linear(SMALL_LINEAR_IN_CHANNELS, len(FILTER_TYPE_DIC))],
             ])
+        elif SYNTH_TYPE == 'MODULAR':
+            pass
         else:
             raise ValueError("Provided SYNTH_TYPE is not recognized")
 
@@ -325,6 +328,7 @@ class BigSynthNetwork(nn.Module):
         if SYNTH_TYPE == 'SYNTH_BASIC':
             for out_name, lin in self.classification_params.items():
                 # -----> do not use softmax if using CrossEntropyLoss()
+                x = lin(x)
                 probabilities = self.softmax(x)
                 if out_name == 'osc1_freq' or out_name == 'osc2_freq':
                     osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())

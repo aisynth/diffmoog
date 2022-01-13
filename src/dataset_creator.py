@@ -78,7 +78,14 @@ if __name__ == "__main__":
                 for channel in range(NUM_CHANNELS):
                     cell = synth_obj.architecture[channel][layer]
                     if cell.operation is not None:
-                        params_dict[cell.index] = [cell.operation, cell.parameters]
+                        operation = cell.operation
+                    else:
+                        operation = 'None'
+                    if cell.parameters is not None:
+                        parameters = cell.parameters
+                    else:
+                        parameters = 'None'
+                    params_dict[cell.index] = [operation, parameters]
             dataset.append(params_dict)
 
             # dataset = pd.concat([pd.DataFrame(l) for l in dataset], axis=1).T

@@ -6,7 +6,7 @@ from config import BATCH_SIZE, EPOCHS, LEARNING_RATE, DEBUG_MODE, REGRESSION_LOS
     SPECTROGRAM_LOSS_TYPE, LOAD_MODEL_PATH, USE_LOADED_MODEL, FREQ_PARAM_LOSS_TYPE, FREQ_MSE_LOSS_FACTOR, \
     LOG_SPECTROGRAM_MSE_LOSS, ONLY_OSC_DATASET, CNN_NETWORK, TRANSFORM, MODEL_FREQUENCY_OUTPUT, \
     NUM_EPOCHS_TO_PRINT_STATS, PRINT_PER_ACCURACY_STATS_MULTIPLE_EPOCHS, REINFORCE_REWARD_SPEC_MSE_THRESHOLD, \
-    NUM_EPOCHS_TO_SAVE_MODEL, FREQ_REINFORCE_LOSS_FACTOR, REINFORCEMENT_EPSILON, OVERRIDE_OPTIMIZER
+    NUM_EPOCHS_TO_SAVE_MODEL, FREQ_REINFORCE_LOSS_FACTOR, REINFORCEMENT_EPSILON, OVERRIDE_OPTIMIZER, SAMPLE_RATE
 from ai_synth_dataset import AiSynthDataset, AiSynthSingleOscDataset
 from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, OS, PLOT_SPEC
 from model import SmallSynthNetwork, BigSynthNetwork
@@ -52,8 +52,6 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
         osc_target_id = target_params_dic['classification_params']['osc1_freq']
         osc_target = torch.tensor([OSC_FREQ_DIC_INV[x.item()] for x in osc_target_id], device=device_arg)
         osc_pred = output_dic['osc1_freq']
-        # print("osc_pred:", osc_pred[2].item())
-        # print("osc_target:", osc_target[2].item())
 
         if ARCHITECTURE == 'SPEC_NO_SYNTH':
             if SPECTROGRAM_LOSS_TYPE == 'MSE':
@@ -172,21 +170,16 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
             denormalized_output_dic = normalizer.denormalize(output_dic)
             denormalized_output_dic['osc1_freq'] = torch.clamp(denormalized_output_dic['osc1_freq'], min=0, max=20000)
 
+            # -------------------------------------
+            # -----------Run Synth-----------------
+            # -------------------------------------
             if SYNTH_TYPE == 'OSC_ONLY':
                 param_dict_to_synth = denormalized_output_dic
-
-                # -------------------------------------
-                # -----------Run Synth-----------------
-                # -------------------------------------
                 overall_synth_obj = SynthOscOnly(parameters_dict=param_dict_to_synth,
                                                  num_sounds=len(transformed_signal))
 
             elif SYNTH_TYPE == 'SYNTH_BASIC':
                 param_dict_to_synth = helper.clamp_regression_params(denormalized_output_dic)
-
-                # -------------------------------------
-                # -----------Run Synth-----------------
-                # -------------------------------------
                 overall_synth_obj = SynthBasicFlow(parameters_dict=param_dict_to_synth,
                                                    num_sounds=len(transformed_signal))
 
@@ -210,60 +203,6 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
                     helper.plot_spectrogram(predicted_transformed_signal[i].cpu().detach().numpy(),
                                             title=f"Predicted MelSpectrogram (dB) {osc_pred[i]}",
                                             ylabel='mel freq')
-
-                    for freq in OSC_FREQ_LIST:
-                        overall_synth_obj1 = SynthOscOnly(parameters_dict={'osc1_freq': freq},
-                                                          num_sounds=1)
-                        overall_synth_obj1.signal = helper.move_to(overall_synth_obj1.signal, device_arg)
-                        predicted_transformed_signal1 = transform(overall_synth_obj1.signal)
-                        predicted_transformed_signal1 = helper.move_to(predicted_transformed_signal1, device_arg)
-                        predicted_transformed_signal1 = torch.squeeze(predicted_transformed_signal1)
-                        helper.plot_spectrogram(predicted_transformed_signal1.cpu().detach().numpy(),
-                                                title=f"Predicted MelSpectrogram (dB) {freq}",
-                                                ylabel='mel freq')
-
-                    overall_synth_obj1 = SynthOscOnly(parameters_dict={'osc1_freq': 87.31},
-                                                       num_sounds=1)
-                    overall_synth_obj1.signal = helper.move_to(overall_synth_obj1.signal, device_arg)
-                    predicted_transformed_signal1 = transform(overall_synth_obj1.signal)
-                    predicted_transformed_signal1 = helper.move_to(predicted_transformed_signal1, device_arg)
-                    predicted_transformed_signal1 = torch.squeeze(predicted_transformed_signal1)
-                    helper.plot_spectrogram(predicted_transformed_signal1.cpu().detach().numpy(),
-                                            title=f"Predicted MelSpectrogram (dB) 87.31",
-                                            ylabel='mel freq')
-
-                    overall_synth_obj1 = SynthOscOnly(parameters_dict={'osc1_freq': 86},
-                                                       num_sounds=1)
-                    overall_synth_obj1.signal = helper.move_to(overall_synth_obj1.signal, device_arg)
-                    predicted_transformed_signal1 = transform(overall_synth_obj1.signal)
-                    predicted_transformed_signal1 = helper.move_to(predicted_transformed_signal1, device_arg)
-                    predicted_transformed_signal1 = torch.squeeze(predicted_transformed_signal1)
-                    helper.plot_spectrogram(predicted_transformed_signal1.cpu().detach().numpy(),
-                                            title=f"Predicted MelSpectrogram (dB) 86",
-                                            ylabel='mel freq')
-
-                    overall_synth_obj1 = SynthOscOnly(parameters_dict={'osc1_freq': 85},
-                                                       num_sounds=1)
-                    overall_synth_obj1.signal = helper.move_to(overall_synth_obj1.signal, device_arg)
-                    predicted_transformed_signal1 = transform(overall_synth_obj1.signal)
-                    predicted_transformed_signal1 = helper.move_to(predicted_transformed_signal1, device_arg)
-                    predicted_transformed_signal1 = torch.squeeze(predicted_transformed_signal1)
-                    helper.plot_spectrogram(predicted_transformed_signal1.cpu().detach().numpy(),
-                                            title=f"Predicted MelSpectrogram (dB) 85",
-                                            ylabel='mel freq')
-
-                    overall_synth_obj1 = SynthOscOnly(parameters_dict={'osc1_freq': 84},
-                                                       num_sounds=1)
-                    overall_synth_obj1.signal = helper.move_to(overall_synth_obj1.signal, device_arg)
-                    predicted_transformed_signal1 = transform(overall_synth_obj1.signal)
-                    predicted_transformed_signal1 = helper.move_to(predicted_transformed_signal1, device_arg)
-                    predicted_transformed_signal1 = torch.squeeze(predicted_transformed_signal1)
-                    helper.plot_spectrogram(predicted_transformed_signal1.cpu().detach().numpy(),
-                                            title=f"Predicted MelSpectrogram (dB) 84",
-                                            ylabel='mel freq')
-
-                    print(criterion_spectrogram(predicted_transformed_signal[i], transformed_signal[i]))
-                    print(criterion_spectrogram(predicted_transformed_signal[i], predicted_transformed_signal1))
 
             if LOG_SPECTROGRAM_MSE_LOSS:
                 spectrogram_mse_loss = criterion_spectrogram(torch.log(predicted_transformed_signal+1),
@@ -563,7 +502,7 @@ if __name__ == "__main__":
                                                    DATASET_TYPE,
                                                    TRAIN_PARAMETERS_FILE,
                                                    TRAIN_AUDIO_DIR,
-                                                   synth.SAMPLE_RATE,
+                                                   SAMPLE_RATE,
                                                    device
                                                    )
     elif SYNTH_TYPE == 'SYNTH_BASIC':
@@ -571,8 +510,15 @@ if __name__ == "__main__":
                                           DATASET_TYPE,
                                           TRAIN_PARAMETERS_FILE,
                                           TRAIN_AUDIO_DIR,
-                                          transform,
-                                          synth.SAMPLE_RATE,
+                                          SAMPLE_RATE,
+                                          device
+                                          )
+    elif SYNTH_TYPE == 'MODULAR':
+        ai_synth_dataset = AiSynthDataset(DATASET_MODE,
+                                          DATASET_TYPE,
+                                          TRAIN_PARAMETERS_FILE,
+                                          TRAIN_AUDIO_DIR,
+                                          SAMPLE_RATE,
                                           device
                                           )
     else:

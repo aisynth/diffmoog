@@ -1,10 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy
-from config import PI, PLOT_SPEC
 from src.config import SIGNAL_DURATION_SEC, SAMPLE_RATE
 from synth_config import OSC_FREQ_LIST, WAVE_TYPE_DIC, NUM_LAYERS, NUM_CHANNELS, MAX_MOD_INDEX, MAX_LFO_FREQ, \
     FILTER_TYPE_DIC, MIN_FILTER_FREQ, MAX_FILTER_FREQ, MODULAR_SYNTH_OPERATIONS, MODULAR_SYNTH_PARAMS
-import synth_modules
 import random
 import simpleaudio as sa
 import numpy as np

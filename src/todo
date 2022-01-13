@@ -1,5 +1,7 @@
     # todo:
     1. generate multiple signals
+    2. add synth directory, add modular synth architectures file
+    3. add all cells to dataset, even if None
     2. add heads to model with modular synth
     3. make single fm sounds from modular synth
     3. make data set
