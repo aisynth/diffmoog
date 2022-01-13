@@ -2,14 +2,13 @@ import torch
 import os
 from torch import Tensor
 import torchaudio
-import synth_modules
 import matplotlib
 import matplotlib.pyplot as plt
 import librosa
-from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE, SYNTH_TYPE, PRINT_ACCURACY_STATS, OS
-from synth_config import *
+from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE, PRINT_ACCURACY_STATS, OS
+from synth.synth_config import *
 from torch.utils.data import DataLoader
-import synth_config
+from synth import synth_config
 from torch import nn
 
 

@@ -3,10 +3,9 @@ import helper
 from torch import nn
 from model import SmallSynthNetwork
 from ai_synth_dataset import AiSynthDataset
-from synth_architecture import SynthBasicFlow
+from synth.synth_architecture import SynthBasicFlow
 from config import TEST_PARAMETERS_FILE, TEST_AUDIO_DIR, BATCH_SIZE, LEARNING_RATE, LOAD_MODEL_PATH, \
     REGRESSION_LOSS_FACTOR, SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, OS
-import synth_modules
 import os
 import scipy.io.wavfile
 import pandas as pd

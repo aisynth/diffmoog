@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 # import simpleaudio as sa
 import helper
 import julius
-from synth_config import *
+from synth.synth_config import *
 
 
 class SynthModules:

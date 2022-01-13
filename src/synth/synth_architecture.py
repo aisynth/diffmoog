@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy
 from src.config import SIGNAL_DURATION_SEC, SAMPLE_RATE
-from synth_config import OSC_FREQ_LIST, WAVE_TYPE_DIC, NUM_LAYERS, NUM_CHANNELS, MAX_MOD_INDEX, MAX_LFO_FREQ, \
+from synth.synth_config import OSC_FREQ_LIST, WAVE_TYPE_DIC, NUM_LAYERS, NUM_CHANNELS, MAX_MOD_INDEX, MAX_LFO_FREQ, \
     FILTER_TYPE_DIC, MIN_FILTER_FREQ, MAX_FILTER_FREQ, MODULAR_SYNTH_OPERATIONS, MODULAR_SYNTH_PARAMS
 import random
 import simpleaudio as sa
@@ -9,209 +9,7 @@ import numpy as np
 import torch
 from torch import nn
 import helper
-from synth_modules import SynthModules
-
-
-class SynthBasicFlow:
-    """A basic synthesizer signal flow architecture.
-        The synth is based over common commercial software synthesizers.
-        It has dual oscillators followed by FM module, summed together
-        and passed in a frequency filter and envelope shaper
-
-        [osc1] -> FM
-                    \
-                     + -> [frequency filter] -> [envelope shaper] -> output sound
-                    /
-        [osc2] -> FM
-
-        Args:
-            self: Self object
-            file_name: name for sound
-            parameters_dict(optional): parameters for the synth components to generate specific sounds
-            num_sounds: number of sounds to generate.
-        """
-
-    def __init__(self, file_name='unnamed_sound', parameters_dict=None, num_sounds=1):
-        self.file_name = file_name
-        self.params_dict = {}
-        # init parameters_dict
-        if parameters_dict is None:
-            self.init_random_synth_params(num_sounds)
-        elif type(parameters_dict) is dict:
-            self.params_dict = parameters_dict.copy()
-        else:
-            ValueError("Provided parameters are not provided as dictionary")
-
-        # generate signal with basic signal flow
-        self.signal = self.generate_signal(num_sounds)
-
-    def init_random_synth_params(self, num_sounds):
-        """init params_dict with lists of parameters"""
-
-        # todo: refactor: initializations by iterating/referencing synth.PARAM_LIST
-        self.params_dict['osc1_amp'] = np.random.random_sample(size=num_sounds)
-        self.params_dict['osc1_freq'] = random.choices(OSC_FREQ_LIST, k=num_sounds)
-        self.params_dict['osc1_wave'] = random.choices(list(WAVE_TYPE_DIC), k=num_sounds)
-        self.params_dict['osc1_mod_index'] = np.random.uniform(low=0, high=MAX_MOD_INDEX, size=num_sounds)
-        self.params_dict['lfo1_freq'] = np.random.uniform(low=0, high=MAX_LFO_FREQ, size=num_sounds)
-
-        self.params_dict['osc2_amp'] = np.random.random_sample(size=num_sounds)
-        self.params_dict['osc2_freq'] = random.choices(OSC_FREQ_LIST, k=num_sounds)
-        self.params_dict['osc2_wave'] = random.choices(list(WAVE_TYPE_DIC), k=num_sounds)
-        self.params_dict['osc2_mod_index'] = np.random.uniform(low=0, high=MAX_MOD_INDEX, size=num_sounds)
-        self.params_dict['lfo2_freq'] = np.random.uniform(low=0, high=MAX_LFO_FREQ, size=num_sounds)
-
-        self.params_dict['filter_type'] = random.choices(list(FILTER_TYPE_DIC), k=num_sounds)
-        self.params_dict['filter_freq'] = \
-            np.random.uniform(low=MIN_FILTER_FREQ, high=MAX_FILTER_FREQ, size=num_sounds)
-
-        attack_t = np.random.random_sample(size=num_sounds)
-        decay_t = np.random.random_sample(size=num_sounds)
-        sustain_t = np.random.random_sample(size=num_sounds)
-        release_t = np.random.random_sample(size=num_sounds)
-        adsr_sum = attack_t + decay_t + sustain_t + release_t
-        attack_t = attack_t / adsr_sum
-        decay_t = decay_t / adsr_sum
-        sustain_t = sustain_t / adsr_sum
-        release_t = release_t / adsr_sum
-
-        # fixing a numerical issue in case the ADSR times exceeds signal length
-        adsr_aggregated_time = attack_t + decay_t + sustain_t + release_t
-        overflow_indices = [idx for idx, val in enumerate(adsr_aggregated_time) if val > SIGNAL_DURATION_SEC]
-        attack_t[overflow_indices] -= 1e-6
-        decay_t[overflow_indices] -= 1e-6
-        sustain_t[overflow_indices] -= 1e-6
-        release_t[overflow_indices] -= 1e-6
-
-        self.params_dict['attack_t'] = attack_t
-        self.params_dict['decay_t'] = decay_t
-        self.params_dict['sustain_t'] = sustain_t
-        self.params_dict['release_t'] = release_t
-        self.params_dict['sustain_level'] = np.random.random_sample(size=num_sounds)
-
-        for key, val in self.params_dict.items():
-            if isinstance(val, numpy.ndarray):
-                self.params_dict[key] = val.tolist()
-
-        if num_sounds == 1:
-            for key, value in self.params_dict.items():
-                self.params_dict[key] = value[0]
-
-    def generate_signal(self, num_sounds):
-        osc1_amp = self.params_dict['osc1_amp']
-        osc1_freq = self.params_dict['osc1_freq']
-        osc1_wave = self.params_dict['osc1_wave']
-        osc1_mod_index = self.params_dict['osc1_mod_index']
-        lfo1_freq = self.params_dict['lfo1_freq']
-
-        osc2_amp = self.params_dict['osc2_amp']
-        osc2_freq = self.params_dict['osc2_freq']
-        osc2_wave = self.params_dict['osc2_wave']
-        osc2_mod_index = self.params_dict['osc2_mod_index']
-        lfo2_freq = self.params_dict['lfo2_freq']
-
-        filter_type = self.params_dict['filter_type']
-        filter_freq = self.params_dict['filter_freq']
-
-        attack_t = self.params_dict['attack_t']
-        decay_t = self.params_dict['decay_t']
-        sustain_t = self.params_dict['sustain_t']
-        release_t = self.params_dict['release_t']
-        sustain_level = self.params_dict['sustain_level']
-
-        synth = SynthModules(num_sounds)
-
-        lfo1 = synth.oscillator(amp=1,
-                                freq=lfo1_freq,
-                                phase=0,
-                                waveform='sine',
-                                num_sounds=num_sounds)
-
-        fm_osc1 = synth.oscillator_fm(amp_c=osc1_amp,
-                                      freq_c=osc1_freq,
-                                      waveform=osc1_wave,
-                                      mod_index=osc1_mod_index,
-                                      modulator=lfo1,
-                                      num_sounds=num_sounds)
-
-        lfo2 = synth.oscillator(amp=1,
-                                freq=lfo2_freq,
-                                phase=0,
-                                waveform='sine',
-                                num_sounds=num_sounds)
-
-        fm_osc2 = synth.oscillator_fm(amp_c=osc2_amp,
-                                      freq_c=osc2_freq,
-                                      waveform=osc2_wave,
-                                      mod_index=osc2_mod_index,
-                                      modulator=lfo2,
-                                      num_sounds=num_sounds)
-
-        mixed_signal = (fm_osc1 + fm_osc2) / 2
-
-        # mixed_signal = mixed_signal.cpu()
-
-        filtered_signal = synth.filter(mixed_signal, filter_freq, filter_type, num_sounds)
-
-        enveloped_signal = synth.adsr_envelope(filtered_signal,
-                                               attack_t,
-                                               decay_t,
-                                               sustain_t,
-                                               sustain_level,
-                                               release_t,
-                                               num_sounds)
-
-        return enveloped_signal
-
-
-class SynthOscOnly:
-    """A synthesizer that produces a single sine oscillator.
-
-        Args:
-            self: Self object
-            file_name: name for sound
-            parameters_dict(optional): parameters for the synth components to generate specific sounds
-            num_sounds: number of sounds to generate.
-        """
-
-    def __init__(self, file_name='unnamed_sound', parameters_dict=None, num_sounds=1):
-        self.file_name = file_name
-        self.params_dict = {}
-        # init parameters_dict
-        if parameters_dict is None:
-            self.init_random_synth_params(num_sounds)
-        elif type(parameters_dict) is dict:
-            self.params_dict = parameters_dict.copy()
-        else:
-            ValueError("Provided parameters are not provided as dictionary")
-
-        # generate signal with basic signal flow
-        self.signal = self.generate_signal(num_sounds)
-
-    def init_random_synth_params(self, num_sounds):
-        """init params_dict with lists of parameters"""
-
-        self.params_dict['osc1_freq'] = random.choices(OSC_FREQ_LIST, k=num_sounds)
-
-        for key, val in self.params_dict.items():
-            if isinstance(val, numpy.ndarray):
-                self.params_dict[key] = val.tolist()
-
-        if num_sounds == 1:
-            for key, value in self.params_dict.items():
-                self.params_dict[key] = value[0]
-
-    def generate_signal(self, num_sounds):
-        osc_freq = self.params_dict['osc1_freq']
-
-        synthesizer = SynthModules(num_sounds)
-
-        osc = synthesizer.oscillator(amp=1,
-                                     freq=osc_freq,
-                                     phase=0,
-                                     waveform='sine',
-                                     num_sounds=num_sounds)
-        return osc
+from synth.synth_modules import SynthModules
 
 
 class SynthModular:
@@ -519,18 +317,207 @@ class SynthModularCell:
                         ValueError("Illegal parameter for the provided operation")
 
 
-BASIC_FLOW = [
-    SynthModularCell(index=(0, 0), operation='osc', default_connection=True),
-    SynthModularCell(index=(0, 1), operation='fm', default_connection=True),
-    SynthModularCell(index=(1, 0), operation='osc', default_connection=True),
-    SynthModularCell(index=(1, 1), operation='fm', input_list=[[1, 0]], output=[0, 2]),
-    SynthModularCell(index=(1, 2), operation=None, input_list=None),
-    SynthModularCell(index=(0, 2),
-                     operation='mix',
-                     input_list=[[0, 1], [1, 1]]),
-    SynthModularCell(index=(0, 3), operation='filter', default_connection=True),
-    SynthModularCell(index=(0, 4), operation='env_adsr', default_connection=True),
-]
+class SynthBasicFlow:
+    """A basic synthesizer signal flow architecture.
+        The synth is based over common commercial software synthesizers.
+        It has dual oscillators followed by FM module, summed together
+        and passed in a frequency filter and envelope shaper
+
+        [osc1] -> FM
+                    \
+                     + -> [frequency filter] -> [envelope shaper] -> output sound
+                    /
+        [osc2] -> FM
+
+        Args:
+            self: Self object
+            file_name: name for sound
+            parameters_dict(optional): parameters for the synth components to generate specific sounds
+            num_sounds: number of sounds to generate.
+        """
+
+    def __init__(self, file_name='unnamed_sound', parameters_dict=None, num_sounds=1):
+        self.file_name = file_name
+        self.params_dict = {}
+        # init parameters_dict
+        if parameters_dict is None:
+            self.init_random_synth_params(num_sounds)
+        elif type(parameters_dict) is dict:
+            self.params_dict = parameters_dict.copy()
+        else:
+            ValueError("Provided parameters are not provided as dictionary")
+
+        # generate signal with basic signal flow
+        self.signal = self.generate_signal(num_sounds)
+
+    def init_random_synth_params(self, num_sounds):
+        """init params_dict with lists of parameters"""
+
+        # todo: refactor: initializations by iterating/referencing synth.PARAM_LIST
+        self.params_dict['osc1_amp'] = np.random.random_sample(size=num_sounds)
+        self.params_dict['osc1_freq'] = random.choices(OSC_FREQ_LIST, k=num_sounds)
+        self.params_dict['osc1_wave'] = random.choices(list(WAVE_TYPE_DIC), k=num_sounds)
+        self.params_dict['osc1_mod_index'] = np.random.uniform(low=0, high=MAX_MOD_INDEX, size=num_sounds)
+        self.params_dict['lfo1_freq'] = np.random.uniform(low=0, high=MAX_LFO_FREQ, size=num_sounds)
+
+        self.params_dict['osc2_amp'] = np.random.random_sample(size=num_sounds)
+        self.params_dict['osc2_freq'] = random.choices(OSC_FREQ_LIST, k=num_sounds)
+        self.params_dict['osc2_wave'] = random.choices(list(WAVE_TYPE_DIC), k=num_sounds)
+        self.params_dict['osc2_mod_index'] = np.random.uniform(low=0, high=MAX_MOD_INDEX, size=num_sounds)
+        self.params_dict['lfo2_freq'] = np.random.uniform(low=0, high=MAX_LFO_FREQ, size=num_sounds)
+
+        self.params_dict['filter_type'] = random.choices(list(FILTER_TYPE_DIC), k=num_sounds)
+        self.params_dict['filter_freq'] = \
+            np.random.uniform(low=MIN_FILTER_FREQ, high=MAX_FILTER_FREQ, size=num_sounds)
+
+        attack_t = np.random.random_sample(size=num_sounds)
+        decay_t = np.random.random_sample(size=num_sounds)
+        sustain_t = np.random.random_sample(size=num_sounds)
+        release_t = np.random.random_sample(size=num_sounds)
+        adsr_sum = attack_t + decay_t + sustain_t + release_t
+        attack_t = attack_t / adsr_sum
+        decay_t = decay_t / adsr_sum
+        sustain_t = sustain_t / adsr_sum
+        release_t = release_t / adsr_sum
+
+        # fixing a numerical issue in case the ADSR times exceeds signal length
+        adsr_aggregated_time = attack_t + decay_t + sustain_t + release_t
+        overflow_indices = [idx for idx, val in enumerate(adsr_aggregated_time) if val > SIGNAL_DURATION_SEC]
+        attack_t[overflow_indices] -= 1e-6
+        decay_t[overflow_indices] -= 1e-6
+        sustain_t[overflow_indices] -= 1e-6
+        release_t[overflow_indices] -= 1e-6
+
+        self.params_dict['attack_t'] = attack_t
+        self.params_dict['decay_t'] = decay_t
+        self.params_dict['sustain_t'] = sustain_t
+        self.params_dict['release_t'] = release_t
+        self.params_dict['sustain_level'] = np.random.random_sample(size=num_sounds)
+
+        for key, val in self.params_dict.items():
+            if isinstance(val, numpy.ndarray):
+                self.params_dict[key] = val.tolist()
+
+        if num_sounds == 1:
+            for key, value in self.params_dict.items():
+                self.params_dict[key] = value[0]
+
+    def generate_signal(self, num_sounds):
+        osc1_amp = self.params_dict['osc1_amp']
+        osc1_freq = self.params_dict['osc1_freq']
+        osc1_wave = self.params_dict['osc1_wave']
+        osc1_mod_index = self.params_dict['osc1_mod_index']
+        lfo1_freq = self.params_dict['lfo1_freq']
+
+        osc2_amp = self.params_dict['osc2_amp']
+        osc2_freq = self.params_dict['osc2_freq']
+        osc2_wave = self.params_dict['osc2_wave']
+        osc2_mod_index = self.params_dict['osc2_mod_index']
+        lfo2_freq = self.params_dict['lfo2_freq']
+
+        filter_type = self.params_dict['filter_type']
+        filter_freq = self.params_dict['filter_freq']
+
+        attack_t = self.params_dict['attack_t']
+        decay_t = self.params_dict['decay_t']
+        sustain_t = self.params_dict['sustain_t']
+        release_t = self.params_dict['release_t']
+        sustain_level = self.params_dict['sustain_level']
+
+        synth = SynthModules(num_sounds)
+
+        lfo1 = synth.oscillator(amp=1,
+                                freq=lfo1_freq,
+                                phase=0,
+                                waveform='sine',
+                                num_sounds=num_sounds)
+
+        fm_osc1 = synth.oscillator_fm(amp_c=osc1_amp,
+                                      freq_c=osc1_freq,
+                                      waveform=osc1_wave,
+                                      mod_index=osc1_mod_index,
+                                      modulator=lfo1,
+                                      num_sounds=num_sounds)
+
+        lfo2 = synth.oscillator(amp=1,
+                                freq=lfo2_freq,
+                                phase=0,
+                                waveform='sine',
+                                num_sounds=num_sounds)
+
+        fm_osc2 = synth.oscillator_fm(amp_c=osc2_amp,
+                                      freq_c=osc2_freq,
+                                      waveform=osc2_wave,
+                                      mod_index=osc2_mod_index,
+                                      modulator=lfo2,
+                                      num_sounds=num_sounds)
+
+        mixed_signal = (fm_osc1 + fm_osc2) / 2
+
+        # mixed_signal = mixed_signal.cpu()
+
+        filtered_signal = synth.filter(mixed_signal, filter_freq, filter_type, num_sounds)
+
+        enveloped_signal = synth.adsr_envelope(filtered_signal,
+                                               attack_t,
+                                               decay_t,
+                                               sustain_t,
+                                               sustain_level,
+                                               release_t,
+                                               num_sounds)
+
+        return enveloped_signal
+
+
+class SynthOscOnly:
+    """A synthesizer that produces a single sine oscillator.
+
+        Args:
+            self: Self object
+            file_name: name for sound
+            parameters_dict(optional): parameters for the synth components to generate specific sounds
+            num_sounds: number of sounds to generate.
+        """
+
+    def __init__(self, file_name='unnamed_sound', parameters_dict=None, num_sounds=1):
+        self.file_name = file_name
+        self.params_dict = {}
+        # init parameters_dict
+        if parameters_dict is None:
+            self.init_random_synth_params(num_sounds)
+        elif type(parameters_dict) is dict:
+            self.params_dict = parameters_dict.copy()
+        else:
+            ValueError("Provided parameters are not provided as dictionary")
+
+        # generate signal with basic signal flow
+        self.signal = self.generate_signal(num_sounds)
+
+    def init_random_synth_params(self, num_sounds):
+        """init params_dict with lists of parameters"""
+
+        self.params_dict['osc1_freq'] = random.choices(OSC_FREQ_LIST, k=num_sounds)
+
+        for key, val in self.params_dict.items():
+            if isinstance(val, numpy.ndarray):
+                self.params_dict[key] = val.tolist()
+
+        if num_sounds == 1:
+            for key, value in self.params_dict.items():
+                self.params_dict[key] = value[0]
+
+    def generate_signal(self, num_sounds):
+        osc_freq = self.params_dict['osc1_freq']
+
+        synthesizer = SynthModules(num_sounds)
+
+        osc = synthesizer.oscillator(amp=1,
+                                     freq=osc_freq,
+                                     phase=0,
+                                     waveform='sine',
+                                     num_sounds=num_sounds)
+        return osc
+
 
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)

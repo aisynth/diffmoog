@@ -2,10 +2,10 @@ from torch import nn
 import torch
 import helper
 from torchsummary import summary
-from synth_config import REGRESSION_PARAM_LIST, CLASSIFICATION_PARAM_LIST
-from synth_modules import WAVE_TYPE_DIC, FILTER_TYPE_DIC, OSC_FREQ_LIST
+from synth.synth_config import REGRESSION_PARAM_LIST
+from synth.synth_modules import WAVE_TYPE_DIC, FILTER_TYPE_DIC, OSC_FREQ_LIST
 from config import SYNTH_TYPE, ARCHITECTURE, MODEL_FREQUENCY_OUTPUT
-from synth_architecture import SynthOscOnly
+from synth.synth_architecture import SynthOscOnly
 
 
 # todo: this is value from Valerio Tutorial. has to check

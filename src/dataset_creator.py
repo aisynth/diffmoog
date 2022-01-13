@@ -3,9 +3,9 @@ import os
 import scipy.io.wavfile
 import torch
 import helper
-from synth_architecture import SynthBasicFlow, SynthOscOnly, SynthModular, SynthModularCell, BASIC_FLOW
+from synth.synth_architecture import SynthBasicFlow, SynthOscOnly, SynthModular, BASIC_FLOW
 from config import DATASET_SIZE, DATASET_TYPE, DATASET_MODE, OS, SYNTH_TYPE, ONLY_OSC_DATASET
-from synth_config import OSC_FREQ_LIST, NUM_LAYERS, NUM_CHANNELS
+from synth.synth_config import OSC_FREQ_LIST, NUM_LAYERS, NUM_CHANNELS
 
 """
 Create a dataset by randomizing synthesizer parameters and generating sound.

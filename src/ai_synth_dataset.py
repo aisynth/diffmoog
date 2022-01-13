@@ -3,12 +3,9 @@ import pandas as pd
 import torchaudio
 import os
 import helper
-import synth_modules
 from torch.utils.data import Dataset
-from src.config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, TEST_PARAMETERS_FILE, TEST_AUDIO_DIR, \
-    DATASET_MODE, DATASET_TYPE, OS, SAMPLE_RATE, SYNTH_TYPE
-import time
-import synth_config
+from src.config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, DATASET_MODE, DATASET_TYPE, SAMPLE_RATE, SYNTH_TYPE
+from synth import synth_config
 import ast
 
 
