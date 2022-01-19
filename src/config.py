@@ -16,14 +16,14 @@ SIGNAL_DURATION_SEC = 1.0
 " Mode - define a common configuration for the whole system     "
 "   0 -                     Use custom configurations           "
 "   Any other number -      Use predefined configuration preset. See below "
-MODE = 9
+MODE = 10
 
 # Dataset configs
 ONLY_OSC_DATASET = False
 if ONLY_OSC_DATASET:
     DATASET_SIZE = NUM_OF_OSC_FREQUENCIES
 else:
-    DATASET_SIZE = 100
+    DATASET_SIZE = 1000
 
 NUM_EPOCHS_TO_PRINT_STATS = 100
 NUM_EPOCHS_TO_SAVE_MODEL = 100
@@ -45,16 +45,16 @@ elif OS == 'LINUX':
 
 # Model configs
 CNN_NETWORK = 'BIG'  # 'BIG' or 'SMALL' - one of 2 possible network architectures
-BATCH_SIZE = 16
+BATCH_SIZE = 64
 EPOCHS = 50000
-LEARNING_RATE = 0.00001
+LEARNING_RATE = 0.001
 
 REINFORCEMENT_EPSILON = 0.15
 
 # Synth architecture. OSC_ONLY or SYNTH_BASIC or MODULAR
 SYNTH_TYPE = 'MODULAR'
 if SYNTH_TYPE == 'MODULAR':
-    PRESET = 'BASIC_FLOW'
+    PRESET = 'FM'
 else:
     PRESET = None
 
@@ -160,6 +160,12 @@ elif MODE == 8:
 elif MODE == 9:
     SYNTH_TYPE = 'MODULAR'
     PRESET = 'BASIC_FLOW'
+    ARCHITECTURE = 'SPECTROGRAM_ONLY'
+    SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
+    MODEL_FREQUENCY_OUTPUT = 'SINGLE'
+elif MODE == 10:
+    SYNTH_TYPE = 'MODULAR'
+    PRESET = 'FM'
     ARCHITECTURE = 'SPECTROGRAM_ONLY'
     SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
     MODEL_FREQUENCY_OUTPUT = 'SINGLE'

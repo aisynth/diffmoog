@@ -12,3 +12,8 @@ BASIC_FLOW = [
     SynthModularCell(index=(0, 3), operation='filter', default_connection=True),
     SynthModularCell(index=(0, 4), operation='env_adsr', default_connection=True),
 ]
+
+FM = [
+    SynthModularCell(index=(0, 0), operation='osc', default_connection=True),
+    SynthModularCell(index=(0, 1), operation='fm', default_connection=True),
+]

@@ -7,7 +7,7 @@ from synth.synth_modules import WAVE_TYPE_DIC, FILTER_TYPE_DIC, OSC_FREQ_LIST
 from config import SYNTH_TYPE, ARCHITECTURE, MODEL_FREQUENCY_OUTPUT, PRESET, CNN_NETWORK
 from synth.synth_architecture import SynthOscOnly
 from synth.synth_config import NUM_CHANNELS, NUM_LAYERS
-from synth.synth_modular_presets import BASIC_FLOW
+from synth.synth_modular_presets import BASIC_FLOW, FM
 
 # todo: this is value from Valerio Tutorial. has to check
 # LINEAR_IN_CHANNELS = 128 * 5 * 4
@@ -250,6 +250,8 @@ class BigSynthNetwork(nn.Module):
             self.module_dict = {}
             if PRESET == 'BASIC_FLOW':
                 self.preset = BASIC_FLOW
+            elif PRESET == 'FM':
+                self.preset = FM
             else:
                 ValueError("Unknown preset")
 

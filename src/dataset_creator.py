@@ -4,9 +4,9 @@ import scipy.io.wavfile
 import torch
 import helper
 from synth.synth_architecture import SynthBasicFlow, SynthOscOnly, SynthModular
-from synth.synth_modular_presets import BASIC_FLOW
-from config import DATASET_SIZE, DATASET_TYPE, DATASET_MODE, OS, SYNTH_TYPE, ONLY_OSC_DATASET
+from config import DATASET_SIZE, DATASET_TYPE, DATASET_MODE, OS, SYNTH_TYPE, ONLY_OSC_DATASET, PRESET
 from synth.synth_config import OSC_FREQ_LIST, NUM_LAYERS, NUM_CHANNELS
+from synth.synth_modular_presets import BASIC_FLOW, FM
 
 """
 Create a dataset by randomizing synthesizer parameters and generating sound.
@@ -62,7 +62,11 @@ if __name__ == "__main__":
             #                                                'sustain_level': 0.3, 'release_t': 0.25})
             # ]
             synth_obj = SynthModular()
-            synth_obj.apply_architecture(BASIC_FLOW)
+            if PRESET == 'BASIC_FLOW':
+                preset = BASIC_FLOW
+            elif PRESET == 'FM':
+                preset = FM
+            synth_obj.apply_architecture(preset)
             synth_obj.generate_random_parmas(num_sounds=1)
             # synth_obj.update_cells(update_params)
             synth_obj.generate_signal()
@@ -97,9 +101,8 @@ if __name__ == "__main__":
             elif OS == 'LINUX':
                 audio_path = dataset_dir_path + "wav_files/" + f"{file_name}.wav"
 
+            audio = torch.squeeze(audio)
             audio = audio.detach().cpu().numpy()
-            if SYNTH_TYPE == 'OSC_ONLY':
-                audio = audio.T
 
             scipy.io.wavfile.write(audio_path, 44100, audio)
             print(f"Generated {file_name}")

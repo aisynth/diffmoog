@@ -60,7 +60,7 @@ mel_spectrogram_transform = torchaudio.transforms.MelSpectrogram(
     n_mels=128,
     power=2.0,
     f_min=0,
-    f_max=1100
+    f_max=20000
 ).to(get_device())
 
 amplitude_to_db_transform = torchaudio.transforms.AmplitudeToDB().to(get_device())
@@ -734,7 +734,7 @@ class SpectralLoss():
                 n_mels=256,
                 power=2.0,
                 f_min=0,
-                f_max=1100
+                f_max=20000
             ).to(get_device())
             self.spectrogram_ops.append(mel_spec_transform)
 

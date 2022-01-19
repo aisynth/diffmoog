@@ -11,7 +11,7 @@ from config import TRAIN_PARAMETERS_FILE, TRAIN_AUDIO_DIR, OS, PLOT_SPEC
 from model import SmallSynthNetwork, BigSynthNetwork
 from synth.synth_architecture import SynthBasicFlow, SynthOscOnly, SynthModular, SynthModularCell
 from synth.synth_config import OSC_FREQ_LIST, OSC_FREQ_DIC_INV
-from synth.synth_modular_presets import BASIC_FLOW
+from synth.synth_modular_presets import BASIC_FLOW, FM
 from torch.distributions import Categorical
 import helper
 import time
@@ -54,17 +54,34 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
             modular_synth = SynthModular()
 
             if PRESET == 'BASIC_FLOW':
-                modular_synth.apply_architecture(BASIC_FLOW)
+                preset = BASIC_FLOW
+            if PRESET == 'FM':
+                preset = FM
+            else:
+                ValueError("Unknown PRESET")
 
-                update_params = []
-                for index, operation_dict in param_dict_to_synth.items():
-                    synth_modular_cell = SynthModularCell(index=index, parameters=operation_dict['params'])
-                    update_params.append(synth_modular_cell)
+            modular_synth.apply_architecture(preset)
+
+            update_params = []
+            for index, operation_dict in param_dict_to_synth.items():
+                synth_modular_cell = SynthModularCell(index=index, parameters=operation_dict['params'])
+                update_params.append(synth_modular_cell)
 
             modular_synth.update_cells(update_params)
             modular_synth.generate_signal(num_sounds=len(transformed_signal))
 
             modular_synth.signal = helper.move_to(modular_synth.signal, device_arg)
+
+            # predicted_transformed_signal = transform(modular_synth.signal)
+            # transformed_signal = torch.squeeze(transformed_signal)
+            # for i in range(5, 7):
+            #     helper.plot_spectrogram(transformed_signal[i].cpu().detach().numpy(),
+            #                             title=f"True MelSpectrogram (dB) for sound {i}",
+            #                             ylabel='mel freq')
+            #
+            #     helper.plot_spectrogram(predicted_transformed_signal[i].cpu().detach().numpy(),
+            #                             title=f"Predicted MelSpectrogram (dB) sound {i}",
+            #                             ylabel='mel freq')
 
             if SPECTROGRAM_LOSS_TYPE == 'MULTI-SPECTRAL':
                 multi_spec_loss = helper.SpectralLoss()
