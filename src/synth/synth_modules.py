@@ -62,17 +62,22 @@ class SynthModules:
 
             if num_sounds == 1:
                 freq_float = freq
+                amp_float = amp
             else:
+                if isinstance(amp, int):
+                    amp_float = amp
+                else:
+                    amp_float = amp[i]
                 freq_float = freq[i]
 
-            sine_wave = amp * torch.sin(TWO_PI * freq_float * t + phase)
-            square_wave = amp * torch.sign(torch.sin(TWO_PI * freq_float * t + phase))
-            triangle_wave = (2 * amp / PI) * torch.arcsin(torch.sin((TWO_PI * freq_float * t + phase)))
+            sine_wave = amp_float * torch.sin(TWO_PI * freq_float * t + phase)
+            square_wave = amp_float * torch.sign(torch.sin(TWO_PI * freq_float * t + phase))
+            triangle_wave = (2 * amp_float / PI) * torch.arcsin(torch.sin((TWO_PI * freq_float * t + phase)))
             # triangle_wave = amp * torch.sin(TWO_PI * freq_float * t + phase)
             sawtooth_wave = 2 * (t * freq_float - torch.floor(0.5 + t * freq_float))  # Sawtooth closed form
             # Phase shift (by normalization to range [0,1] and modulo operation)
             sawtooth_wave = (((sawtooth_wave + 1) / 2) + phase / TWO_PI) % 1
-            sawtooth_wave = amp * (sawtooth_wave * 2 - 1)  # re-normalization to range [-amp, amp]
+            sawtooth_wave = amp_float * (sawtooth_wave * 2 - 1)  # re-normalization to range [-amp, amp]
 
             if isinstance(waveform, str):
                 if waveform == 'sine':
@@ -88,8 +93,8 @@ class SynthModules:
                 waveform_probabilities = waveform[i]
                 oscillator = waveform_probabilities[0] * sine_wave \
                              + waveform_probabilities[1] * square_wave \
-                             + waveform_probabilities[2] * triangle_wave \
-                             + waveform_probabilities[3] * sawtooth_wave
+                             + waveform_probabilities[2] * sawtooth_wave
+                # + waveform_probabilities[2] * triangle_wave \
 
             if first_time:
                 oscillator_tensor = torch.cat((oscillator_tensor, oscillator), dim=0).unsqueeze(dim=0)
@@ -319,10 +324,13 @@ class SynthModules:
                 sustain = torch.full((sustain_num_samples,), sustain_level)
                 release = torch.linspace(sustain_level, 0, release_num_samples)
             else:
+                sustain_level_value = sustain_level[i]
+                if torch.is_tensor(sustain_level_value):
+                    sustain_level_value = sustain_level_value.item()
                 attack = torch.linspace(0, 1, int(attack_num_samples[i].item()), device=helper.get_device())
-                decay = torch.linspace(1, sustain_level[i], int(decay_num_samples[i]), device=helper.get_device())
-                sustain = torch.full((int(sustain_num_samples[i].item()),), sustain_level[i], device=helper.get_device())
-                release = torch.linspace(sustain_level[i], 0, int(release_num_samples[i].item()), device=helper.get_device())
+                decay = torch.linspace(1, sustain_level_value, int(decay_num_samples[i]), device=helper.get_device())
+                sustain = torch.full((int(sustain_num_samples[i].item()),), sustain_level_value, device=helper.get_device())
+                release = torch.linspace(sustain_level_value, 0, int(release_num_samples[i].item()), device=helper.get_device())
 
                 # todo: make sure ADSR behavior is differentiable. linspace has to know to get tensors
                 # attack_mod = helper.linspace(torch.tensor(0), torch.tensor(1), attack_num_samples[i])

@@ -16,7 +16,7 @@ SIGNAL_DURATION_SEC = 1.0
 " Mode - define a common configuration for the whole system     "
 "   0 -                     Use custom configurations           "
 "   Any other number -      Use predefined configuration preset. See below "
-MODE = 8
+MODE = 9
 
 # Dataset configs
 ONLY_OSC_DATASET = False
@@ -45,7 +45,7 @@ elif OS == 'LINUX':
 
 # Model configs
 CNN_NETWORK = 'BIG'  # 'BIG' or 'SMALL' - one of 2 possible network architectures
-BATCH_SIZE = 256
+BATCH_SIZE = 16
 EPOCHS = 50000
 LEARNING_RATE = 0.00001
 
@@ -53,6 +53,10 @@ REINFORCEMENT_EPSILON = 0.15
 
 # Synth architecture. OSC_ONLY or SYNTH_BASIC or MODULAR
 SYNTH_TYPE = 'MODULAR'
+if SYNTH_TYPE == 'MODULAR':
+    PRESET = 'BASIC_FLOW'
+else:
+    PRESET = None
 
 " The architecture of the system, that defines the data flow and the loss functions:                    "
 "   1. SPECTROGRAM_ONLY (input -> CNN -> parameters -> Synth -> output; Loss over spectrograms)         "
@@ -149,7 +153,13 @@ elif MODE == 7:
     SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
     MODEL_FREQUENCY_OUTPUT = 'SINGLE'
 elif MODE == 8:
+    SYNTH_TYPE = 'SYNTH_BASIC'
+    ARCHITECTURE = 'SPECTROGRAM_ONLY'
+    SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
+    MODEL_FREQUENCY_OUTPUT = 'SINGLE'
+elif MODE == 9:
     SYNTH_TYPE = 'MODULAR'
+    PRESET = 'BASIC_FLOW'
     ARCHITECTURE = 'SPECTROGRAM_ONLY'
     SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
     MODEL_FREQUENCY_OUTPUT = 'SINGLE'

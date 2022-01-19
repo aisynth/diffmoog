@@ -46,8 +46,12 @@ OSC_FREQ_DIC_INV = {v: k for k, v in OSC_FREQ_DIC.items()}
 MAX_AMP = 1
 MAX_MOD_INDEX = 100
 MAX_LFO_FREQ = 20
-MIN_FILTER_FREQ = 20
+MIN_FILTER_FREQ = 0
 MAX_FILTER_FREQ = 20000
+
+# When predicting the oscillator frequency by regression, the defines are used to normalize the output from the model
+MARGIN = 200
+MAX_CARRIER_OSCILLATOR_FREQ = OSC_FREQ_LIST[-1] + MARGIN
 
 # --------------------------------------
 # -----------Modular Synth--------------
@@ -61,7 +65,7 @@ NUM_LAYERS = 5
 MODULAR_SYNTH_OPERATIONS = ['osc', 'fm', 'mix', 'filter', 'env_adsr']
 MODULAR_SYNTH_PARAMS = {'osc': ['amp', 'freq', 'waveform'],
                         'fm': ['amp_c', 'freq_c', 'waveform', 'mod_index'],
-                        'mix': ['new_signal', 'factor'],
+                        'mix': None,
                         'filter': ['filter_freq', 'filter_type'],
                         'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']}
 

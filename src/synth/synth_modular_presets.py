@@ -1,4 +1,4 @@
-from synth_architecture import SynthModularCell
+from synth.synth_architecture import SynthModularCell
 
 BASIC_FLOW = [
     SynthModularCell(index=(0, 0), operation='osc', default_connection=True),
