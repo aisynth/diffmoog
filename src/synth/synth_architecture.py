@@ -217,6 +217,7 @@ class SynthModular:
                                                              release_t=cell.parameters['release_t'],
                                                              num_sounds=num_sounds)
 
+        # Final signal summing from all channels in the last layer
         final_signal = torch.zeros((int(SAMPLE_RATE * SIGNAL_DURATION_SEC)),
                                    requires_grad=True,
                                    device=helper.get_device())

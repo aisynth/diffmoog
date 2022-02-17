@@ -11,7 +11,7 @@ import ast
 
 class AiSynthDataset(Dataset):
     """
-    A custom Ai-synth dataset.
+    A custom AI-synth dataset.
     Holds a path for the sound files, and the corresponding parameters used to create each sound
 
     Upon using dataloader:

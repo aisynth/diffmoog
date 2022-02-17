@@ -10,7 +10,7 @@ TWO_PI = 2 * PI
 NUM_OF_OSC_FREQUENCIES = 49
 
 # Synth configs
-SAMPLE_RATE = 44100
+SAMPLE_RATE = 16000
 SIGNAL_DURATION_SEC = 1.0
 
 " Mode - define a common configuration for the whole system     "
@@ -45,7 +45,7 @@ elif OS == 'LINUX':
 
 # Model configs
 CNN_NETWORK = 'BIG'  # 'BIG' or 'SMALL' - one of 2 possible network architectures
-BATCH_SIZE = 64
+BATCH_SIZE = 128
 EPOCHS = 50000
 LEARNING_RATE = 0.001
 
@@ -75,6 +75,10 @@ ARCHITECTURE = 'SPECTROGRAM_ONLY'  # SPECTROGRAM_ONLY, PARAMETERS_ONLY, SPEC_NO_
     "4. EMD (earth movers distance)" \
     "5. MULTI-SPECTRAL"
 SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
+
+if SPECTROGRAM_LOSS_TYPE == 'MULTI-SPECTRAL':
+    MULTI_SPECTRAL_LOSS_SPEC_TYPE = 'SPECTROGRAM' # one of ['BOTH', 'MEL_SPECTROGRAM', 'SPECTROGRAM']
+
 FREQ_PARAM_LOSS_TYPE = 'MSE'  # MSE or CE (Cross Entropy)
 
 " The model can output the oscillator frequency as:                                 "

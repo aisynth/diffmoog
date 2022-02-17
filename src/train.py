@@ -31,8 +31,23 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
     sum_epoch_loss, sum_epoch_accuracy, sum_stats = helper.reset_stats()
     num_of_mini_batches = 0
 
-    for target_signal, target_params_dic in data_loader:
-        start = time.time()
+    # init modular synth architecture
+    if SYNTH_TYPE == 'MODULAR':
+
+        modular_synth = SynthModular()
+
+        if PRESET == 'BASIC_FLOW':
+            preset = BASIC_FLOW
+        if PRESET == 'FM':
+            preset = FM
+        else:
+            preset = None
+            ValueError("Unknown PRESET")
+
+        modular_synth.apply_architecture(preset)
+
+    for target_signal, target_param_dic in data_loader:
+        batch_start_time = time.time()
 
         # set_to_none as advised in page 6:
         # https://tigress-web.princeton.edu/~jdh4/PyTorchPerformanceTuningGuide_GTC2021.pdf
@@ -43,27 +58,19 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
         # -----------Run Model-----------------
         # -------------------------------------
         # signal_log_mel_spec.requires_grad = True
-
+        model_start_time = time.time()
         output_dic, osc_logits_pred = model(transformed_signal)
+        model_end_time = time.time()
+
+        synth_start_time = time.time()
 
         # helper.map_classification_params_from_ints(predicted_dic)
         if SYNTH_TYPE == 'MODULAR':
             denormalized_output_dic = normalizer.denormalize(output_dic)
-            param_dict_to_synth = helper.clamp_regression_params(denormalized_output_dic)
-
-            modular_synth = SynthModular()
-
-            if PRESET == 'BASIC_FLOW':
-                preset = BASIC_FLOW
-            if PRESET == 'FM':
-                preset = FM
-            else:
-                ValueError("Unknown PRESET")
-
-            modular_synth.apply_architecture(preset)
+            predicted_param_dict = helper.clamp_regression_params(denormalized_output_dic)
 
             update_params = []
-            for index, operation_dict in param_dict_to_synth.items():
+            for index, operation_dict in predicted_param_dict.items():
                 synth_modular_cell = SynthModularCell(index=index, parameters=operation_dict['params'])
                 update_params.append(synth_modular_cell)
 
@@ -71,6 +78,8 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
             modular_synth.generate_signal(num_sounds=len(transformed_signal))
 
             modular_synth.signal = helper.move_to(modular_synth.signal, device_arg)
+
+            synth_end_time = time.time()
 
             # predicted_transformed_signal = transform(modular_synth.signal)
             # transformed_signal = torch.squeeze(transformed_signal)
@@ -83,6 +92,8 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
             #                             title=f"Predicted MelSpectrogram (dB) sound {i}",
             #                             ylabel='mel freq')
 
+            loss_start_time = time.time()
+
             if SPECTROGRAM_LOSS_TYPE == 'MULTI-SPECTRAL':
                 multi_spec_loss = helper.SpectralLoss()
                 target_signal = target_signal.squeeze()
@@ -90,9 +101,11 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
             else:
                 ValueError("SYNTH_TYPE 'MODULAR' supports only SPECTROGRAM_LOSS_TYPE of type 'MULTI-SPECTRAL'")
 
+            loss_end_time = time.time()
+
         elif SYNTH_TYPE == 'OSC_ONLY' or SYNTH_TYPE == 'BASIC_FLOW':
             if SYNTH_TYPE == 'OSC_ONLY':
-                osc_target_id = target_params_dic['classification_params']['osc1_freq']
+                osc_target_id = target_param_dic['classification_params']['osc1_freq']
                 osc_target = torch.tensor([OSC_FREQ_DIC_INV[x.item()] for x in osc_target_id], device=device_arg)
                 osc_pred = output_dic['osc1_freq']
 
@@ -178,10 +191,10 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
                         # actions = torch.arange(start=0, end=49, device=device_arg)
                     # Replace line above with line below to directly sample the correct actions (Environment is well-known)
                     # actions = torch.arange(start=0, end=49, device=device_arg)
-                    param_dict_to_synth = helper.map_classification_params_from_ints({'osc1_freq': actions})
+                    predicted_param_dict = helper.map_classification_params_from_ints({'osc1_freq': actions})
 
                     # Step Environment i.e feed the synthesizer with the chosen frequency and acquire signal
-                    overall_synth_obj = SynthOscOnly(parameters_dict=param_dict_to_synth, num_sounds=len(transformed_signal))
+                    overall_synth_obj = SynthOscOnly(parameters_dict=predicted_param_dict, num_sounds=len(transformed_signal))
                     predicted_transformed_signal = transform(overall_synth_obj.signal)
 
                     # Calculate reward based on the difference between input and output spectrograms
@@ -220,13 +233,13 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
                 # -----------Run Synth-----------------
                 # -------------------------------------
                 if SYNTH_TYPE == 'OSC_ONLY':
-                    param_dict_to_synth = denormalized_output_dic
-                    overall_synth_obj = SynthOscOnly(parameters_dict=param_dict_to_synth,
+                    predicted_param_dict = denormalized_output_dic
+                    overall_synth_obj = SynthOscOnly(parameters_dict=predicted_param_dict,
                                                      num_sounds=len(transformed_signal))
 
                 elif SYNTH_TYPE == 'SYNTH_BASIC':
-                    param_dict_to_synth = helper.clamp_regression_params(denormalized_output_dic)
-                    overall_synth_obj = SynthBasicFlow(parameters_dict=param_dict_to_synth,
+                    predicted_param_dict = helper.clamp_regression_params(denormalized_output_dic)
+                    overall_synth_obj = SynthBasicFlow(parameters_dict=predicted_param_dict,
                                                        num_sounds=len(transformed_signal))
 
                 else:
@@ -291,8 +304,8 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
                 # -----------------------------------------------
 
                 if ARCHITECTURE == "FULL":
-                    classification_target_params = target_params_dic['classification_params']
-                    regression_target_parameters = target_params_dic['regression_params']
+                    classification_target_params = target_param_dic['classification_params']
+                    regression_target_parameters = target_param_dic['regression_params']
                     helper.map_classification_params_to_ints(classification_target_params)
                     normalizer.normalize(regression_target_parameters)
 
@@ -364,6 +377,8 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
                         raise ValueError("Unknown LOSS_TYPE")
                     # loss.requires_grad = True
 
+        backward_start_time = time.time()
+
         num_of_mini_batches += 1
         sum_epoch_loss += loss.item()
         loss.backward()
@@ -382,7 +397,7 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
 
             if ARCHITECTURE == 'FULL' or ARCHITECTURE == 'SPECTROGRAM_ONLY' or \
                     (ARCHITECTURE == 'PARAMETERS_ONLY' and FREQ_PARAM_LOSS_TYPE == 'MSE'):
-                accuracy, stats = helper.regression_freq_accuracy(output_dic, target_params_dic, device_arg)
+                accuracy, stats = helper.regression_freq_accuracy(output_dic, target_param_dic, device_arg)
                 sum_epoch_accuracy += accuracy
                 for i in range(len(OSC_FREQ_LIST)):
                     sum_stats[i]['prediction_success'] += stats[i]['prediction_success']
@@ -391,7 +406,7 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
             else:
                 ValueError("Unknown architecture")
 
-        end = time.time()
+        batch_end_time = time.time()
 
         if PRINT_TRAIN_STATS:
             if ARCHITECTURE == 'FULL':
@@ -413,18 +428,28 @@ def train_single_epoch(model, data_loader, transform, optimizer_arg, scheduler_a
                     print(
                         f"MSE loss: {round(loss.item(), 7)},\t"
                         f"accuracy: {round(accuracy * 100, 2)}%,\t"
-                        f"batch processing time: {round(end - start, 2)}s")
-                else:
+                        f"batch processing time: {round(batch_end_time - batch_start_time, 2)}s")
+                elif SYNTH_TYPE == 'MODULAR':
+                    backward_end_time = time.time()
+
                     print(
-                        f"MSE loss: {round(loss.item(), 7)},\t"
-                        f"batch processing time: {round(end - start, 2)}s")
+                        f"MSE loss: {round(loss.item(), 7)},\n"
+                        f"batch processing time: {round(batch_end_time - batch_start_time, 2)}s, \n"
+                        f"model processing time: {round(model_end_time - model_start_time, 2)}s, \t"
+                        f"synth processing time: {round(synth_end_time - synth_start_time, 2)}s, \t"
+                        f"backward processing time: {round(backward_end_time - backward_start_time, 2)}s, \t"
+                        f"loss processing time: {round(loss_end_time - loss_start_time, 2)}s\n")
+                    helper.print_modular_stats(predicted_param_dict, target_param_dic)
+                    print('---------------------')
+                else:
+                    print(f"MSE loss: {round(loss.item(), 7)},\n")
 
             elif ARCHITECTURE == 'PARAMETERS_ONLY':
                 print(
                     f"Frequency {FREQ_PARAM_LOSS_TYPE} loss: {round(loss.item(), 6)},\t\t"
                     f"Accuracy: {round(accuracy * 100, 2)}%,\t"
                     f"MSE of spectrograms: {round(SPECTROGRAM_LOSS_FACTOR * spectrogram_mse_loss.item(), 3)}, \t"
-                    f"Batch processing time: {round(end - start, 2)}s")
+                    f"Batch processing time: {round(batch_end_time - batch_start_time, 2)}s")
             else:
                 ValueError("Unknown architecture")
 

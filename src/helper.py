@@ -5,7 +5,8 @@ import torchaudio
 import matplotlib
 import matplotlib.pyplot as plt
 import librosa
-from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE, PRINT_ACCURACY_STATS, OS
+from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE, PRINT_ACCURACY_STATS, OS, SIGNAL_DURATION_SEC, \
+    MULTI_SPECTRAL_LOSS_SPEC_TYPE
 from synth.synth_config import *
 from torch.utils.data import DataLoader
 from synth import synth_config
@@ -56,11 +57,11 @@ spectrogram_transform = torchaudio.transforms.Spectrogram(
 mel_spectrogram_transform = torchaudio.transforms.MelSpectrogram(
     sample_rate=SAMPLE_RATE,
     n_fft=1024,
-    hop_length=512,
+    hop_length=256,
     n_mels=128,
     power=2.0,
     f_min=0,
-    f_max=20000
+    f_max=8000
 ).to(get_device())
 
 amplitude_to_db_transform = torchaudio.transforms.AmplitudeToDB().to(get_device())
@@ -283,7 +284,7 @@ class Normalizer:
         self.adsr_normalizer = MinMaxNormaliser(target_min_val=0,
                                                 target_max_val=1,
                                                 original_min_val=0,
-                                                original_max_val=synth_config.SIGNAL_DURATION_SEC)
+                                                original_max_val=SIGNAL_DURATION_SEC)
 
         self.filter_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                        target_max_val=1,
@@ -663,7 +664,7 @@ def earth_mover_distance(y_true, y_pred):
     return final
 
 
-class SpectralLoss():
+class SpectralLoss:
     """From DDSP code:
     https://github.com/magenta/ddsp/blob/8536a366c7834908f418a6721547268e8f2083cc/ddsp/losses.py#L144"""
     """Multiscale spectrogram loss.
@@ -674,13 +675,13 @@ class SpectralLoss():
     """
 
     def __init__(self,
-                 fft_sizes=(4096, 2048, 1024, 512, 256, 128),
+                 fft_sizes=(2048, 1024, 512, 256, 128, 64),
                  loss_type='L1',
                  mag_weight=1.0,
                  delta_time_weight=0.0,
                  delta_freq_weight=0.0,
                  cumsum_freq_weight=1.0,
-                 logmag_weight=1000,
+                 logmag_weight=1,
                  loudness_weight=0.0,
                  name='spectral_loss'):
         """Constructor, set loss weights of various components.
@@ -721,22 +722,24 @@ class SpectralLoss():
 
         self.spectrogram_ops = []
         for size in self.fft_sizes:
-            # spectrogram_transform = torchaudio.transforms.Spectrogram(
-            #     # win_length default = n_fft. hop_length default = win_length / 2
-            #     n_fft=size,
-            #     power=2.0
-            # ).to(get_device())
+            if MULTI_SPECTRAL_LOSS_SPEC_TYPE == 'BOTH' or MULTI_SPECTRAL_LOSS_SPEC_TYPE == 'SPECTROGRAM':
+                spec_transform = torchaudio.transforms.Spectrogram(
+                    n_fft=size,
+                    power=2.0
+                ).to(get_device())
+                self.spectrogram_ops.append(spec_transform)
 
-            mel_spec_transform = torchaudio.transforms.MelSpectrogram(
-                sample_rate=SAMPLE_RATE,
-                n_fft=size,
-                hop_length=int(size / 2),
-                n_mels=256,
-                power=2.0,
-                f_min=0,
-                f_max=20000
-            ).to(get_device())
-            self.spectrogram_ops.append(mel_spec_transform)
+            if MULTI_SPECTRAL_LOSS_SPEC_TYPE == 'BOTH' or MULTI_SPECTRAL_LOSS_SPEC_TYPE == 'MEL_SPECTROGRAM':
+                mel_spec_transform = torchaudio.transforms.MelSpectrogram(
+                    sample_rate=SAMPLE_RATE,
+                    n_fft=size,
+                    hop_length=int(size / 4),
+                    n_mels=256,
+                    power=2.0,
+                    f_min=0,
+                    f_max=1300
+                ).to(get_device())
+                self.spectrogram_ops.append(mel_spec_transform)
 
     def call(self, target_audio, audio, weights=None):
         """ execute multi-spectral loss computation between two audio signals
@@ -870,3 +873,98 @@ def reset_stats():
         stats.append(dict_record)
 
     return avg_loss, avg_accuracy, stats
+
+
+def print_modular_stats(predicted_param_dict, target_param_dict):
+    for index, operation_dict in predicted_param_dict.items():
+        string_index = f'{index}'
+        operation = operation_dict['operation']
+        result = all(elem == operation for elem in target_param_dict[string_index][0])
+        if not result:
+            AssertionError("Unpredictable operation prediction behavior")
+
+        pdist = nn.PairwiseDistance(p=2)
+
+        if operation == 'osc':
+            predicted_carrier_amp = operation_dict['params']['amp'].squeeze()
+            predicted_carrier_freq = operation_dict['params']['freq'].squeeze()
+            predicted_waveform = operation_dict['params']['waveform'].argmax(dim=1)
+
+            target_amp = target_param_dict[string_index][1]['amp']
+            target_freq = target_param_dict[string_index][1]['freq']
+            target_waveform = target_param_dict[string_index][1]['waveform']
+
+            amp_dist = pdist(predicted_carrier_amp, target_amp)
+            freq_dist = pdist(predicted_carrier_freq, target_freq)
+            waveform_accuracy = \
+                torch.sum(torch.eq(predicted_waveform, target_waveform)) * 100 / target_waveform.shape[0]
+
+            print(f"{operation} at index {index} param stats")
+            print(f"\tamp l2 dist: {amp_dist}")
+            print(f"\tfreq l2 dist: {freq_dist}")
+            print(f"\twaveform accuracy: {waveform_accuracy}%\n")
+
+        elif operation == 'fm':
+            predicted_carrier_amp = operation_dict['params']['amp_c'].squeeze()
+            predicted_carrier_freq = operation_dict['params']['freq_c'].squeeze()
+            predicted_carrier_waveform = operation_dict['params']['waveform'].argmax(dim=1)
+            predicted_mod_index = operation_dict['params']['mod_index'].squeeze()
+
+            target_carrier_amp = target_param_dict[string_index][1]['amp_c']
+            target_carrier_freq = target_param_dict[string_index][1]['freq_c']
+            target_carrier_waveform = target_param_dict[string_index][1]['waveform']
+            target_mod_index = target_param_dict[string_index][1]['mod_index']
+
+            carrier_amp_dist = pdist(predicted_carrier_amp, target_carrier_amp)
+            carrier_freq_dist = pdist(predicted_carrier_freq, target_carrier_freq)
+            carrier_waveform_accuracy = \
+                torch.sum(torch.eq(predicted_carrier_waveform, target_carrier_waveform))\
+                * 100 / target_waveform.shape[0]
+            mod_index_dist = pdist(predicted_mod_index, target_mod_index)
+
+            print(f"{operation} at index {index} param stats")
+            print(f"\tcarrier amp l2 dist: {carrier_amp_dist}")
+            print(f"\tcarrier freq l2 dist: {carrier_freq_dist}")
+            print(f"\tcarrier waveform accuracy: {carrier_waveform_accuracy}%")
+            print(f"\tmod_index l2 dist: {mod_index_dist}\n")
+
+        elif operation == 'filter':
+            predicted_filter_freq = operation_dict['params']['filter_freq'].squeeze()
+            predicted_filter_type = operation_dict['params']['filter_type'].argmax(dim=1)
+
+            target_filter_freq = target_param_dict[string_index][1]['filter_freq']
+            target_filter_type = target_param_dict[string_index][1]['filter_type']
+
+            filter_freq_dist = pdist(predicted_filter_freq, target_filter_freq)
+            filter_type_accuracy = \
+                torch.sum(torch.eq(predicted_filter_type, target_filter_type)) * 100 / target_filter_type.shape[0]
+
+            print(f"{operation} at index {index} param stats")
+            print(f"\tfilter_freq l2 dist: {filter_freq_dist}")
+            print(f"\tfilter_type accuracy: {filter_type_accuracy}%\n")
+
+        elif operation == 'env_adsr':
+            predicted_attack_t = operation_dict['params']['attack_t'].squeeze()
+            predicted_decay_t = operation_dict['params']['decay_t'].squeeze()
+            predicted_sustain_t = operation_dict['params']['sustain_t'].squeeze()
+            predicted_sustain_level = operation_dict['params']['sustain_level'].squeeze()
+            predicted_release_t = operation_dict['params']['release_t'].squeeze()
+
+            target_attack_t = target_param_dict[string_index][1]['attack_t']
+            target_decay_t = target_param_dict[string_index][1]['decay_t']
+            target_sustain_t = target_param_dict[string_index][1]['sustain_t']
+            target_sustain_level = target_param_dict[string_index][1]['sustain_level']
+            target_release_t = target_param_dict[string_index][1]['release_t']
+
+            attack_t_dist = pdist(predicted_attack_t, target_attack_t)
+            decay_t_dist = pdist(predicted_decay_t, target_decay_t)
+            sustain_t_dist = pdist(predicted_sustain_t, target_sustain_t)
+            sustain_level_dist = pdist(predicted_sustain_level, target_sustain_level)
+            release_t_dist = pdist(predicted_release_t, target_release_t)
+
+            print(f"{operation} at index {index} param stats")
+            print(f"\tattack_t l2 dist: {attack_t_dist}")
+            print(f"\tdecay_t l2 dist: {decay_t_dist}")
+            print(f"\tsustain_t l2 dist: {sustain_t_dist}")
+            print(f"\tsustain_level l2 dist: {sustain_level_dist}")
+            print(f"\trelease_t l2 dist: {release_t_dist}\n")

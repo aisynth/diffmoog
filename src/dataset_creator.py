@@ -4,7 +4,7 @@ import scipy.io.wavfile
 import torch
 import helper
 from synth.synth_architecture import SynthBasicFlow, SynthOscOnly, SynthModular
-from config import DATASET_SIZE, DATASET_TYPE, DATASET_MODE, OS, SYNTH_TYPE, ONLY_OSC_DATASET, PRESET
+from config import DATASET_SIZE, DATASET_TYPE, DATASET_MODE, OS, SYNTH_TYPE, ONLY_OSC_DATASET, PRESET, SAMPLE_RATE
 from synth.synth_config import OSC_FREQ_LIST, NUM_LAYERS, NUM_CHANNELS
 from synth.synth_modular_presets import BASIC_FLOW, FM
 
@@ -104,7 +104,7 @@ if __name__ == "__main__":
             audio = torch.squeeze(audio)
             audio = audio.detach().cpu().numpy()
 
-            scipy.io.wavfile.write(audio_path, 44100, audio)
+            scipy.io.wavfile.write(audio_path, SAMPLE_RATE, audio)
             print(f"Generated {file_name}")
 
         elif DATASET_MODE == 'MEL_SPEC':

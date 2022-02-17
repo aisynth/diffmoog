@@ -1,8 +1,14 @@
     # todo:
-    1. generate multiple signals
-    2. add synth directory, add modular synth architectures file
-    3. add all cells to dataset, even if None
-    2. add heads to model with modular synth
-    3. make single fm sounds from modular synth
-    3. make data set
-    4. train
+
+    1.  dataset creator saves only operation and parameters. shall save full architecture design!
+        line 93 at dataset_creator
+        params_dict[cell.index] = [operation, parameters]
+
+    2.  do something with warning
+        UserWarning: At least one mel filterbank has all zero values...
+
+    3.  debug training, look that all heads from model act as required
+
+    4.  add statistics for all the parameters
+
+

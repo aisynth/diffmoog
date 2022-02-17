@@ -13,10 +13,12 @@ from synth.synth_modular_presets import BASIC_FLOW, FM
 # LINEAR_IN_CHANNELS = 128 * 5 * 4
 SMALL_LINEAR_IN_CHANNELS = 4480
 # BIG_LINEAR_IN_CHANNELS = 17920
-BIG_LINEAR_IN_CHANNELS = 32256
+# BIG_LINEAR_IN_CHANNELS = 32256
+# BIG_LINEAR_IN_CHANNELS = 13824
+BIG_LINEAR_IN_CHANNELS = 23040
 # BIG_LINEAR_IN_CHANNELS = 60928
 # LINEAR_IN_CHANNELS = 8064
-HIDDEN_IN_CHANNELS = 32
+HIDDEN_IN_CHANNELS = 128
 
 freq_dict = {'osc1_freq': torch.tensor(OSC_FREQ_LIST, requires_grad=False, device=helper.get_device())}
 synth_obj = SynthOscOnly(file_name=None, parameters_dict=freq_dict, num_sounds=len(OSC_FREQ_LIST))
