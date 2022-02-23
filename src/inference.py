@@ -239,8 +239,6 @@ if __name__ == "__main__":
     # import test dataset
     ai_synth_test_dataset = AiSynthDataset(TEST_PARAMETERS_FILE,
                                            TEST_AUDIO_DIR,
-                                           helper.mel_spectrogram_transform,
-                                           synth.sample_rate,
                                            device)
 
     test_dataloader = helper.create_data_loader(ai_synth_test_dataset, BATCH_SIZE)

@@ -7,17 +7,13 @@ from pathlib import Path
 
 @dataclass
 class Config:
-    # Definitions
-    num_of_osc_frequencies = 49
-
-    # Synth configs
     sample_rate = 16000
     signal_duration_sec = 1.0
 
     " Mode - define a common configuration for the whole system     "
     "   0 -                     Use custom configurations           "
     "   Any other number -      Use predefined configuration preset. See below "
-    mode: int = 10
+    mode: int = 2
 
     " The architecture of the system, that defines the data flow and the loss functions:                    "
     "   1. SPECTROGRAM_ONLY (input -> CNN -> parameters -> Synth -> output; Loss over spectrograms)         "
@@ -77,57 +73,15 @@ class Config:
             self.model_frequency_output = 'LOGITS'
 
         if self.spectrogram_loss_type == 'MULTI-SPECTRAL':
-            self.multi_spectral_loss_spec_type = 'SPECTROGRAM'
             # one of ['BOTH', 'MEL_SPECTROGRAM', 'SPECTROGRAM']
+            self.multi_spectral_loss_spec_type = 'SPECTROGRAM'
 
         if self.mode == 1:
-            self.synth_type = 'OSC_ONLY'
-            self.architecture = 'PARAMETERS_ONLY'
-            self.model_frequency_output = 'SINGLE'
-            self.freq_param_loss_type = 'MSE'
-        elif self.mode == 2:
-            self.synth_type = 'OSC_ONLY'
-            self.architecture = 'PARAMETERS_ONLY'
-            self.freq_param_loss_type = 'CE'
-            self.model_frequency_output = 'LOGITS'
-        elif self.mode == 3:
-            self.synth_type = 'OSC_ONLY'
-            self.architecture = 'PARAMETERS_ONLY'
-            self.model_frequency_output = 'WEIGHTED'
-            self.freq_param_loss_type = 'MSE'
-        elif self.mode == 4:
-            self.synth_type = 'OSC_ONLY'
-            self.architecture = 'SPECTROGRAM_ONLY'
-            self.spectrogram_loss_type = 'MSE'
-            self.model_frequency_output = 'SINGLE'
-        elif self.mode == 5:
-            self.synth_type = 'OSC_ONLY'
-            self.architecture = 'SPEC_NO_SYNTH'
-            self.spectrogram_loss_type = 'MSE'
-            self.model_frequency_output = 'WEIGHTED'
-        elif self.mode == 6:
-            self.synth_type = 'OSC_ONLY'
-            self.architecture = 'REINFORCE'
-            self.spectrogram_loss_type = 'MSE'
-            self.model_frequency_output = 'PROBS'
-        elif self.mode == 7:
-            self.synth_type = 'OSC_ONLY'
-            self.architecture = 'SPECTROGRAM_ONLY'
-            self.spectrogram_loss_type = 'MULTI-SPECTRAL'
-            self.model_frequency_output = 'SINGLE'
-        elif self.mode == 8:
-            self.synth_type = 'SYNTH_BASIC'
-            self.architecture = 'SPECTROGRAM_ONLY'
-            self.spectrogram_loss_type = 'MULTI-SPECTRAL'
-            self.model_frequency_output = 'SINGLE'
-        elif self.mode == 9:
-            self.synth_type = 'MODULAR'
             self.preset = 'BASIC_FLOW'
             self.architecture = 'SPECTROGRAM_ONLY'
             self.spectrogram_loss_type = 'MULTI-SPECTRAL'
             self.model_frequency_output = 'SINGLE'
-        elif self.mode == 10:
-            self.synth_type = 'MODULAR'
+        elif self.mode == 2:
             self.preset = 'FM'
             self.architecture = 'SPECTROGRAM_ONLY'
             self.spectrogram_loss_type = 'MULTI-SPECTRAL'
@@ -136,9 +90,7 @@ class Config:
 
 @dataclass
 class SynthConfig:
-    # Synth architecture. OSC_ONLY or SYNTH_BASIC or MODULAR
-    synth_type = 'MODULAR'
-    regression_param_list = None
+    preset = 'FM'
     wave_type_dict = {"sine": 0,
                      "square": 1,
                      "sawtooth": 2}
@@ -146,7 +98,6 @@ class SynthConfig:
     filter_type_dict = {"low_pass": 0,
                        "high_pass": 1}
 
-    # build a list of possible frequencies
     semitones_max_offset: int = 24
     middle_c_freq: float = 261.6255653005985
     max_amp = 1
@@ -173,17 +124,12 @@ class SynthConfig:
                             'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']}
 
     def __post_init__(self):
-        if self.synth_type == 'MODULAR':
-            self.preset = 'FM'
-        else:
-            self.preset = None
         self.wave_type_dic_inv = {v: k for k, v in self.wave_type_dict.items()}
         self.filter_type_dic_inv = {v: k for k, v in self.filter_type_dict.items()}
 
+        # build a list of possible frequencies
         self.semitones_list = [*range(-self.semitones_max_offset, self.semitones_max_offset + 1)]
-
         self.osc_freq_list = [self.middle_c_freq * (2 ** (1 / 12)) ** x for x in self.semitones_list]
-        # OSC_FREQ_LIST = OSC_FREQ_LIST1[39:]
         self.osc_freq_dic = {round(key, 4): value for value, key in enumerate(self.osc_freq_list)}
         self.osc_freq_dic_inv = {v: k for k, v in self.osc_freq_dic.items()}
         self.max_carrier_oscillator_freq = self.osc_freq_list[-1] + self.margin
@@ -191,26 +137,19 @@ class SynthConfig:
 
 @dataclass
 class DatasetConfig:
-    only_osc_dataset = False
+    dataset_size = 50000
     num_epochs_to_print_stats = 100
     num_epochs_to_save_model = 100
-    dataset_mode = 'WAV'  # WAV or MEL_SPEC - represent the format to save and load the audio signal
     train_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'train', 'dataset.pkl')
     train_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'train', 'wav_files')
     test_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'test', 'dataset.pkl')
     test_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'test', 'wav_files')
 
-    def __post_init__(self):
-        if self.only_osc_dataset:
-            self.dataset_size = self.num_of_osc_frequencies
-        else:
-            self.dataset_size = 100
-
 
 @dataclass
 class ModelConfig:
     batch_size = 128
-    num_epochs = 50000
+    num_epochs = 100
     learning_rate = 0.001
 
     reinforcement_epsilon = 0.15

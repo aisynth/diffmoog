@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from config import Config, SynthConfig, DatasetConfig, ModelConfig
-from ai_synth_dataset import AiSynthDataset
+from ai_synth_dataset import AiSynthDataset, create_data_loader
 from model import BigSynthNetwork
 from synth.synth_architecture import SynthModular, SynthModularCell
 from synth import synth_modular_presets
@@ -162,26 +162,24 @@ def train(model, data_loader, transform, optimiser_arg, device_arg, cur_epoch, n
     torch.autograd.set_detect_anomaly(True)
 
     # init modular synth architecture
-    if cfg.synth_type == 'MODULAR':
+    modular_synth = SynthModular(synth_cfg=synth_cfg,
+                                 num_channels=synth_cfg.num_channels,
+                                 num_layers=synth_cfg.num_channels,
+                                 sample_rate=cfg.sample_rate,
+                                 signal_duration_sec=cfg.signal_duration_sec,
+                                 num_sounds=1,
+                                 device=device_arg
+                                 )
 
-        modular_synth = SynthModular(synth_cfg=synth_cfg,
-                                     num_channels=synth_cfg.num_channels,
-                                     num_layers=synth_cfg.num_channels,
-                                     sample_rate=cfg.sample_rate,
-                                     signal_duration_sec=cfg.signal_duration_sec,
-                                     num_sounds=1,
-                                     device=device_arg
-                                     )
+    if cfg.preset == 'BASIC_FLOW':
+        preset = synth_modular_presets.BASIC_FLOW
+    elif cfg.preset == 'FM':
+        preset = synth_modular_presets.FM
+    else:
+        preset = None
+        ValueError("Unknown PRESET")
 
-        if cfg.preset == 'BASIC_FLOW':
-            preset = synth_modular_presets.BASIC_FLOW
-        if cfg.preset == 'FM':
-            preset = synth_modular_presets.FM
-        else:
-            preset = None
-            ValueError("Unknown PRESET")
-
-        modular_synth.apply_architecture(preset)
+    modular_synth.apply_architecture(preset)
 
     for epoch in range(num_epochs):
         if epoch % 100 == 0:
@@ -240,15 +238,8 @@ def run():
     dataset_cfg = DatasetConfig()
     model_cfg = ModelConfig()
 
-    ai_synth_dataset = AiSynthDataset(dataset_cfg.dataset_mode,
-                                      dataset_cfg.train_parameters_file,
-                                      dataset_cfg.train_audio_dir,
-                                      cfg.sample_rate,
-                                      device,
-                                      synth_cfg
-                                      )
-
-    train_dataloader = helper.create_data_loader(ai_synth_dataset, model_cfg.batch_size)
+    ai_synth_dataset = AiSynthDataset(dataset_cfg.train_parameters_file, dataset_cfg.train_audio_dir, device)
+    train_dataloader = create_data_loader(ai_synth_dataset, model_cfg.batch_size)
 
     # construct model and assign it to device
     synth_net = BigSynthNetwork(synth_cfg).to(device)
@@ -256,7 +247,8 @@ def run():
     # initialize optimizer
     optimizer = torch.optim.Adam(synth_net.parameters(), lr=model_cfg.learning_rate, weight_decay=1e-4)
 
-    print(f"Training model with: \n LOSS_MODE: {cfg.architecture} \n SYNTH_TYPE: {cfg.synth_type}")
+    print(f"Training model with: \n LOSS_MODE: {cfg.architecture} \n")
+
     if cfg.use_loaded_model:
         checkpoint = torch.load(cfg.load_model_path)
         synth_net.load_state_dict(checkpoint['model_state_dict'])

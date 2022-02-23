@@ -5,13 +5,13 @@ import torchaudio
 import matplotlib
 import matplotlib.pyplot as plt
 import librosa
-from torch.utils.data import DataLoader
 from synth import synth_config
 from torch import nn
 from config import SynthConfig, Config
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 import math
+import numpy as np
 
 
 def get_device(gpu_index: int = 0):
@@ -365,11 +365,6 @@ class LogNormaliser:
         return array
 
 
-def create_data_loader(train_data, batch_size):
-    train_dataloader = DataLoader(train_data, batch_size=batch_size)
-    return train_dataloader
-
-
 # from https://github.com/pytorch/pytorch/issues/61292
 def linspace(start: Tensor, stop: Tensor, num: Tensor):
     """
@@ -607,7 +602,7 @@ class SpectralLoss:
                  cumsum_freq_weight=1.0,
                  logmag_weight=1,
                  loudness_weight=0.0,
-                 device='cpu',
+                 device='cuda:0',
                  name='spectral_loss'):
         """Constructor, set loss weights of various components.
     Args:
@@ -754,7 +749,7 @@ class SpectralLoss:
         return loss
 
 
-def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, accuracy_list):
+def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, accuracy_list, path2save_loss_list=None):
     path_parent = os.path.dirname(os.getcwd())
 
     # save model checkpoint
@@ -762,6 +757,8 @@ def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, accur
     plot_path = \
         Path(__file__).parent.parent.joinpath('trained_models', 'loss_graphs', f'end_epoch{cur_epoch}_loss_graph.png')
     txt_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.txt')
+    numpy_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.npy')
+    np.save(numpy_path, np.asarray(loss_list))
 
     torch.save({
         'epoch': cur_epoch,

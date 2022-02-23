@@ -27,7 +27,7 @@ Configurations settings are inside config file.
 
 def create_dataset(train: bool,data_cfg: DatasetConfig, synth_cfg: SynthConfig, sample_rate):
     dataset = []
-    print(f"Creating dataset \n mode = {data_cfg.dataset_mode}, size = {data_cfg.dataset_size} \n")
+    print(f"Creating dataset \n size = {data_cfg.dataset_size} \n")
 
     path_parent = Path(__file__).parent.parent
     if train:
@@ -82,23 +82,13 @@ def create_dataset(train: bool,data_cfg: DatasetConfig, synth_cfg: SynthConfig, 
 
         # dataset = pd.concat([pd.DataFrame(l) for l in dataset], axis=1).T
 
-        if data_cfg.dataset_mode == 'WAV':
-            audio_path = dataset_dir_path.joinpath("wav_files", f"{file_name}.wav")
+        audio_path = dataset_dir_path.joinpath("wav_files", f"{file_name}.wav")
 
-            audio = torch.squeeze(audio)
-            audio = audio.detach().cpu().numpy()
+        audio = torch.squeeze(audio)
+        audio = audio.detach().cpu().numpy()
 
-            scipy.io.wavfile.write(audio_path, sample_rate, audio)
-            print(f"Generated {file_name}")
-
-        elif data_cfg.dataset_mode == 'MEL_SPEC':
-            transform = helper.mel_spectrogram_transform(sample_rate=sample_rate)
-            audio_mel_spec = transform(audio)
-            audio_log_mel_spec = helper.amplitude_to_db_transform(audio_mel_spec)
-            audio_log_mel_spec = torch.unsqueeze(audio_log_mel_spec, dim=0)
-            audio_mel_spec_path = dataset_dir_path.joinpath("audio_mel_spec_files", f"{file_name}.pt")
-            torch.save(audio_log_mel_spec, audio_mel_spec_path)
-            print(f"Generated {file_name}")
+        scipy.io.wavfile.write(audio_path, sample_rate, audio)
+        print(f"Generated {file_name}")
 
     dataframe = pd.DataFrame(dataset)
     parameters_path = dataset_dir_path.joinpath("dataset.pkl")

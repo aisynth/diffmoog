@@ -21,7 +21,7 @@ class SynthModular:
                  sample_rate=44100,
                  signal_duration_sec=1.0,
                  num_sounds=1,
-                 device='cpu'
+                 device='cuda:0'
                  ):
 
         self.architecture = [[SynthModularCell(index=(channel, layer), default_connection=True)
