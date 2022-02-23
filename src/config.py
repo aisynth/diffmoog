@@ -1,175 +1,216 @@
 import os
+from dataclasses import dataclass, field
+from pathlib import Path
+
+
 # from synth_config import BASIC_FLOW
 
-# change this to either WINDOWS or LINUX
-OS = 'WINDOWS'
+@dataclass
+class Config:
+    # Definitions
+    num_of_osc_frequencies = 49
 
-# Definitions
-PI = 3.141592653589793
-TWO_PI = 2 * PI
-NUM_OF_OSC_FREQUENCIES = 49
+    # Synth configs
+    sample_rate = 16000
+    signal_duration_sec = 1.0
 
-# Synth configs
-SAMPLE_RATE = 16000
-SIGNAL_DURATION_SEC = 1.0
+    " Mode - define a common configuration for the whole system     "
+    "   0 -                     Use custom configurations           "
+    "   Any other number -      Use predefined configuration preset. See below "
+    mode: int = 10
 
-" Mode - define a common configuration for the whole system     "
-"   0 -                     Use custom configurations           "
-"   Any other number -      Use predefined configuration preset. See below "
-MODE = 10
+    " The architecture of the system, that defines the data flow and the loss functions:                    "
+    "   1. SPECTROGRAM_ONLY (input -> CNN -> parameters -> Synth -> output; Loss over spectrograms)         "
+    "   2. PARAMETERS_ONLY (input -> CNN -> parameters; Loss over parameters)                               "
+    "   3. FULL - (input -> CNN -> parameters -> Synth -> output; Loss over spectrograms AND parameters)    "
+    "   4. SPEC_NO_SYNTH (input -> CNN -> parameters); Output inner product <probabilities, spectrograms>;   "
+    "      Loss over spectrograms)                                                                          "
+    "   5. REINFORCE - (input -> CNN -> parameters); Loss is computed to maximize rewards for correct       "
+    "       classification. Using the classical REINFORCE algorithm                                         "
+    architecture = 'SPECTROGRAM_ONLY'  # SPECTROGRAM_ONLY, PARAMETERS_ONLY, SPEC_NO_SYNTH or FULL (Spectrogram + parameters)
 
-# Dataset configs
-ONLY_OSC_DATASET = False
-if ONLY_OSC_DATASET:
-    DATASET_SIZE = NUM_OF_OSC_FREQUENCIES
-else:
-    DATASET_SIZE = 1000
-
-NUM_EPOCHS_TO_PRINT_STATS = 100
-NUM_EPOCHS_TO_SAVE_MODEL = 100
-
-
-DATASET_TYPE = 'TRAIN'  # TRAIN or TEST
-DATASET_MODE = 'WAV'  # WAV or MEL_SPEC - represent the format to save and load the audio signal
-path_parent = os.path.dirname(os.getcwd())
-if OS == 'WINDOWS':
-    TRAIN_PARAMETERS_FILE = path_parent + "\\dataset\\train\\dataset.csv"
-    TRAIN_AUDIO_DIR = path_parent + "\\dataset\\train\\wav_files"
-    TEST_PARAMETERS_FILE = path_parent + "\\dataset\\test\\dataset.csv"
-    TEST_AUDIO_DIR = path_parent + "\\dataset\\test\\wav_files"
-elif OS == 'LINUX':
-    TRAIN_PARAMETERS_FILE = path_parent + "/ai_synth/dataset/train/dataset.csv"
-    TRAIN_AUDIO_DIR = path_parent + "/ai_synth/dataset/train/wav_files"
-    TEST_PARAMETERS_FILE = path_parent + "/ai_synth/dataset/test/dataset.csv"
-    TEST_AUDIO_DIR = path_parent + "/ai_synth/dataset/test/wav_files"
-
-# Model configs
-CNN_NETWORK = 'BIG'  # 'BIG' or 'SMALL' - one of 2 possible network architectures
-BATCH_SIZE = 128
-EPOCHS = 50000
-LEARNING_RATE = 0.001
-
-REINFORCEMENT_EPSILON = 0.15
-
-# Synth architecture. OSC_ONLY or SYNTH_BASIC or MODULAR
-SYNTH_TYPE = 'MODULAR'
-if SYNTH_TYPE == 'MODULAR':
-    PRESET = 'FM'
-else:
-    PRESET = None
-
-" The architecture of the system, that defines the data flow and the loss functions:                    "
-"   1. SPECTROGRAM_ONLY (input -> CNN -> parameters -> Synth -> output; Loss over spectrograms)         "
-"   2. PARAMETERS_ONLY (input -> CNN -> parameters; Loss over parameters)                               "
-"   3. FULL - (input -> CNN -> parameters -> Synth -> output; Loss over spectrograms AND parameters)    "
-"   4. SPEC_NO_SYNTH (input -> CNN -> parameters); Output inner product <probabilities, spectrograms>;   "
-"      Loss over spectrograms)                                                                          "
-"   5. REINFORCE - (input -> CNN -> parameters); Loss is computed to maximize rewards for correct       "
-"       classification. Using the classical REINFORCE algorithm                                         "
-ARCHITECTURE = 'SPECTROGRAM_ONLY'  # SPECTROGRAM_ONLY, PARAMETERS_ONLY, SPEC_NO_SYNTH or FULL (Spectrogram + parameters)
-
-" Spectrogram loss type options:" \
+    " Spectrogram loss type options:" \
     "1. MSE" \
     "2. LSD (Log Spectral Distance)" \
     "3. KL (Kullback-Leibler)" \
     "4. EMD (earth movers distance)" \
     "5. MULTI-SPECTRAL"
-SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
+    spectrogram_loss_type = 'MULTI-SPECTRAL'
+    freq_param_loss_type = 'MSE'  # MSE or CE (Cross Entropy)
 
-if SPECTROGRAM_LOSS_TYPE == 'MULTI-SPECTRAL':
-    MULTI_SPECTRAL_LOSS_SPEC_TYPE = 'SPECTROGRAM' # one of ['BOTH', 'MEL_SPECTROGRAM', 'SPECTROGRAM']
+    " The model can output the oscillator frequency as:                                 "
+    "   1. LOGITS (size is num of frequencies, for cross entropy loss)                  "
+    "   2. PROBS (same as LOGITS, but softmax is applied)                               "
+    "   3. WEIGHTED - inner product of <probabilities, original frequencies>. size is 1 "
+    "   4. SINGLE - linear layer outputs single neuron. size is 1                       "
+    model_frequency_output = 'SINGLE'
+    transform = 'MEL_SPECTROGRAM'  # MEL_SPECTROGRAM or SPECTROGRAM- to be used in the data loader and at the synth output
 
-FREQ_PARAM_LOSS_TYPE = 'MSE'  # MSE or CE (Cross Entropy)
+    use_loaded_model = False
+    override_optimizer = True
 
-" The model can output the oscillator frequency as:                                 "
-"   1. LOGITS (size is num of frequencies, for cross entropy loss)                  "
-"   2. PROBS (same as LOGITS, but softmax is applied)                               "
-"   3. WEIGHTED - inner product of <probabilities, original frequencies>. size is 1 "
-"   4. SINGLE - linear layer outputs single neuron. size is 1                       "
-MODEL_FREQUENCY_OUTPUT = 'SINGLE'
-if FREQ_PARAM_LOSS_TYPE == 'CE':
-    MODEL_FREQUENCY_OUTPUT = 'LOGITS'
+    save_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'trained_synth_net.pt')
+    load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'synth_net_epoch2.pth')
 
-TRANSFORM = 'MEL_SPECTROGRAM'  # MEL_SPECTROGRAM or SPECTROGRAM- to be used in the data loader and at the synth output
+    num_epochs_to_save_model = 5
 
-REINFORCE_REWARD_SPEC_MSE_THRESHOLD = 6
+    regression_loss_factor = 1e-1
+    spectrogram_loss_factor = 1e-5
+    freq_mse_loss_factor = 1e-3
+    freq_reinforce_loss_factor = 1e5
 
-USE_LOADED_MODEL = False
-OVERRIDE_OPTIMIZER = True
+    # Debug
+    debug_mode = False
+    plot_spec = False
+    print_train_stats = True
+    print_accuracy_stats = False
+    print_per_accuracy_stats_multiple_epochs = True
 
-if OS == 'WINDOWS':
-    SAVE_MODEL_PATH = "..\\trained_models\\trained_synth_net.pt"
-    LOAD_MODEL_PATH = path_parent + "\\trained_models\\synth_net_epoch1000.pt"
-elif OS == 'LINUX':
-    SAVE_MODEL_PATH = "../trained_models/trained_synth_net.pth"
-    LOAD_MODEL_PATH = "../trained_models/synth_net_epoch2.pth"
+    log_spectrogram_mse_loss = False
 
-REGRESSION_LOSS_FACTOR = 1e-1
-SPECTROGRAM_LOSS_FACTOR = 1e-5
-FREQ_MSE_LOSS_FACTOR = 1e-3
-FREQ_REINFORCE_LOSS_FACTOR = 1e5
+    def __post_init__(self):
 
-# Debug
-DEBUG_MODE = False
-PLOT_SPEC = False
-PRINT_TRAIN_STATS = True
-PRINT_ACCURACY_STATS = False
-PRINT_PER_ACCURACY_STATS_MULTIPLE_EPOCHS = True
+        if self.log_spectrogram_mse_loss:
+           self.spectrogram_loss_factor = 1000
 
-LOG_SPECTROGRAM_MSE_LOSS = False
+        if self.freq_param_loss_type == 'CE':
+            self.model_frequency_output = 'LOGITS'
 
-if LOG_SPECTROGRAM_MSE_LOSS:
-    SPECTROGRAM_LOSS_FACTOR = 1000
+        if self.spectrogram_loss_type == 'MULTI-SPECTRAL':
+            self.multi_spectral_loss_spec_type = 'SPECTROGRAM'
+            # one of ['BOTH', 'MEL_SPECTROGRAM', 'SPECTROGRAM']
 
-if MODE == 1:
-    SYNTH_TYPE = 'OSC_ONLY'
-    ARCHITECTURE = 'PARAMETERS_ONLY'
-    MODEL_FREQUENCY_OUTPUT = 'SINGLE'
-    FREQ_PARAM_LOSS_TYPE = 'MSE'
-elif MODE == 2:
-    SYNTH_TYPE = 'OSC_ONLY'
-    ARCHITECTURE = 'PARAMETERS_ONLY'
-    FREQ_PARAM_LOSS_TYPE = 'CE'
-    MODEL_FREQUENCY_OUTPUT = 'LOGITS'
-elif MODE == 3:
-    SYNTH_TYPE = 'OSC_ONLY'
-    ARCHITECTURE = 'PARAMETERS_ONLY'
-    MODEL_FREQUENCY_OUTPUT = 'WEIGHTED'
-    FREQ_PARAM_LOSS_TYPE = 'MSE'
-elif MODE == 4:
-    SYNTH_TYPE = 'OSC_ONLY'
-    ARCHITECTURE = 'SPECTROGRAM_ONLY'
-    SPECTROGRAM_LOSS_TYPE = 'MSE'
-    MODEL_FREQUENCY_OUTPUT = 'SINGLE'
-elif MODE == 5:
-    SYNTH_TYPE = 'OSC_ONLY'
-    ARCHITECTURE = 'SPEC_NO_SYNTH'
-    SPECTROGRAM_LOSS_TYPE = 'MSE'
-    MODEL_FREQUENCY_OUTPUT = 'WEIGHTED'
-elif MODE == 6:
-    SYNTH_TYPE = 'OSC_ONLY'
-    ARCHITECTURE = 'REINFORCE'
-    SPECTROGRAM_LOSS_TYPE = 'MSE'
-    MODEL_FREQUENCY_OUTPUT = 'PROBS'
-elif MODE == 7:
-    SYNTH_TYPE = 'OSC_ONLY'
-    ARCHITECTURE = 'SPECTROGRAM_ONLY'
-    SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
-    MODEL_FREQUENCY_OUTPUT = 'SINGLE'
-elif MODE == 8:
-    SYNTH_TYPE = 'SYNTH_BASIC'
-    ARCHITECTURE = 'SPECTROGRAM_ONLY'
-    SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
-    MODEL_FREQUENCY_OUTPUT = 'SINGLE'
-elif MODE == 9:
-    SYNTH_TYPE = 'MODULAR'
-    PRESET = 'BASIC_FLOW'
-    ARCHITECTURE = 'SPECTROGRAM_ONLY'
-    SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
-    MODEL_FREQUENCY_OUTPUT = 'SINGLE'
-elif MODE == 10:
-    SYNTH_TYPE = 'MODULAR'
-    PRESET = 'FM'
-    ARCHITECTURE = 'SPECTROGRAM_ONLY'
-    SPECTROGRAM_LOSS_TYPE = 'MULTI-SPECTRAL'
-    MODEL_FREQUENCY_OUTPUT = 'SINGLE'
+        if self.mode == 1:
+            self.synth_type = 'OSC_ONLY'
+            self.architecture = 'PARAMETERS_ONLY'
+            self.model_frequency_output = 'SINGLE'
+            self.freq_param_loss_type = 'MSE'
+        elif self.mode == 2:
+            self.synth_type = 'OSC_ONLY'
+            self.architecture = 'PARAMETERS_ONLY'
+            self.freq_param_loss_type = 'CE'
+            self.model_frequency_output = 'LOGITS'
+        elif self.mode == 3:
+            self.synth_type = 'OSC_ONLY'
+            self.architecture = 'PARAMETERS_ONLY'
+            self.model_frequency_output = 'WEIGHTED'
+            self.freq_param_loss_type = 'MSE'
+        elif self.mode == 4:
+            self.synth_type = 'OSC_ONLY'
+            self.architecture = 'SPECTROGRAM_ONLY'
+            self.spectrogram_loss_type = 'MSE'
+            self.model_frequency_output = 'SINGLE'
+        elif self.mode == 5:
+            self.synth_type = 'OSC_ONLY'
+            self.architecture = 'SPEC_NO_SYNTH'
+            self.spectrogram_loss_type = 'MSE'
+            self.model_frequency_output = 'WEIGHTED'
+        elif self.mode == 6:
+            self.synth_type = 'OSC_ONLY'
+            self.architecture = 'REINFORCE'
+            self.spectrogram_loss_type = 'MSE'
+            self.model_frequency_output = 'PROBS'
+        elif self.mode == 7:
+            self.synth_type = 'OSC_ONLY'
+            self.architecture = 'SPECTROGRAM_ONLY'
+            self.spectrogram_loss_type = 'MULTI-SPECTRAL'
+            self.model_frequency_output = 'SINGLE'
+        elif self.mode == 8:
+            self.synth_type = 'SYNTH_BASIC'
+            self.architecture = 'SPECTROGRAM_ONLY'
+            self.spectrogram_loss_type = 'MULTI-SPECTRAL'
+            self.model_frequency_output = 'SINGLE'
+        elif self.mode == 9:
+            self.synth_type = 'MODULAR'
+            self.preset = 'BASIC_FLOW'
+            self.architecture = 'SPECTROGRAM_ONLY'
+            self.spectrogram_loss_type = 'MULTI-SPECTRAL'
+            self.model_frequency_output = 'SINGLE'
+        elif self.mode == 10:
+            self.synth_type = 'MODULAR'
+            self.preset = 'FM'
+            self.architecture = 'SPECTROGRAM_ONLY'
+            self.spectrogram_loss_type = 'MULTI-SPECTRAL'
+            self.model_frequency_output = 'SINGLE'
+
+
+@dataclass
+class SynthConfig:
+    # Synth architecture. OSC_ONLY or SYNTH_BASIC or MODULAR
+    synth_type = 'MODULAR'
+    regression_param_list = None
+    wave_type_dict = {"sine": 0,
+                     "square": 1,
+                     "sawtooth": 2}
+
+    filter_type_dict = {"low_pass": 0,
+                       "high_pass": 1}
+
+    # build a list of possible frequencies
+    semitones_max_offset: int = 24
+    middle_c_freq: float = 261.6255653005985
+    max_amp = 1
+    max_mod_index = 100
+    max_lfo_freq = 20
+    min_filter_freq = 0
+    max_filter_freq = 20000
+
+    # When predicting the oscillator frequency by regression, the defines are used to normalize the output from the model
+    margin = 200
+    # --------------------------------------
+    # -----------Modular Synth--------------
+    # --------------------------------------
+    # Modular Synth attributes:
+    num_channels = 4
+    num_layers = 5
+
+    # Modular synth possible modules from synth_modules.py
+    modular_synth_operations = ['osc', 'fm', 'mix', 'filter', 'env_adsr']
+    modular_synth_params = {'osc': ['amp', 'freq', 'waveform'],
+                            'fm': ['amp_c', 'freq_c', 'waveform', 'mod_index'],
+                            'mix': None,
+                            'filter': ['filter_freq', 'filter_type'],
+                            'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']}
+
+    def __post_init__(self):
+        if self.synth_type == 'MODULAR':
+            self.preset = 'FM'
+        else:
+            self.preset = None
+        self.wave_type_dic_inv = {v: k for k, v in self.wave_type_dict.items()}
+        self.filter_type_dic_inv = {v: k for k, v in self.filter_type_dict.items()}
+
+        self.semitones_list = [*range(-self.semitones_max_offset, self.semitones_max_offset + 1)]
+
+        self.osc_freq_list = [self.middle_c_freq * (2 ** (1 / 12)) ** x for x in self.semitones_list]
+        # OSC_FREQ_LIST = OSC_FREQ_LIST1[39:]
+        self.osc_freq_dic = {round(key, 4): value for value, key in enumerate(self.osc_freq_list)}
+        self.osc_freq_dic_inv = {v: k for k, v in self.osc_freq_dic.items()}
+        self.max_carrier_oscillator_freq = self.osc_freq_list[-1] + self.margin
+
+
+@dataclass
+class DatasetConfig:
+    only_osc_dataset = False
+    num_epochs_to_print_stats = 100
+    num_epochs_to_save_model = 100
+    dataset_mode = 'WAV'  # WAV or MEL_SPEC - represent the format to save and load the audio signal
+    train_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'train', 'dataset.pkl')
+    train_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'train', 'wav_files')
+    test_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'test', 'dataset.pkl')
+    test_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'test', 'wav_files')
+
+    def __post_init__(self):
+        if self.only_osc_dataset:
+            self.dataset_size = self.num_of_osc_frequencies
+        else:
+            self.dataset_size = 100
+
+
+@dataclass
+class ModelConfig:
+    batch_size = 128
+    num_epochs = 50000
+    learning_rate = 0.001
+
+    reinforcement_epsilon = 0.15

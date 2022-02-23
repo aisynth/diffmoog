@@ -6,18 +6,24 @@ Created on Mon May 31 15:41:38 2021
 @author: Moshe Laufer, Noy Uzrad
 """
 import torch
-from config import PI, TWO_PI, DEBUG_MODE, SAMPLE_RATE, SIGNAL_DURATION_SEC
+import math
+
 import matplotlib.pyplot as plt
 # import simpleaudio as sa
+from pip._internal.cli.cmdoptions import debug_mode
+
 import helper
 import julius
 from synth.synth_config import *
 
+PI = math.pi
+TWO_PI = 2 * PI
+
 
 class SynthModules:
-    def __init__(self, num_sounds=1):
-        self.sample_rate = SAMPLE_RATE
-        self.sig_duration = SIGNAL_DURATION_SEC
+    def __init__(self, num_sounds=1, sample_rate=44100, signal_duration_sec=1.0, device='cuda:0', debug_mode=False):
+        self.sample_rate = sample_rate
+        self.sig_duration = signal_duration_sec
         self.time_samples = torch.linspace(0, self.sig_duration, steps=int(self.sample_rate * self.sig_duration),
                                            requires_grad=True)
         self.modulation_time = torch.linspace(0, self.sig_duration, steps=self.sample_rate)
@@ -25,7 +31,7 @@ class SynthModules:
         self.signal = torch.zeros(size=(num_sounds, self.time_samples.shape[0]), dtype=torch.float32,
                                   requires_grad=True)
 
-        self.device = helper.get_device()
+        self.device = device
         self.time_samples = helper.move_to(self.time_samples, self.device)
         self.modulation_time = helper.move_to(self.modulation_time, self.device)
         self.signal = helper.move_to(self.signal, self.device)
@@ -56,7 +62,7 @@ class SynthModules:
         t = self.time_samples
         # oscillator = torch.zeros_like(t, requires_grad=True)
 
-        oscillator_tensor = torch.tensor((), requires_grad=True).to(helper.get_device())
+        oscillator_tensor = torch.tensor((), requires_grad=True).to(self.device)
         first_time = True
         for i in range(num_sounds):
 
@@ -135,7 +141,7 @@ class SynthModules:
 
         self.signal_values_sanity_check(amp_c, freq_c, waveform)
         t = self.time_samples
-        oscillator_tensor = torch.tensor((), requires_grad=True).to(helper.get_device())
+        oscillator_tensor = torch.tensor((), requires_grad=True).to(self.device)
         first_time = True
         for i in range(num_sounds):
             if num_sounds == 1:
@@ -150,7 +156,8 @@ class SynthModules:
                 input_signal_cur = modulator[i]
 
             fm_sine_wave = amp_float * torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur)
-            fm_square_wave = amp_float * torch.sign(torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur))
+            fm_square_wave = amp_float * torch.sign(
+                torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur))
             # fm_triangle_wave = (2 * amp_float / PI) * torch.arcsin(torch.sin((TWO_PI * freq_float * t + mod_index_float * input_signal_cur)))
             fm_triangle_wave = amp_float * torch.sin(TWO_PI * freq_float * t + mod_index_float * input_signal_cur)
 
@@ -228,7 +235,7 @@ class SynthModules:
 
         t = self.time_samples
         dc = 1
-        carrier = SynthModules()
+        carrier = SynthModules(device=self.device)
         carrier.oscillator(amp=amp_c, freq=freq_c, phase=0, waveform=waveform)
         modulator = amp_m * torch.sin(TWO_PI * freq_m * t)
         am_signal = (dc + modulator / amp_c) * carrier.signal
@@ -299,8 +306,10 @@ class SynthModules:
         else:
             attack_num_samples = [torch.floor(torch.tensor(self.sample_rate * attack_t[k])) for k in range(num_sounds)]
             decay_num_samples = [torch.floor(torch.tensor(self.sample_rate * decay_t[k])) for k in range(num_sounds)]
-            sustain_num_samples = [torch.floor(torch.tensor(self.sample_rate * sustain_t[k])) for k in range(num_sounds)]
-            release_num_samples = [torch.floor(torch.tensor(self.sample_rate * release_t[k])) for k in range(num_sounds)]
+            sustain_num_samples = [torch.floor(torch.tensor(self.sample_rate * sustain_t[k])) for k in
+                                   range(num_sounds)]
+            release_num_samples = [torch.floor(torch.tensor(self.sample_rate * release_t[k])) for k in
+                                   range(num_sounds)]
             attack_num_samples = torch.stack(attack_num_samples)
             decay_num_samples = torch.stack(decay_num_samples)
             sustain_num_samples = torch.stack(sustain_num_samples)
@@ -329,8 +338,10 @@ class SynthModules:
                     sustain_level_value = sustain_level_value.item()
                 attack = torch.linspace(0, 1, int(attack_num_samples[i].item()), device=helper.get_device())
                 decay = torch.linspace(1, sustain_level_value, int(decay_num_samples[i]), device=helper.get_device())
-                sustain = torch.full((int(sustain_num_samples[i].item()),), sustain_level_value, device=helper.get_device())
-                release = torch.linspace(sustain_level_value, 0, int(release_num_samples[i].item()), device=helper.get_device())
+                sustain = torch.full((int(sustain_num_samples[i].item()),), sustain_level_value,
+                                     device=helper.get_device())
+                release = torch.linspace(sustain_level_value, 0, int(release_num_samples[i].item()),
+                                         device=helper.get_device())
 
                 # todo: make sure ADSR behavior is differentiable. linspace has to know to get tensors
                 # attack_mod = helper.linspace(torch.tensor(0), torch.tensor(1), attack_num_samples[i])
@@ -362,13 +373,14 @@ class SynthModules:
                 if num_sounds == 1:
                     enveloped_signal_tensor = enveloped_signal
                 else:
-                    enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped_signal), dim=0).unsqueeze(dim=0)
+                    enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped_signal), dim=0).unsqueeze(
+                        dim=0)
                     first_time = False
             else:
                 enveloped = enveloped_signal.unsqueeze(dim=0)
                 enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped), dim=0)
 
-            if DEBUG_MODE:
+            if debug_mode:
                 plt.plot(envelope.cpu())
                 plt.plot(self.signal.cpu())
                 plt.show()
@@ -428,7 +440,8 @@ class SynthModules:
                 if num_sounds == 1:
                     filtered_signal_tensor = filtered_signal
                 else:
-                    filtered_signal_tensor = torch.cat((filtered_signal_tensor, filtered_signal), dim=0).unsqueeze(dim=0)
+                    filtered_signal_tensor = torch.cat((filtered_signal_tensor, filtered_signal), dim=0).unsqueeze(
+                        dim=0)
                     first_time = False
             else:
                 filtered_signal = filtered_signal.unsqueeze(dim=0)
@@ -551,7 +564,6 @@ So it is not used
 """
 
 if __name__ == "__main__":
-    print(len(OSC_FREQ_LIST))
     a = SynthModules()
     b = SynthModules()
     b.oscillator(1, 5, 0, 'sine')

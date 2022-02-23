@@ -5,21 +5,22 @@ import torchaudio
 import matplotlib
 import matplotlib.pyplot as plt
 import librosa
-from config import TWO_PI, DEBUG_MODE, SAMPLE_RATE, PRINT_ACCURACY_STATS, OS, SIGNAL_DURATION_SEC, \
-    MULTI_SPECTRAL_LOSS_SPEC_TYPE
-from synth.synth_config import *
 from torch.utils.data import DataLoader
 from synth import synth_config
 from torch import nn
+from config import SynthConfig, Config
+from pathlib import Path
+from torch.utils.tensorboard import SummaryWriter
+import math
 
 
-def get_device():
-    if torch.cuda.is_available():
-        device = "cuda"
+def get_device(gpu_index: int = 0):
+    if int(gpu_index) >= 0 and torch.cuda.is_available():
+        device = torch.device("cuda:" + str(gpu_index))
+        print('using device: ', torch.cuda.get_device_name(device))
     else:
-        device = "cpu"
-    if DEBUG_MODE:
-        print(f"Using device {device}")
+        device = torch.device("cpu")
+        # print('using cpu')
     return device
 
 
@@ -40,54 +41,48 @@ def move_to(obj, device):
         raise TypeError("Invalid type for move_to")
 
 
-# class TwoWayDict(dict):
-#     def __len__(self):
-#         return dict.__len__(self) / 2
-#
-#     def __setitem__(self, key, value):
-#         dict.__setitem__(self, key, value)
-#         dict.__setitem__(self, value, key)
-
 spectrogram_transform = torchaudio.transforms.Spectrogram(
     # win_length default = n_fft. hop_length default = win_length / 2
     n_fft=512,
     power=2.0
 ).to(get_device())
 
-mel_spectrogram_transform = torchaudio.transforms.MelSpectrogram(
-    sample_rate=SAMPLE_RATE,
-    n_fft=1024,
-    hop_length=256,
-    n_mels=128,
-    power=2.0,
-    f_min=0,
-    f_max=8000
-).to(get_device())
+
+def mel_spectrogram_transform(sample_rate):
+    return torchaudio.transforms.MelSpectrogram(sample_rate=sample_rate,
+                                                n_fft=1024,
+                                                hop_length=256,
+                                                n_mels=128,
+                                                power=2.0,
+                                                f_min=0,
+                                                f_max=8000).to(get_device())
+
 
 amplitude_to_db_transform = torchaudio.transforms.AmplitudeToDB().to(get_device())
 
-log_mel_spec_transform = torch.nn.Sequential(mel_spectrogram_transform, amplitude_to_db_transform).to(get_device())
+
+# log_mel_spec_transform = torch.nn.Sequential(mel_spectrogram_transform, amplitude_to_db_transform).to(get_device())
 
 
-def map_classification_params_to_ints(params_dic: dict):
-    """ map classification params to ints, to input them for a neural network """
-    mapped_params_dict = {}
-    for key, val in params_dic.items():
-        if key in synth_config.CLASSIFICATION_PARAM_LIST:
-            if key == "osc1_freq" or key == "osc2_freq":
-                # todo: inspect which of these are needed (i think only the middle one)
-                if torch.is_tensor(val):
-                    mapped_params_dict[key] = [synth_config.OSC_FREQ_DIC[round(x.item(), 4)] for x in val]
-                if isinstance(val, float):
-                    mapped_params_dict[key] = synth_config.OSC_FREQ_DIC[round(val, 4)]
-                else:
-                    mapped_params_dict[key] = [synth_config.OSC_FREQ_DIC[round(x, 4)] for x in val]
-            if "wave" in key:
-                mapped_params_dict[key] = synth_config.WAVE_TYPE_DIC[val]
-            elif "filter_type" == key:
-                mapped_params_dict[key] = synth_config.FILTER_TYPE_DIC[val]
-
-    return mapped_params_dict
+# def map_classification_params_to_ints(params_dic: dict):
+#     """ map classification params to ints, to input them for a neural network """
+#     mapped_params_dict = {}
+#     for key, val in params_dic.items():
+#         if key in synth_config.CLASSIFICATION_PARAM_LIST:
+#             if key == "osc1_freq" or key == "osc2_freq":
+#                 # todo: inspect which of these are needed (i think only the middle one)
+#                 if torch.is_tensor(val):
+#                     mapped_params_dict[key] = [synth_config.OSC_FREQ_DIC[round(x.item(), 4)] for x in val]
+#                 if isinstance(val, float):
+#                     mapped_params_dict[key] = synth_config.OSC_FREQ_DIC[round(val, 4)]
+#                 else:
+#                     mapped_params_dict[key] = [synth_config.OSC_FREQ_DIC[round(x, 4)] for x in val]
+#             if "wave" in key:
+#                 mapped_params_dict[key] = synth_config.WAVE_TYPE_DIC[val]
+#             elif "filter_type" == key:
+#                 mapped_params_dict[key] = synth_config.FILTER_TYPE_DIC[val]
+#
+#     return mapped_params_dict
 
 
 def map_classification_params_from_ints(params_dic: dict):
@@ -107,124 +102,79 @@ def map_classification_params_from_ints(params_dic: dict):
     return mapped_params_dict
 
 
-def clamp_regression_params(parameters_dict: dict):
+def clamp_regression_params(parameters_dict: dict, synth_cfg: SynthConfig, cfg: Config):
     """ clamp regression parameters to values that can be interpreted by the synth module,
         add classification parameters as is"""
-    '''
-    ['osc1_amp', 'osc1_mod_index', 'lfo1_freq',
-     'osc2_amp', 'osc2_mod_index', 'lfo2_freq',
-     'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']'''
 
-    if SYNTH_TYPE == 'MODULAR':
-        clamped_params_dict = {}
-        for key, val in parameters_dict.items():
-            operation = val['operation']
-            operation_params = val['params']
+    clamped_params_dict = {}
+    for key, val in parameters_dict.items():
+        operation = val['operation']
+        operation_params = val['params']
 
-            if operation == 'osc':
-                clamped_params_dict[key] = \
-                    {'operation': operation,
-                     'params':
-                         {'amp': operation_params['amp'],
-                          'freq': torch.clamp(operation_params['freq'], min=0, max=synth_config.MAX_LFO_FREQ),
-                          'waveform': operation_params['waveform']
-                          }
-                     }
+        if operation == 'osc':
+            clamped_params_dict[key] = \
+                {'operation': operation,
+                 'params':
+                     {'amp': operation_params['amp'],
+                      'freq': torch.clamp(operation_params['freq'], min=0, max=synth_cfg.max_lfo_freq),
+                      'waveform': operation_params['waveform']
+                      }
+                 }
 
-            elif operation == 'fm':
-                clamped_params_dict[key] = \
-                    {'operation': operation,
-                     'params':
-                         {'amp_c': operation_params['amp_c'],
-                          'freq_c':
-                              torch.clamp(operation_params['freq_c'],
-                                          min=0, max=synth_config.MAX_CARRIER_OSCILLATOR_FREQ),
-                          'waveform': operation_params['waveform'],
-                          'mod_index': torch.clamp(operation_params['freq_c'], min=0, max=synth_config.MAX_MOD_INDEX)
-                          }
-                     }
+        elif operation == 'fm':
+            clamped_params_dict[key] = \
+                {'operation': operation,
+                 'params':
+                     {'amp_c': operation_params['amp_c'],
+                      'freq_c':
+                          torch.clamp(operation_params['freq_c'],
+                                      min=0, max=synth_cfg.max_carrier_oscillator_freq),
+                      'waveform': operation_params['waveform'],
+                      'mod_index': torch.clamp(operation_params['freq_c'], min=0, max=synth_cfg.max_mod_index)
+                      }
+                 }
 
-            elif operation == 'filter':
-                clamped_params_dict[key] = \
-                    {'operation': operation,
-                     'params':
-                         {'filter_type': operation_params['filter_type'],
-                          'filter_freq': torch.clamp(operation_params['filter_freq'],
-                                                     min=synth_config.MIN_FILTER_FREQ,
-                                                     max=synth_config.MAX_FILTER_FREQ)
-                          }
-                     }
+        elif operation == 'filter':
+            clamped_params_dict[key] = \
+                {'operation': operation,
+                 'params':
+                     {'filter_type': operation_params['filter_type'],
+                      'filter_freq': torch.clamp(operation_params['filter_freq'],
+                                                 min=synth_cfg.min_filter_freq,
+                                                 max=synth_cfg.max_filter_freq)
+                      }
+                 }
 
-            elif operation == 'env_adsr':
-                attack_t = torch.clamp(operation_params['attack_t'], min=0, max=synth_config.SIGNAL_DURATION_SEC)
-                decay_t = torch.clamp(operation_params['decay_t'], min=0, max=synth_config.SIGNAL_DURATION_SEC)
-                sustain_t = torch.clamp(operation_params['release_t'], min=0, max=synth_config.SIGNAL_DURATION_SEC)
-                release_t = torch.clamp(operation_params['release_t'], min=0, max=synth_config.SIGNAL_DURATION_SEC)
+        elif operation == 'env_adsr':
+            attack_t = torch.clamp(operation_params['attack_t'], min=0, max=cfg.signal_duration_sec)
+            decay_t = torch.clamp(operation_params['decay_t'], min=0, max=cfg.signal_duration_sec)
+            sustain_t = torch.clamp(operation_params['release_t'], min=0, max=cfg.signal_duration_sec)
+            release_t = torch.clamp(operation_params['release_t'], min=0, max=cfg.signal_duration_sec)
 
-                clamped_attack, clamped_decay, clamped_sustain, clamped_release =\
-                    clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t)
+            clamped_attack, clamped_decay, clamped_sustain, clamped_release = \
+                clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t)
 
-                clamped_params_dict[key] = \
-                    {'operation': operation,
-                     'params':
-                         {'attack_t': clamped_attack,
-                          'decay_t': clamped_decay,
-                          'sustain_t': clamped_sustain,
-                          'sustain_level': torch.clamp(operation_params['sustain_level'], min=0, max=synth_config.MAX_AMP),
-                          'release_t': clamped_release
-                          }
-                     }
-
-    elif SYNTH_TYPE == 'BASIC_FLOW':
-        clamped_params_dict = {'osc1_amp': torch.clamp(parameters_dict['osc1_amp'], min=0, max=synth_config.MAX_AMP),
-                               'osc1_mod_index': torch.clamp(parameters_dict['osc1_mod_index'], min=0,
-                                                             max=synth_config.MAX_MOD_INDEX),
-                               'lfo1_freq': torch.clamp(parameters_dict['lfo1_freq'], min=0,
-                                                        max=synth_config.MAX_LFO_FREQ),
-                               'osc2_amp': torch.clamp(parameters_dict['osc2_amp'], min=0, max=synth_config.MAX_AMP),
-                               'osc2_mod_index': torch.clamp(parameters_dict['osc2_mod_index'], min=0,
-                                                             max=synth_config.MAX_MOD_INDEX),
-                               'lfo2_freq': torch.clamp(parameters_dict['lfo2_freq'], min=0,
-                                                        max=synth_config.MAX_LFO_FREQ),
-                               'filter_freq': torch.clamp(parameters_dict['filter_freq'],
-                                                          min=synth_config.MIN_FILTER_FREQ,
-                                                          max=synth_config.MAX_FILTER_FREQ)}
-
-        attack_t = torch.clamp(parameters_dict['attack_t'], min=0, max=synth_config.SIGNAL_DURATION_SEC)
-        decay_t = torch.clamp(parameters_dict['decay_t'], min=0, max=synth_config.SIGNAL_DURATION_SEC)
-        sustain_t = torch.clamp(parameters_dict['release_t'], min=0, max=synth_config.SIGNAL_DURATION_SEC)
-        release_t = torch.clamp(parameters_dict['release_t'], min=0, max=synth_config.SIGNAL_DURATION_SEC)
-
-        clamped_attack, clamped_decay, clamped_sustain, clamped_release = \
-            clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t)
-
-        clamped_params_dict['attack_t'] = clamped_attack
-        clamped_params_dict['decay_t'] = clamped_decay
-        clamped_params_dict['sustain_t'] = clamped_sustain
-        clamped_params_dict['release_t'] = clamped_release
-
-        clamped_params_dict['sustain_level'] = torch.clamp(parameters_dict['sustain_level'], min=0,
-                                                           max=synth_config.MAX_AMP)
-
-        # Add Classification parameters as-is
-        clamped_params_dict['osc1_freq'] = parameters_dict['osc1_freq']
-        clamped_params_dict['osc2_freq'] = parameters_dict['osc2_freq']
-        clamped_params_dict['osc1_wave'] = parameters_dict['osc1_wave']
-        clamped_params_dict['osc2_wave'] = parameters_dict['osc2_wave']
-        clamped_params_dict['filter_type'] = parameters_dict['filter_type']
-
-    else:
-        ValueError("Unknown SYNTH_TYPE")
+            clamped_params_dict[key] = \
+                {'operation': operation,
+                 'params':
+                     {'attack_t': clamped_attack,
+                      'decay_t': clamped_decay,
+                      'sustain_t': clamped_sustain,
+                      'sustain_level': torch.clamp(operation_params['sustain_level'], min=0,
+                                                   max=synth_config.MAX_AMP),
+                      'release_t': clamped_release
+                      }
+                 }
 
     return clamped_params_dict
 
 
-def clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t):
+def clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t, cfg: Config):
     """This function clamps the superposition of adsr times, so it does not exceed signal length"""
 
     adsr_length_in_sec = attack_t + decay_t + sustain_t + release_t
 
-    adsr_clamp_indices = torch.nonzero(adsr_length_in_sec >= synth_config.SIGNAL_DURATION_SEC, as_tuple=True)[0]
+    adsr_clamp_indices = torch.nonzero(adsr_length_in_sec >= cfg.signal_duration_sec, as_tuple=True)[0]
 
     normalized_attack_list = []
     normalized_decay_list = []
@@ -258,6 +208,7 @@ def clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t):
 
     return normalized_attack_tensor, normalized_decay_tensor, normalized_sustain_tensor, normalized_release_tensor
 
+
 class Normalizer:
     """ normalize/de-normalise regression parameters"""
     '''
@@ -265,36 +216,36 @@ class Normalizer:
      'osc2_amp', 'osc2_mod_index', 'lfo2_freq', 'lfo2_phase',
      'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']'''
 
-    def __init__(self):
+    def __init__(self, signal_duration_sec, synth_cfg: SynthConfig):
         self.mod_index_normalizer = MinMaxNormaliser(target_min_val=0,
                                                      target_max_val=1,
                                                      original_min_val=0,
-                                                     original_max_val=synth_config.MAX_MOD_INDEX)
+                                                     original_max_val=synth_cfg.max_mod_index)
 
         self.lfo_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                     target_max_val=1,
                                                     original_min_val=0,
-                                                    original_max_val=synth_config.MAX_LFO_FREQ)
+                                                    original_max_val=synth_cfg.max_lfo_freq)
 
         self.lfo_phase_normalizer = MinMaxNormaliser(target_min_val=0,
                                                      target_max_val=1,
                                                      original_min_val=0,
-                                                     original_max_val=TWO_PI)
+                                                     original_max_val=math.pi)
 
         self.adsr_normalizer = MinMaxNormaliser(target_min_val=0,
                                                 target_max_val=1,
                                                 original_min_val=0,
-                                                original_max_val=SIGNAL_DURATION_SEC)
+                                                original_max_val=signal_duration_sec)
 
         self.filter_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                        target_max_val=1,
                                                        original_min_val=0,
-                                                       original_max_val=synth_config.MAX_FILTER_FREQ)
+                                                       original_max_val=synth_cfg.max_filter_freq)
 
         self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                            target_max_val=1,
                                                            original_min_val=0,
-                                                           original_max_val=synth_config.MAX_CARRIER_OSCILLATOR_FREQ)
+                                                           original_max_val=synth_cfg.max_carrier_oscillator_freq)
 
     def normalize(self, parameters_dict: dict):
         normalized_params_dict = {
@@ -313,80 +264,52 @@ class Normalizer:
 
     def denormalize(self, parameters_dict: dict):
 
-        if SYNTH_TYPE == 'MODULAR':
-            denormalized_params_dict = {}
-            for key, val in parameters_dict.items():
-                operation = val['operation']
-                params = val['params']
+        denormalized_params_dict = {}
+        for key, val in parameters_dict.items():
+            operation = val['operation']
+            params = val['params']
 
-                if operation == 'osc':
-                    denormalized_params_dict[key] = \
-                        {'operation': operation,
-                         'params':
-                             {'amp': params['amp'],
-                              'freq': self.lfo_freq_normalizer.denormalise(params['freq']),
-                              'waveform': params['waveform']
-                              }
-                         }
+            if operation == 'osc':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'params':
+                         {'amp': params['amp'],
+                          'freq': self.lfo_freq_normalizer.denormalise(params['freq']),
+                          'waveform': params['waveform']
+                          }
+                     }
 
-                elif operation == 'fm':
-                    denormalized_params_dict[key] = \
-                        {'operation': operation,
-                         'params':
-                             {'amp_c': params['amp_c'],
-                              'freq_c': self.oscillator_freq_normalizer.denormalise(params['freq_c']),
-                              'waveform': params['waveform'],
-                              'mod_index': self.mod_index_normalizer.denormalise(params['mod_index'])
-                              }
-                         }
+            elif operation == 'fm':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'params':
+                         {'amp_c': params['amp_c'],
+                          'freq_c': self.oscillator_freq_normalizer.denormalise(params['freq_c']),
+                          'waveform': params['waveform'],
+                          'mod_index': self.mod_index_normalizer.denormalise(params['mod_index'])
+                          }
+                     }
 
-                elif operation == 'filter':
-                    denormalized_params_dict[key] = \
-                        {'operation': operation,
-                         'params':
-                             {'filter_type': params['filter_type'],
-                              'filter_freq': self.filter_freq_normalizer.denormalise(params['filter_freq'])
-                              }
-                         }
+            elif operation == 'filter':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'params':
+                         {'filter_type': params['filter_type'],
+                          'filter_freq': self.filter_freq_normalizer.denormalise(params['filter_freq'])
+                          }
+                     }
 
-                elif operation == 'env_adsr':
-                    denormalized_params_dict[key] = \
-                        {'operation': operation,
-                         'params':
-                             {'attack_t': self.adsr_normalizer.denormalise(params['attack_t']),
-                              'decay_t': self.adsr_normalizer.denormalise(params['decay_t']),
-                              'sustain_t': self.adsr_normalizer.denormalise(params['sustain_t']),
-                              'sustain_level': params['sustain_level'],
-                              'release_t': self.filter_freq_normalizer.denormalise(params['release_t'])
-                              }
-                         }
-
-        elif SYNTH_TYPE == 'OSC_ONLY':
-            denormalized_params_dict = {'osc1_freq': parameters_dict['osc1_freq']}
-        elif SYNTH_TYPE == 'SYNTH_BASIC':
-            denormalized_params_dict = {
-                'osc1_mod_index': self.mod_index_normalizer.denormalise(parameters_dict['osc1_mod_index']),
-                'lfo1_freq': self.lfo_freq_normalizer.denormalise(parameters_dict['lfo1_freq']),
-                'osc2_mod_index': self.mod_index_normalizer.denormalise(parameters_dict['osc2_mod_index']),
-                'lfo2_freq': self.lfo_freq_normalizer.denormalise(parameters_dict['lfo2_freq']),
-                'filter_freq': self.filter_freq_normalizer.denormalise(parameters_dict['filter_freq']),
-                'attack_t': self.adsr_normalizer.denormalise(parameters_dict['attack_t']),
-                'decay_t': self.adsr_normalizer.denormalise(parameters_dict['decay_t']),
-                'sustain_t': self.adsr_normalizer.denormalise(parameters_dict['sustain_t']),
-                'release_t': self.adsr_normalizer.denormalise(parameters_dict['release_t']),
-
-                # params that doesn't need denormalization:
-                'osc1_freq': parameters_dict['osc1_freq'],
-                'osc1_wave': parameters_dict['osc1_wave'],
-                'osc1_amp': parameters_dict['osc1_amp'],
-                'osc2_freq': parameters_dict['osc2_freq'],
-                'osc2_wave': parameters_dict['osc2_wave'],
-                'osc2_amp': parameters_dict['osc2_amp'],
-                'filter_type': parameters_dict['filter_type'],
-                'sustain_level': parameters_dict['sustain_level']}
-        else:
-            denormalized_params_dict = None
-            ValueError("Unknown SYNTH_TYPE")
+            elif operation == 'env_adsr':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'params':
+                         {'attack_t': self.adsr_normalizer.denormalise(params['attack_t']),
+                          'decay_t': self.adsr_normalizer.denormalise(params['decay_t']),
+                          'sustain_t': self.adsr_normalizer.denormalise(params['sustain_t']),
+                          'sustain_level': params['sustain_level'],
+                          'release_t': self.filter_freq_normalizer.denormalise(params['release_t'])
+                          }
+                     }
 
         return denormalized_params_dict
 
@@ -493,14 +416,14 @@ def lsd_loss(input_spectrogram: Tensor, ouput_spectrogram: Tensor) -> Tensor:
     return log_spectral_distance
 
 
-def regression_freq_accuracy(output_dic, target_params_dic, device_arg):
-    osc_freq_tensor = torch.tensor(OSC_FREQ_LIST, device=device_arg)
+def regression_freq_accuracy(output_dic, target_params_dic, device_arg, synth_cfg: SynthConfig, cfg: Config):
+    osc_freq_tensor = torch.tensor(synth_cfg.osc_freq_list, device=device_arg)
     param_dict_to_synth = output_dic
     closest_frequency_index = torch.searchsorted(osc_freq_tensor, param_dict_to_synth['osc1_freq'])
     num_correct_predictions = 0
 
-    frequency_id = list(range(len(OSC_FREQ_LIST)))
-    frequency_list = OSC_FREQ_LIST
+    frequency_id = list(range(len(synth_cfg.osc_freq_list)))
+    frequency_list = synth_cfg.osc_freq_list
     prediction_success = []
     frequency_predictions = []
     frequency_model_output = []
@@ -511,20 +434,20 @@ def regression_freq_accuracy(output_dic, target_params_dic, device_arg):
         closest_osc_index_from_below = closest_frequency_index[i] - 1
         closest_osc_index_from_above = closest_frequency_index[i]
         if closest_osc_index_from_below == -1:
-            rounded_predicted_freq = OSC_FREQ_LIST[0]
-        elif closest_osc_index_from_above == len(OSC_FREQ_LIST):
-            rounded_predicted_freq = OSC_FREQ_LIST[len(OSC_FREQ_LIST) - 1]
+            rounded_predicted_freq = synth_cfg.osc_freq_list[0]
+        elif closest_osc_index_from_above == len(synth_cfg.osc_freq_list):
+            rounded_predicted_freq = synth_cfg.osc_freq_list[len(synth_cfg.osc_freq_list) - 1]
         else:
-            below_ratio = predicted_osc / OSC_FREQ_LIST[closest_osc_index_from_below.item()]
-            above_ratio = OSC_FREQ_LIST[closest_osc_index_from_above.item()] / predicted_osc
+            below_ratio = predicted_osc / synth_cfg.osc_freq_list[closest_osc_index_from_below.item()]
+            above_ratio = synth_cfg.osc_freq_list[closest_osc_index_from_above.item()] / predicted_osc
 
             if below_ratio < above_ratio:
-                rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_below.item()]
+                rounded_predicted_freq = synth_cfg.osc_freq_list[closest_osc_index_from_below.item()]
             else:
-                rounded_predicted_freq = OSC_FREQ_LIST[closest_osc_index_from_above.item()]
+                rounded_predicted_freq = synth_cfg.osc_freq_list[closest_osc_index_from_above.item()]
 
         frequency_predictions.append(rounded_predicted_freq)
-        target_osc = OSC_FREQ_DIC_INV[target_params_dic['classification_params']['osc1_freq'][i].item()]
+        target_osc = synth_cfg.osc_freq_dic_inv[target_params_dic['classification_params']['osc1_freq'][i].item()]
 
         if abs(rounded_predicted_freq - target_osc) < 1:
             prediction_success.append(1)
@@ -544,7 +467,7 @@ def regression_freq_accuracy(output_dic, target_params_dic, device_arg):
         }
         stats.append(dict_record)
 
-    if PRINT_ACCURACY_STATS:
+    if cfg.print_accuracy_stats:
         fmt = [
             ('Frequency ID', 'frequency_id', 13),
             ('Frequency (Hz)', 'frequency(Hz)', 17),
@@ -675,6 +598,7 @@ class SpectralLoss:
     """
 
     def __init__(self,
+                 cfg: Config,
                  fft_sizes=(2048, 1024, 512, 256, 128, 64),
                  loss_type='L1',
                  mag_weight=1.0,
@@ -683,6 +607,7 @@ class SpectralLoss:
                  cumsum_freq_weight=1.0,
                  logmag_weight=1,
                  loudness_weight=0.0,
+                 device='cpu',
                  name='spectral_loss'):
         """Constructor, set loss weights of various components.
     Args:
@@ -719,26 +644,27 @@ class SpectralLoss:
         self.cumsum_freq_weight = cumsum_freq_weight
         self.logmag_weight = logmag_weight
         self.loudness_weight = loudness_weight
+        self.device = device
 
         self.spectrogram_ops = []
         for size in self.fft_sizes:
-            if MULTI_SPECTRAL_LOSS_SPEC_TYPE == 'BOTH' or MULTI_SPECTRAL_LOSS_SPEC_TYPE == 'SPECTROGRAM':
+            if cfg.multi_spectral_loss_spec_type == 'BOTH' or cfg.multi_spectral_loss_spec_type == 'SPECTROGRAM':
                 spec_transform = torchaudio.transforms.Spectrogram(
                     n_fft=size,
                     power=2.0
-                ).to(get_device())
+                ).to(self.device)
                 self.spectrogram_ops.append(spec_transform)
 
-            if MULTI_SPECTRAL_LOSS_SPEC_TYPE == 'BOTH' or MULTI_SPECTRAL_LOSS_SPEC_TYPE == 'MEL_SPECTROGRAM':
+            if cfg.multi_spectral_loss_spec_type == 'BOTH' or cfg.multi_spectral_loss_spec_type == 'MEL_SPECTROGRAM':
                 mel_spec_transform = torchaudio.transforms.MelSpectrogram(
-                    sample_rate=SAMPLE_RATE,
+                    sample_rate=cfg.sample_rate,
                     n_fft=size,
                     hop_length=int(size / 4),
                     n_mels=256,
                     power=2.0,
                     f_min=0,
                     f_max=1300
-                ).to(get_device())
+                ).to(self.device)
                 self.spectrogram_ops.append(mel_spec_transform)
 
     def call(self, target_audio, audio, weights=None):
@@ -832,16 +758,10 @@ def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, accur
     path_parent = os.path.dirname(os.getcwd())
 
     # save model checkpoint
-    if OS == 'WINDOWS':
-        model_checkpoint = path_parent + f"\\trained_models\\synth_net_epoch{cur_epoch}.pt"
-        plot_path = path_parent + f"\\trained_models\\loss_graphs\\end_epoch{cur_epoch}_loss_graph.png"
-        txt_path = path_parent + f"\\trained_models\\loss_list.txt"
-    elif OS == 'LINUX':
-        model_checkpoint = path_parent + f"/ai_synth/trained_models/synth_net_epoch{cur_epoch}.pt"
-        plot_path = path_parent + f"/ai_synth/trained_models/loss_graphs/end_epoch{cur_epoch}_loss_graph.png"
-        txt_path = path_parent + f"/ai_synth/trained_models/loss_list.txt"
-    else:
-        ValueError("Unknown OS")
+    model_checkpoint = Path(__file__).parent.parent.joinpath('trained_models', f'synth_net_epoch{cur_epoch}.pt')
+    plot_path = \
+        Path(__file__).parent.parent.joinpath('trained_models', 'loss_graphs', f'end_epoch{cur_epoch}_loss_graph.png')
+    txt_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.txt')
 
     torch.save({
         'epoch': cur_epoch,
@@ -858,14 +778,14 @@ def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, accur
     text_file.close()
 
 
-def reset_stats():
+def reset_stats(synth_cfg: SynthConfig):
     avg_loss = 0
     avg_accuracy = 0
     stats = []
-    for j in range(len(OSC_FREQ_LIST)):
+    for j in range(len(synth_cfg.osc_freq_list)):
         dict_record = {
             'frequency_id': j,
-            'frequency(Hz)': round(OSC_FREQ_LIST[j], 3),
+            'frequency(Hz)': round(synth_cfg.osc_freq_list[j], 3),
             'prediction_success': 0,
             'predicted_frequency': 0,
             'frequency_model_output': 0
@@ -875,11 +795,34 @@ def reset_stats():
     return avg_loss, avg_accuracy, stats
 
 
-def print_modular_stats(predicted_param_dict, target_param_dict):
+def print_modular_stats(predicted_param_dict, target_param_dict, synth_cfg: SynthConfig):
+    mapped_target_param_dict = {}
+    for idx, value in target_param_dict.items():
+
+        cell_dict = target_param_dict[idx]
+        params_dict = cell_dict['parameters']
+
+        mapped_params_dict = {}
+        if params_dict != 'None' and not isinstance(params_dict, list):
+            for key, val in params_dict.items():
+                if key in ['waveform', 'freq_c', 'filter_type']:
+                    if key == 'waveform':
+                        mapped_params_dict[key] = torch.Tensor([synth_cfg.wave_type_dict[x] for x in val]).to(get_device())
+                    elif key == 'freq_c':
+                        val_list = val.tolist()
+                        mapped_params_dict[key] = torch.Tensor([synth_cfg.osc_freq_dic[round(x, 4)] for x in val_list]).to(get_device())
+                    elif key == 'filter_type':
+                        mapped_params_dict[key] = synth_cfg.filter_type_dict[val]
+                else:
+                    mapped_params_dict[key] = params_dict[key].clone().detach().requires_grad_(True).to(get_device())
+
+        mapped_cell_dict = {'operation': cell_dict['operation'],
+                            'parameters': mapped_params_dict}
+        mapped_target_param_dict[idx] = mapped_cell_dict
+
     for index, operation_dict in predicted_param_dict.items():
-        string_index = f'{index}'
         operation = operation_dict['operation']
-        result = all(elem == operation for elem in target_param_dict[string_index][0])
+        result = all(elem == operation for elem in target_param_dict[index]['operation'])
         if not result:
             AssertionError("Unpredictable operation prediction behavior")
 
@@ -890,9 +833,9 @@ def print_modular_stats(predicted_param_dict, target_param_dict):
             predicted_carrier_freq = operation_dict['params']['freq'].squeeze()
             predicted_waveform = operation_dict['params']['waveform'].argmax(dim=1)
 
-            target_amp = target_param_dict[string_index][1]['amp']
-            target_freq = target_param_dict[string_index][1]['freq']
-            target_waveform = target_param_dict[string_index][1]['waveform']
+            target_amp = mapped_target_param_dict[index]['parameters']['amp']
+            target_freq = mapped_target_param_dict[index]['parameters']['freq']
+            target_waveform = mapped_target_param_dict[index]['parameters']['waveform']
 
             amp_dist = pdist(predicted_carrier_amp, target_amp)
             freq_dist = pdist(predicted_carrier_freq, target_freq)
@@ -904,21 +847,22 @@ def print_modular_stats(predicted_param_dict, target_param_dict):
             print(f"\tfreq l2 dist: {freq_dist}")
             print(f"\twaveform accuracy: {waveform_accuracy}%\n")
 
+
         elif operation == 'fm':
             predicted_carrier_amp = operation_dict['params']['amp_c'].squeeze()
             predicted_carrier_freq = operation_dict['params']['freq_c'].squeeze()
             predicted_carrier_waveform = operation_dict['params']['waveform'].argmax(dim=1)
             predicted_mod_index = operation_dict['params']['mod_index'].squeeze()
 
-            target_carrier_amp = target_param_dict[string_index][1]['amp_c']
-            target_carrier_freq = target_param_dict[string_index][1]['freq_c']
-            target_carrier_waveform = target_param_dict[string_index][1]['waveform']
-            target_mod_index = target_param_dict[string_index][1]['mod_index']
+            target_carrier_amp = mapped_target_param_dict[index]['parameters']['amp_c']
+            target_carrier_freq = mapped_target_param_dict[index]['parameters']['freq_c']
+            target_carrier_waveform = mapped_target_param_dict[index]['parameters']['waveform']
+            target_mod_index = mapped_target_param_dict[index]['parameters']['mod_index']
 
             carrier_amp_dist = pdist(predicted_carrier_amp, target_carrier_amp)
             carrier_freq_dist = pdist(predicted_carrier_freq, target_carrier_freq)
             carrier_waveform_accuracy = \
-                torch.sum(torch.eq(predicted_carrier_waveform, target_carrier_waveform))\
+                torch.sum(torch.eq(predicted_carrier_waveform, target_carrier_waveform)) \
                 * 100 / target_waveform.shape[0]
             mod_index_dist = pdist(predicted_mod_index, target_mod_index)
 
@@ -928,12 +872,13 @@ def print_modular_stats(predicted_param_dict, target_param_dict):
             print(f"\tcarrier waveform accuracy: {carrier_waveform_accuracy}%")
             print(f"\tmod_index l2 dist: {mod_index_dist}\n")
 
+
         elif operation == 'filter':
             predicted_filter_freq = operation_dict['params']['filter_freq'].squeeze()
             predicted_filter_type = operation_dict['params']['filter_type'].argmax(dim=1)
 
-            target_filter_freq = target_param_dict[string_index][1]['filter_freq']
-            target_filter_type = target_param_dict[string_index][1]['filter_type']
+            target_filter_freq = target_param_dict[index]['parameters']['filter_freq']
+            target_filter_type = target_param_dict[index]['parameters']['filter_type']
 
             filter_freq_dist = pdist(predicted_filter_freq, target_filter_freq)
             filter_type_accuracy = \
@@ -943,6 +888,7 @@ def print_modular_stats(predicted_param_dict, target_param_dict):
             print(f"\tfilter_freq l2 dist: {filter_freq_dist}")
             print(f"\tfilter_type accuracy: {filter_type_accuracy}%\n")
 
+
         elif operation == 'env_adsr':
             predicted_attack_t = operation_dict['params']['attack_t'].squeeze()
             predicted_decay_t = operation_dict['params']['decay_t'].squeeze()
@@ -950,11 +896,11 @@ def print_modular_stats(predicted_param_dict, target_param_dict):
             predicted_sustain_level = operation_dict['params']['sustain_level'].squeeze()
             predicted_release_t = operation_dict['params']['release_t'].squeeze()
 
-            target_attack_t = target_param_dict[string_index][1]['attack_t']
-            target_decay_t = target_param_dict[string_index][1]['decay_t']
-            target_sustain_t = target_param_dict[string_index][1]['sustain_t']
-            target_sustain_level = target_param_dict[string_index][1]['sustain_level']
-            target_release_t = target_param_dict[string_index][1]['release_t']
+            target_attack_t = target_param_dict[index]['parameters']['attack_t']
+            target_decay_t = target_param_dict[index]['parameters']['decay_t']
+            target_sustain_t = target_param_dict[index]['parameters']['sustain_t']
+            target_sustain_level = target_param_dict[index]['parameters']['sustain_level']
+            target_release_t = target_param_dict[index]['parameters']['release_t']
 
             attack_t_dist = pdist(predicted_attack_t, target_attack_t)
             decay_t_dist = pdist(predicted_decay_t, target_decay_t)
@@ -968,3 +914,5 @@ def print_modular_stats(predicted_param_dict, target_param_dict):
             print(f"\tsustain_t l2 dist: {sustain_t_dist}")
             print(f"\tsustain_level l2 dist: {sustain_level_dist}")
             print(f"\trelease_t l2 dist: {release_t_dist}\n")
+
+

@@ -32,9 +32,9 @@ def predict(model, test_data_loader, device_arg):
 
             # Infer predictions
             predicted_dic = {}
-            for param in synth.CLASSIFICATION_PARAM_LIST:
+            for param in synth.classification_param_list:
                 predicted_dic[param] = torch.argmax(output_dic[param], dim=1)
-            for index, param in enumerate(synth.REGRESSION_PARAM_LIST):
+            for index, param in enumerate(synth.regression_param_list):
                 predicted_dic[param] = output_dic['regression_params'][:, index]
 
             predicted_dic = helper.map_classification_params_from_ints(predicted_dic)
@@ -60,9 +60,9 @@ def predict(model, test_data_loader, device_arg):
                 # todo: include the index of audio file in the dataset parameters
                 # Infer original audio from
                 original_dic = {}
-                for param in synth.CLASSIFICATION_PARAM_LIST:
+                for param in synth.classification_param_list:
                     original_dic[param] = target_params_dic['classification_params'][param][i]
-                for index, param in enumerate(synth.REGRESSION_PARAM_LIST):
+                for index, param in enumerate(synth.regression_param_list):
                     original_dic[param] = target_params_dic['regression_params'][param][i]
 
                 for key, value in original_dic.items():
@@ -240,7 +240,7 @@ if __name__ == "__main__":
     ai_synth_test_dataset = AiSynthDataset(TEST_PARAMETERS_FILE,
                                            TEST_AUDIO_DIR,
                                            helper.mel_spectrogram_transform,
-                                           synth.SAMPLE_RATE,
+                                           synth.sample_rate,
                                            device)
 
     test_dataloader = helper.create_data_loader(ai_synth_test_dataset, BATCH_SIZE)

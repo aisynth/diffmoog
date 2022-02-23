@@ -1,17 +1,18 @@
 import pandas as pd
-import os
 import scipy.io.wavfile
 import torch
+from pathlib import Path
 import helper
-from synth.synth_architecture import SynthBasicFlow, SynthOscOnly, SynthModular
-from config import DATASET_SIZE, DATASET_TYPE, DATASET_MODE, OS, SYNTH_TYPE, ONLY_OSC_DATASET, PRESET, SAMPLE_RATE
-from synth.synth_config import OSC_FREQ_LIST, NUM_LAYERS, NUM_CHANNELS
-from synth.synth_modular_presets import BASIC_FLOW, FM
+from synth.synth_architecture import SynthModular
+from src.synth import synth_modular_presets
+from config import SynthConfig, DatasetConfig, Config
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+
 
 """
 Create a dataset by randomizing synthesizer parameters and generating sound.
 
-DATASET_MODE may be WAV or MEL_SPEC:
+cfg.dataset_mode may be WAV or MEL_SPEC:
     WAV mode creates audio files
     MEL_SPEC mode creates tensors with the audio files converted using mel spectrogram and amplitude to dB 
     transformations 
@@ -22,104 +23,97 @@ locations
 
 Configurations settings are inside config file.
 """
-if __name__ == "__main__":
+
+
+def create_dataset(train: bool,data_cfg: DatasetConfig, synth_cfg: SynthConfig, sample_rate):
     dataset = []
-    dataset_type = DATASET_TYPE
-    print(f"Creating dataset \n mode = {DATASET_MODE}, size = {DATASET_SIZE} \n")
+    print(f"Creating dataset \n mode = {data_cfg.dataset_mode}, size = {data_cfg.dataset_size} \n")
 
-    path_parent = os.path.dirname(os.getcwd())
-    if dataset_type == 'TRAIN':
-        if OS == 'WINDOWS':
-            dataset_dir_path = path_parent + f"\\dataset\\train\\"
-        elif OS == 'LINUX':
-            dataset_dir_path = path_parent + f"/ai_synth/dataset/train/"
-    if dataset_type == 'TEST':
-        if OS == 'WINDOWS':
-            dataset_dir_path = path_parent + f"\\ai_synth\\dataset\\test\\"
-        elif OS == 'LINUX':
-            dataset_dir_path = path_parent + f"/ai_synth/dataset/test/"
+    path_parent = Path(__file__).parent.parent
+    if train:
+        dataset_dir_path = path_parent.joinpath('dataset', 'train')
+    else:
+        dataset_dir_path = path_parent.joinpath('dataset', 'test')
 
-    for i in range(DATASET_SIZE):
+    for i in range(data_cfg.dataset_size):
         file_name = f"sound_{i}"
-        if SYNTH_TYPE == 'SYNTH_BASIC':
-            synth_obj = SynthBasicFlow(file_name)
-        elif SYNTH_TYPE == 'OSC_ONLY':
-            if ONLY_OSC_DATASET:
-                synth_obj = SynthOscOnly(file_name, parameters_dict={'osc1_freq': OSC_FREQ_LIST[i]})
-            else:
-                synth_obj = SynthOscOnly(file_name, parameters_dict=None)
-        elif SYNTH_TYPE == 'MODULAR':
-            # update_params = [
-            #     SynthModularCell(index=(0, 0), parameters={'amp': 1, 'freq': 3, 'waveform': 'sine'}),
-            #     SynthModularCell(index=(0, 1), parameters={'amp_c': 0.9, 'freq_c': 220, 'waveform': 'square',
-            #                                                'mod_index': 10}),
-            #     SynthModularCell(index=(1, 0), parameters={'amp': 1, 'freq': 1, 'waveform': 'sine'}),
-            #     SynthModularCell(index=(1, 1), parameters={'amp_c': 0.7, 'freq_c': 500, 'waveform': 'sine',
-            #                                                'mod_index': 10}),
-            #     SynthModularCell(index=(0, 2), parameters={'factor': 0}),
-            #     SynthModularCell(index=(0, 3), parameters={'filter_freq': 15000, 'filter_type': 'low_pass'}),
-            #     SynthModularCell(index=(0, 4), parameters={'attack_t': 0.25, 'decay_t': 0.25, 'sustain_t': 0.25,
-            #                                                'sustain_level': 0.3, 'release_t': 0.25})
-            # ]
-            synth_obj = SynthModular()
-            if PRESET == 'BASIC_FLOW':
-                preset = BASIC_FLOW
-            elif PRESET == 'FM':
-                preset = FM
-            synth_obj.apply_architecture(preset)
-            synth_obj.generate_random_parmas(num_sounds=1)
-            # synth_obj.update_cells(update_params)
-            synth_obj.generate_signal()
-        else:
-            raise ValueError("Provided SYNTH_TYPE is not recognized")
+
+        # update_params = [
+        #     SynthModularCell(index=(0, 0), parameters={'amp': 1, 'freq': 3, 'waveform': 'sine'}),
+        #     SynthModularCell(index=(0, 1), parameters={'amp_c': 0.9, 'freq_c': 220, 'waveform': 'square',
+        #                                                'mod_index': 10}),
+        #     SynthModularCell(index=(1, 0), parameters={'amp': 1, 'freq': 1, 'waveform': 'sine'}),
+        #     SynthModularCell(index=(1, 1), parameters={'amp_c': 0.7, 'freq_c': 500, 'waveform': 'sine',
+        #                                                'mod_index': 10}),
+        #     SynthModularCell(index=(0, 2), parameters={'factor': 0}),
+        #     SynthModularCell(index=(0, 3), parameters={'filter_freq': 15000, 'filter_type': 'low_pass'}),
+        #     SynthModularCell(index=(0, 4), parameters={'attack_t': 0.25, 'decay_t': 0.25, 'sustain_t': 0.25,
+        #                                                'sustain_level': 0.3, 'release_t': 0.25})
+        # ]
+        synth_obj = SynthModular(sample_rate=sample_rate,
+                                 signal_duration_sec=1.0,
+                                 num_sounds=1)
+        if synth_cfg.preset == 'BASIC_FLOW':
+            synth_cfg.preset = synth_modular_presets.BASIC_FLOW
+        elif synth_cfg.preset == 'FM':
+            synth_cfg.preset = synth_modular_presets.FM
+        synth_obj.apply_architecture(synth_cfg.preset)
+        synth_obj.generate_random_params(synth_cfg=synth_cfg,
+                                         num_sounds=1)
+        # synth_obj.update_cells(update_params)
+        synth_obj.generate_signal()
 
         audio = synth_obj.signal
-        if SYNTH_TYPE == 'SYNTH_BASIC' or SYNTH_TYPE == 'OSC_ONLY':
-            parameters = synth_obj.params_dict
-            dataset.append(parameters)
-        elif SYNTH_TYPE == 'MODULAR':
-            params_dict = {}
-            for layer in range(NUM_LAYERS):
-                for channel in range(NUM_CHANNELS):
-                    cell = synth_obj.architecture[channel][layer]
-                    if cell.operation is not None:
-                        operation = cell.operation
-                    else:
-                        operation = 'None'
-                    if cell.parameters is not None:
-                        parameters = cell.parameters
-                    else:
-                        parameters = 'None'
-                    params_dict[cell.index] = [operation, parameters]
-            dataset.append(params_dict)
 
-            # dataset = pd.concat([pd.DataFrame(l) for l in dataset], axis=1).T
+        params_dict = {}
+        for layer in range(synth_cfg.num_layers):
+            for channel in range(synth_cfg.num_channels):
+                cell = synth_obj.architecture[channel][layer]
+                if cell.operation is not None:
+                    operation = cell.operation
+                else:
+                    operation = 'None'
+                if cell.parameters is not None:
+                    parameters = cell.parameters
+                else:
+                    parameters = 'None'
+                params_dict[cell.index] = {'operation': operation, 'parameters': parameters}
+        dataset.append(params_dict)
 
-        if DATASET_MODE == 'WAV':
-            if OS == 'WINDOWS':
-                audio_path = dataset_dir_path + "wav_files\\" + f"{file_name}.wav"
-            elif OS == 'LINUX':
-                audio_path = dataset_dir_path + "wav_files/" + f"{file_name}.wav"
+        # dataset = pd.concat([pd.DataFrame(l) for l in dataset], axis=1).T
+
+        if data_cfg.dataset_mode == 'WAV':
+            audio_path = dataset_dir_path.joinpath("wav_files", f"{file_name}.wav")
 
             audio = torch.squeeze(audio)
             audio = audio.detach().cpu().numpy()
 
-            scipy.io.wavfile.write(audio_path, SAMPLE_RATE, audio)
+            scipy.io.wavfile.write(audio_path, sample_rate, audio)
             print(f"Generated {file_name}")
 
-        elif DATASET_MODE == 'MEL_SPEC':
-            audio_mel_spec = helper.mel_spectrogram_transform(audio)
+        elif data_cfg.dataset_mode == 'MEL_SPEC':
+            transform = helper.mel_spectrogram_transform(sample_rate=sample_rate)
+            audio_mel_spec = transform(audio)
             audio_log_mel_spec = helper.amplitude_to_db_transform(audio_mel_spec)
             audio_log_mel_spec = torch.unsqueeze(audio_log_mel_spec, dim=0)
-            if OS == 'WINDOWS':
-                audio_mel_spec_path = dataset_dir_path + f"audio_mel_spec_files\\{file_name}.pt"
-            elif OS == 'LINUX':
-                audio_mel_spec_path = dataset_dir_path + f"audio_mel_spec_files/{file_name}.pt"
+            audio_mel_spec_path = dataset_dir_path.joinpath("audio_mel_spec_files", f"{file_name}.pt")
             torch.save(audio_log_mel_spec, audio_mel_spec_path)
             print(f"Generated {file_name}")
 
     dataframe = pd.DataFrame(dataset)
-    parameters_path = dataset_dir_path + "dataset.csv"
+    parameters_path = dataset_dir_path.joinpath("dataset.pkl")
+    dataframe.to_pickle(str(parameters_path))
 
-    dataframe.to_csv(parameters_path)
+
+if __name__ == '__main__':
+    parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter, description='Train AI Synth')
+    parser.add_argument('-g', '--gpu_index', help='index of gpu (if exist, torch indexing) -1 for cpu',
+                        type=int, default=0)
+    parser.add_argument('-t', '--train', action='store_true', default=True)
+
+    args = parser.parse_args()
+    synth_cfg = SynthConfig()
+    dataset_cfg = DatasetConfig()
+    cfg = Config()
+    create_dataset(args.train, dataset_cfg, synth_cfg, sample_rate=cfg.sample_rate)
 

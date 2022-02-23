@@ -1,0 +1,4 @@
+params:
+  batch_size: 128
+  num_epochs: 50000
+  learning_rate: 0.001
