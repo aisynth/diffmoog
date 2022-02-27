@@ -160,8 +160,7 @@ class SynthModular:
         synth_module = SynthModules(num_sounds=1,
                                     sample_rate=self.sample_rate,
                                     signal_duration_sec=self.signal_duration_sec,
-                                    device=self.device,
-                                    debug_mode=False)
+                                    device=self.device)
 
         for layer in range(self.num_layers):
             for channel in range(self.num_channels):

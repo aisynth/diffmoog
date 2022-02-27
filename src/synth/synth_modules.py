@@ -10,7 +10,6 @@ import math
 
 import matplotlib.pyplot as plt
 # import simpleaudio as sa
-from pip._internal.cli.cmdoptions import debug_mode
 
 import helper
 import julius
@@ -21,7 +20,7 @@ TWO_PI = 2 * PI
 
 
 class SynthModules:
-    def __init__(self, num_sounds=1, sample_rate=44100, signal_duration_sec=1.0, device='cuda:0', debug_mode=False):
+    def __init__(self, num_sounds=1, sample_rate=44100, signal_duration_sec=1.0, device='cuda:0'):
         self.sample_rate = sample_rate
         self.sig_duration = signal_duration_sec
         self.time_samples = torch.linspace(0, self.sig_duration, steps=int(self.sample_rate * self.sig_duration),
@@ -379,11 +378,6 @@ class SynthModules:
             else:
                 enveloped = enveloped_signal.unsqueeze(dim=0)
                 enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped), dim=0)
-
-            if debug_mode:
-                plt.plot(envelope.cpu())
-                plt.plot(self.signal.cpu())
-                plt.show()
 
         return enveloped_signal_tensor
 

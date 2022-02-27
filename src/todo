@@ -1,14 +1,14 @@
-    # todo:
+# todo:
 
-    1.  dataset creator saves only operation and parameters. shall save full architecture design!
-        line 93 at dataset_creator
-        params_dict[cell.index] = [operation, parameters]
+1. concat several mel-spec transform with different window size to be inputted into model
+2. check run in the server
+3. read Lior's article concerning chaining of instruction-sets
+4. keep doing refactoring. fix device printing, make sure all run by configuration,
+5. checkout mlflow or tensorboard \ hydra
+6. add output of every cell to the dataset.
 
-    2.  do something with warning
-        UserWarning: At least one mel filterbank has all zero values...
 
-    3.  debug training, look that all heads from model act as required
 
-    4.  add statistics for all the parameters
+
 
 
