@@ -45,8 +45,9 @@ class BigSynthNetwork(nn.Module):
                         Using argmax to predict a single value is not diffrentiable.
     """
 
-    def __init__(self, synth_cfg: SynthConfig):
+    def __init__(self, synth_cfg: SynthConfig, device):
         super().__init__()
+        self.device = device
         self.conv1 = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
@@ -126,7 +127,7 @@ class BigSynthNetwork(nn.Module):
                                            'module_dict': nn.ModuleDict({
                                                'amp': amplitude_head,
                                                'freq': frequency_head,
-                                               'waveform': waveform_head}).to(device=helper.get_device())}
+                                               'waveform': waveform_head}).to(device=device)}
             elif operation == 'fm':
                 carrier_amplitude_head = nn.Sequential(
                     nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
@@ -149,7 +150,7 @@ class BigSynthNetwork(nn.Module):
                                                'amp_c': carrier_amplitude_head,
                                                'freq_c': carrier_frequency_head,
                                                'waveform': carrier_waveform_head,
-                                               'mod_index': modulation_index_head}).to(device=helper.get_device())}
+                                               'mod_index': modulation_index_head}).to(device=device)}
             elif operation == 'filter':
                 filter_type_head = nn.Sequential(
                     nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
@@ -162,7 +163,7 @@ class BigSynthNetwork(nn.Module):
                 self.module_dict[index] = {'operation': operation,
                                            'module_dict': nn.ModuleDict({
                                                'filter_type': filter_type_head,
-                                               'filter_freq': filter_freq_head}).to(device=helper.get_device())}
+                                               'filter_freq': filter_freq_head}).to(device=device)}
             elif operation == 'env_adsr':
                 attack_t_head = nn.Sequential(
                     nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
@@ -190,7 +191,7 @@ class BigSynthNetwork(nn.Module):
                                                'decay_t': decay_t_head,
                                                'sustain_t': sustain_t_head,
                                                'sustain_level': sustain_level_head,
-                                               'release_t': release_t_head}).to(device=helper.get_device())}
+                                               'release_t': release_t_head}).to(device=device)}
 
         self.softmax = nn.Softmax(dim=1)
         self.sigmoid = nn.Sigmoid()

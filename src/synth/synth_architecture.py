@@ -4,6 +4,7 @@ import numpy
 # from synth.synth_config import OSC_FREQ_LIST, WAVE_TYPE_DIC, NUM_LAYERS, NUM_CHANNELS, MAX_MOD_INDEX, MAX_LFO_FREQ, \
 #     FILTER_TYPE_DIC, MIN_FILTER_FREQ, MAX_FILTER_FREQ, MODULAR_SYNTH_OPERATIONS, MODULAR_SYNTH_PARAMS
 from config import SynthConfig, Config
+from synth import synth_modular_presets
 import random
 import simpleaudio as sa
 import numpy as np
@@ -21,7 +22,8 @@ class SynthModular:
                  sample_rate=44100,
                  signal_duration_sec=1.0,
                  num_sounds=1,
-                 device='cuda:0'
+                 device='cuda:0',
+                 preset: str = None
                  ):
 
         self.architecture = [[SynthModularCell(index=(channel, layer), default_connection=True)
@@ -35,6 +37,10 @@ class SynthModular:
         self.signal = torch.zeros((1, int(sample_rate * signal_duration_sec)), requires_grad=True)
         self.synth_cfg = synth_cfg
         self.device = device
+        self.preset = self.get_preset(preset)
+
+        if preset is not None:
+            self.apply_architecture(self.preset)
 
     def apply_architecture(self, cell_list):
         for cell in cell_list:
@@ -259,6 +265,16 @@ class SynthModular:
 
         self.signal = final_signal
         return final_signal
+
+    def get_preset(self, preset: str):
+        if preset == 'BASIC_FLOW':
+            preset = synth_modular_presets.BASIC_FLOW
+        elif preset == 'FM':
+            preset = synth_modular_presets.FM
+        else:
+            preset = None
+            ValueError("Unknown PRESET")
+        return preset
 
 
 class SynthModularCell:

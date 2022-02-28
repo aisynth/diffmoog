@@ -9,7 +9,6 @@ from synth import synth_config
 from torch import nn
 from config import SynthConfig, Config
 from pathlib import Path
-from torch.utils.tensorboard import SummaryWriter
 import math
 import numpy as np
 
@@ -41,11 +40,10 @@ def move_to(obj, device):
         raise TypeError("Invalid type for move_to")
 
 
-spectrogram_transform = torchaudio.transforms.Spectrogram(
-    # win_length default = n_fft. hop_length default = win_length / 2
-    n_fft=512,
-    power=2.0
-).to(get_device())
+def spectrogram_transform():
+    return torchaudio.transforms.Spectrogram(  # win_length default = n_fft. hop_length default = win_length / 2
+                                             n_fft=512,
+                                             power=2.0)
 
 
 def mel_spectrogram_transform(sample_rate):
@@ -55,10 +53,10 @@ def mel_spectrogram_transform(sample_rate):
                                                 n_mels=128,
                                                 power=2.0,
                                                 f_min=0,
-                                                f_max=8000).to(get_device())
+                                                f_max=8000)
 
 
-amplitude_to_db_transform = torchaudio.transforms.AmplitudeToDB().to(get_device())
+amplitude_to_db_transform = torchaudio.transforms.AmplitudeToDB()
 
 
 # log_mel_spec_transform = torch.nn.Sequential(mel_spectrogram_transform, amplitude_to_db_transform).to(get_device())
@@ -366,14 +364,14 @@ class LogNormaliser:
 
 
 # from https://github.com/pytorch/pytorch/issues/61292
-def linspace(start: Tensor, stop: Tensor, num: Tensor):
+def linspace(start: Tensor, stop: Tensor, num: Tensor, device):
     """
     Creates a tensor of shape [num, *start.shape] whose values are evenly spaced from start to end, inclusive.
     Replicates but the multi-dimensional bahaviour of numpy.linspace in PyTorch.
     """
-    start = start.to(get_device())
-    stop = stop.to(get_device())
-    num = num.to(get_device())
+    start = start.to(device)
+    stop = stop.to(device)
+    num = num.to(device)
     # create a tensor of 'num' steps from 0 to 1
 
     # todo: make sure ADSR behavior is differentiable. arange has to know to get tensors
@@ -387,7 +385,7 @@ def linspace(start: Tensor, stop: Tensor, num: Tensor):
     # arange_tensor1 = torch.stack(arange_list_of_tensors).to(get_device()).squeeze()
 
     # OPTION2
-    arange_tensor2 = torch.arange(num, dtype=torch.float32, device=get_device(), requires_grad=True)
+    arange_tensor2 = torch.arange(num, dtype=torch.float32, device=device, requires_grad=True)
 
     steps = arange_tensor2 / (num - 1)
 
@@ -749,50 +747,24 @@ class SpectralLoss:
         return loss
 
 
-def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, accuracy_list, path2save_loss_list=None):
-    path_parent = os.path.dirname(os.getcwd())
-
+def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, txt_path, numpy_path):
     # save model checkpoint
-    model_checkpoint = Path(__file__).parent.parent.joinpath('trained_models', f'synth_net_epoch{cur_epoch}.pt')
-    plot_path = \
-        Path(__file__).parent.parent.joinpath('trained_models', 'loss_graphs', f'end_epoch{cur_epoch}_loss_graph.png')
-    txt_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.txt')
-    numpy_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.npy')
+    model_checkpoint_path = Path(__file__).parent.parent.joinpath('trained_models', f'synth_net_epoch{cur_epoch}.pt')
     np.save(numpy_path, np.asarray(loss_list))
-
     torch.save({
         'epoch': cur_epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimiser_arg.state_dict(),
         'loss': avg_epoch_loss
-    }, model_checkpoint)
-
-    plt.savefig(plot_path)
+    }, model_checkpoint_path)
 
     text_file = open(txt_path, "w")
     for j in range(len(loss_list)):
-        text_file.write("loss: " + str(loss_list[j]) + " " + "accuracy: " + str(accuracy_list[j]) + "\n")
+        text_file.write(f"epoch:{cur_epoch}\tloss: " + str(loss_list[j]) + "\n")
     text_file.close()
 
 
-def reset_stats(synth_cfg: SynthConfig):
-    avg_loss = 0
-    avg_accuracy = 0
-    stats = []
-    for j in range(len(synth_cfg.osc_freq_list)):
-        dict_record = {
-            'frequency_id': j,
-            'frequency(Hz)': round(synth_cfg.osc_freq_list[j], 3),
-            'prediction_success': 0,
-            'predicted_frequency': 0,
-            'frequency_model_output': 0
-        }
-        stats.append(dict_record)
-
-    return avg_loss, avg_accuracy, stats
-
-
-def print_modular_stats(predicted_param_dict, target_param_dict, synth_cfg: SynthConfig):
+def print_synth_param_stats(predicted_param_dict, target_param_dict, synth_cfg: SynthConfig, device):
     mapped_target_param_dict = {}
     for idx, value in target_param_dict.items():
 
@@ -804,26 +776,26 @@ def print_modular_stats(predicted_param_dict, target_param_dict, synth_cfg: Synt
             for key, val in params_dict.items():
                 if key in ['waveform', 'freq_c', 'filter_type']:
                     if key == 'waveform':
-                        mapped_params_dict[key] = torch.Tensor([synth_cfg.wave_type_dict[x] for x in val]).to(get_device())
+                        mapped_params_dict[key] = torch.Tensor([synth_cfg.wave_type_dict[x] for x in val]).to(device)
                     elif key == 'freq_c':
                         val_list = val.tolist()
-                        mapped_params_dict[key] = torch.Tensor([synth_cfg.osc_freq_dic[round(x, 4)] for x in val_list]).to(get_device())
+                        mapped_params_dict[key] = torch.Tensor(
+                            [synth_cfg.osc_freq_dic[round(x, 4)] for x in val_list]).to(device)
                     elif key == 'filter_type':
                         mapped_params_dict[key] = synth_cfg.filter_type_dict[val]
                 else:
-                    mapped_params_dict[key] = params_dict[key].clone().detach().requires_grad_(True).to(get_device())
+                    mapped_params_dict[key] = params_dict[key].clone().detach().requires_grad_(True).to(device)
 
         mapped_cell_dict = {'operation': cell_dict['operation'],
                             'parameters': mapped_params_dict}
         mapped_target_param_dict[idx] = mapped_cell_dict
 
+    print("Synth parameters statistics\n---------------------------")
     for index, operation_dict in predicted_param_dict.items():
         operation = operation_dict['operation']
         result = all(elem == operation for elem in target_param_dict[index]['operation'])
         if not result:
             AssertionError("Unpredictable operation prediction behavior")
-
-        pdist = nn.PairwiseDistance(p=2)
 
         if operation == 'osc':
             predicted_carrier_amp = operation_dict['params']['amp'].squeeze()
@@ -834,8 +806,8 @@ def print_modular_stats(predicted_param_dict, target_param_dict, synth_cfg: Synt
             target_freq = mapped_target_param_dict[index]['parameters']['freq']
             target_waveform = mapped_target_param_dict[index]['parameters']['waveform']
 
-            amp_dist = pdist(predicted_carrier_amp, target_amp)
-            freq_dist = pdist(predicted_carrier_freq, target_freq)
+            amp_dist = torch.sqrt(torch.sum(torch.square(predicted_carrier_amp - target_amp)))
+            freq_dist = torch.sqrt(torch.sum(torch.square(predicted_carrier_freq - target_freq)))
             waveform_accuracy = \
                 torch.sum(torch.eq(predicted_waveform, target_waveform)) * 100 / target_waveform.shape[0]
 
@@ -843,7 +815,6 @@ def print_modular_stats(predicted_param_dict, target_param_dict, synth_cfg: Synt
             print(f"\tamp l2 dist: {amp_dist}")
             print(f"\tfreq l2 dist: {freq_dist}")
             print(f"\twaveform accuracy: {waveform_accuracy}%\n")
-
 
         elif operation == 'fm':
             predicted_carrier_amp = operation_dict['params']['amp_c'].squeeze()
@@ -856,19 +827,18 @@ def print_modular_stats(predicted_param_dict, target_param_dict, synth_cfg: Synt
             target_carrier_waveform = mapped_target_param_dict[index]['parameters']['waveform']
             target_mod_index = mapped_target_param_dict[index]['parameters']['mod_index']
 
-            carrier_amp_dist = pdist(predicted_carrier_amp, target_carrier_amp)
-            carrier_freq_dist = pdist(predicted_carrier_freq, target_carrier_freq)
+            carrier_amp_dist = torch.sqrt(torch.sum(torch.square(predicted_carrier_amp - target_carrier_amp)))
+            carrier_freq_dist = torch.sqrt(torch.sum(torch.square(predicted_carrier_freq - target_carrier_freq)))
             carrier_waveform_accuracy = \
                 torch.sum(torch.eq(predicted_carrier_waveform, target_carrier_waveform)) \
                 * 100 / target_waveform.shape[0]
-            mod_index_dist = pdist(predicted_mod_index, target_mod_index)
+            mod_index_dist = torch.sqrt(torch.sum(torch.square(predicted_mod_index - target_mod_index)))
 
             print(f"{operation} at index {index} param stats")
             print(f"\tcarrier amp l2 dist: {carrier_amp_dist}")
             print(f"\tcarrier freq l2 dist: {carrier_freq_dist}")
             print(f"\tcarrier waveform accuracy: {carrier_waveform_accuracy}%")
             print(f"\tmod_index l2 dist: {mod_index_dist}\n")
-
 
         elif operation == 'filter':
             predicted_filter_freq = operation_dict['params']['filter_freq'].squeeze()
@@ -877,14 +847,13 @@ def print_modular_stats(predicted_param_dict, target_param_dict, synth_cfg: Synt
             target_filter_freq = target_param_dict[index]['parameters']['filter_freq']
             target_filter_type = target_param_dict[index]['parameters']['filter_type']
 
-            filter_freq_dist = pdist(predicted_filter_freq, target_filter_freq)
+            filter_freq_dist = torch.sqrt(torch.sum(torch.square(predicted_filter_freq, target_filter_freq)))
             filter_type_accuracy = \
                 torch.sum(torch.eq(predicted_filter_type, target_filter_type)) * 100 / target_filter_type.shape[0]
 
             print(f"{operation} at index {index} param stats")
             print(f"\tfilter_freq l2 dist: {filter_freq_dist}")
             print(f"\tfilter_type accuracy: {filter_type_accuracy}%\n")
-
 
         elif operation == 'env_adsr':
             predicted_attack_t = operation_dict['params']['attack_t'].squeeze()
@@ -899,11 +868,11 @@ def print_modular_stats(predicted_param_dict, target_param_dict, synth_cfg: Synt
             target_sustain_level = target_param_dict[index]['parameters']['sustain_level']
             target_release_t = target_param_dict[index]['parameters']['release_t']
 
-            attack_t_dist = pdist(predicted_attack_t, target_attack_t)
-            decay_t_dist = pdist(predicted_decay_t, target_decay_t)
-            sustain_t_dist = pdist(predicted_sustain_t, target_sustain_t)
-            sustain_level_dist = pdist(predicted_sustain_level, target_sustain_level)
-            release_t_dist = pdist(predicted_release_t, target_release_t)
+            attack_t_dist = torch.sqrt(torch.sum(torch.square(predicted_attack_t - target_attack_t)))
+            decay_t_dist = torch.sqrt(torch.sum(torch.square(predicted_decay_t - target_decay_t)))
+            sustain_t_dist = torch.sqrt(torch.sum(torch.square(predicted_sustain_t - target_sustain_t)))
+            sustain_level_dist = torch.sqrt(torch.sum(torch.square(predicted_sustain_level - target_sustain_level)))
+            release_t_dist = torch.sqrt(torch.sum(torch.square(predicted_release_t - target_release_t)))
 
             print(f"{operation} at index {index} param stats")
             print(f"\tattack_t l2 dist: {attack_t_dist}")
@@ -911,5 +880,3 @@ def print_modular_stats(predicted_param_dict, target_param_dict, synth_cfg: Synt
             print(f"\tsustain_t l2 dist: {sustain_t_dist}")
             print(f"\tsustain_level l2 dist: {sustain_level_dist}")
             print(f"\trelease_t l2 dist: {release_t_dist}\n")
-
-

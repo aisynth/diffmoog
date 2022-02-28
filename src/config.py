@@ -43,12 +43,14 @@ class Config:
     transform = 'MEL_SPECTROGRAM'  # MEL_SPECTROGRAM or SPECTROGRAM- to be used in the data loader and at the synth output
 
     use_loaded_model = False
-    override_optimizer = True
 
     save_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'trained_synth_net.pt')
-    load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'synth_net_epoch2.pth')
+    load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'synth_net_epoch901.pth')
 
-    num_epochs_to_save_model = 5
+    txt_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.txt')
+    numpy_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.npy')
+
+    num_epochs_to_save_model = 2
 
     regression_loss_factor = 1e-1
     spectrogram_loss_factor = 1e-5
@@ -58,7 +60,9 @@ class Config:
     # Debug
     debug_mode = False
     plot_spec = False
-    print_train_stats = True
+    print_train_batch_stats = False
+    print_timings = True
+    print_synth_param_stats = True
     print_accuracy_stats = False
     print_per_accuracy_stats_multiple_epochs = True
 
@@ -86,6 +90,28 @@ class Config:
             self.architecture = 'SPECTROGRAM_ONLY'
             self.spectrogram_loss_type = 'MULTI-SPECTRAL'
             self.model_frequency_output = 'SINGLE'
+
+
+@dataclass
+class DatasetConfig:
+    dataset_size = 1000
+    num_epochs_to_print_stats = 100
+    num_epochs_to_save_model = 100
+    train_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'train', 'dataset.pkl')
+    train_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'train', 'wav_files')
+    test_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'test', 'dataset.pkl')
+    test_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'test', 'wav_files')
+
+
+@dataclass
+class ModelConfig:
+    batch_size = 64
+    num_epochs = 20
+    learning_rate = 0.001
+    optimizer_weight_decay = 1e-4
+    optimizer_scheduler_lr = 30
+    optimizer_scheduler_gamma = 0.1
+    reinforcement_epsilon = 0.15
 
 
 @dataclass
@@ -133,23 +159,3 @@ class SynthConfig:
         self.osc_freq_dic = {round(key, 4): value for value, key in enumerate(self.osc_freq_list)}
         self.osc_freq_dic_inv = {v: k for k, v in self.osc_freq_dic.items()}
         self.max_carrier_oscillator_freq = self.osc_freq_list[-1] + self.margin
-
-
-@dataclass
-class DatasetConfig:
-    dataset_size = 50000
-    num_epochs_to_print_stats = 100
-    num_epochs_to_save_model = 100
-    train_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'train', 'dataset.pkl')
-    train_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'train', 'wav_files')
-    test_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'test', 'dataset.pkl')
-    test_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'test', 'wav_files')
-
-
-@dataclass
-class ModelConfig:
-    batch_size = 128
-    num_epochs = 100
-    learning_rate = 0.001
-
-    reinforcement_epsilon = 0.15
