@@ -758,9 +758,8 @@ def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, txt_p
         'loss': avg_epoch_loss
     }, model_checkpoint_path)
 
-    text_file = open(txt_path, "w")
-    for j in range(len(loss_list)):
-        text_file.write(f"epoch:{cur_epoch}\tloss: " + str(loss_list[j]) + "\n")
+    text_file = open(txt_path, 'a')
+    text_file.write(f"epoch:{cur_epoch}\tloss: " + str(avg_epoch_loss) + "\n")
     text_file.close()
 
 
