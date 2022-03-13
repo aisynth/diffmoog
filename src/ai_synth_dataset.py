@@ -38,7 +38,7 @@ class AiSynthDataset(Dataset):
         signal, _ = torchaudio.load(audio_path)
         signal = signal.to(self.device)
 
-        return signal, params_dic
+        return signal, params_dic, index
 
     def _get_audio_path(self, index):
         audio_file_name = f"sound_{index}.wav"

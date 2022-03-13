@@ -107,8 +107,8 @@ class BigSynthNetwork(nn.Module):
             ValueError("Unknown self.cfg.PRESET")
 
         for cell in self.preset:
-            index = cell.index
-            operation = cell.operation
+            index = cell.get('index')
+            operation = cell.get('operation')
 
             if operation == 'osc':
                 amplitude_head = nn.Sequential(
@@ -221,8 +221,8 @@ class BigSynthNetwork(nn.Module):
         output_dic = {}
 
         for cell in self.preset:
-            index = cell.index
-            operation = cell.operation
+            index = cell.get('index')
+            operation = cell.get('operation')
 
             if operation == 'osc':
                 amplitude_head = self.module_dict[index]['module_dict']['amp']

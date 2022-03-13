@@ -325,7 +325,8 @@ def plot_spectrogram(spec, scale='linear', title=None, x_label='frame', ylabel='
     if xmax:
         axs.set_xlim((0, xmax))
     fig.colorbar(im, ax=axs)
-    plt.show(block=False)
+    return fig
+    # plt.show(block=False)
 
 
 class MinMaxNormaliser:

@@ -6,10 +6,9 @@ from model import BigSynthNetwork
 from synth.synth_architecture import SynthModular, SynthModularCell
 import helper
 import time
-import os
 from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-from tqdm import tqdm, trange
+from tqdm import tqdm
 
 
 def train_single_epoch(model,
@@ -124,8 +123,6 @@ def train(model,
 
     # init modular synth
     modular_synth = SynthModular(synth_cfg=synth_cfg,
-                                 num_channels=synth_cfg.num_channels,
-                                 num_layers=synth_cfg.num_channels,
                                  sample_rate=cfg.sample_rate,
                                  signal_duration_sec=cfg.signal_duration_sec,
                                  num_sounds=1,

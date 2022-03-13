@@ -1,247 +1,191 @@
+import matplotlib.pyplot as plt
 import torch
 import helper
-from torch import nn
-from model import SmallSynthNetwork
-from ai_synth_dataset import AiSynthDataset
-from synth.synth_architecture import SynthBasicFlow
-from config import TEST_PARAMETERS_FILE, TEST_AUDIO_DIR, BATCH_SIZE, LEARNING_RATE, LOAD_MODEL_PATH, \
-    REGRESSION_LOSS_FACTOR, SPECTROGRAM_LOSS_FACTOR, PRINT_TRAIN_STATS, OS
-import os
+from model import BigSynthNetwork
+from ai_synth_dataset import AiSynthDataset, create_data_loader
+from synth.synth_architecture import SynthModular, SynthModularCell
+from config import Config, SynthConfig, DatasetConfig, ModelConfig
 import scipy.io.wavfile
 import pandas as pd
+from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from pathlib import Path
+import librosa
+import librosa.display
+import numpy as np
 
 
-def predict(model, test_data_loader, device_arg):
+def predict(model,
+            test_data_loader,
+            transform,
+            device_arg,
+            cfg: Config,
+            synth_cfg: SynthConfig,
+            dataset_cfg: DatasetConfig):
     with torch.no_grad():
-        for signal_mel_spec, target_params_dic in test_data_loader:
-            batch_size = signal_mel_spec.shape[0]
-            signal_log_mel_spec = helper.amplitude_to_db_transform(signal_mel_spec)
-            classification_target_params = target_params_dic['classification_params']
-            regression_target_parameters = target_params_dic['regression_params']
-            translated_classification_target_params = classification_target_params.copy()
-            translated_regression_target_parameters = regression_target_parameters.copy()
-            helper.map_classification_params_to_ints(translated_classification_target_params)
-            normalizer = helper.Normalizer()
-            normalizer.normalize(translated_regression_target_parameters)
+        modular_synth = SynthModular(synth_cfg=synth_cfg,
+                                     sample_rate=cfg.sample_rate,
+                                     signal_duration_sec=cfg.signal_duration_sec,
+                                     num_sounds=1,
+                                     device=device_arg,
+                                     preset=cfg.preset
+                                     )
 
-            translated_classification_target_params = helper.move_to(translated_classification_target_params, device_arg)
-            translated_regression_target_parameters = helper.move_to(translated_regression_target_parameters, device_arg)
-            signal_log_mel_spec = helper.move_to(signal_log_mel_spec, device_arg)
+        predicted_params_list = []
+        for signals, target_params_dic, signals_indices in test_data_loader:
+            normalizer = helper.Normalizer(cfg.signal_duration_sec, synth_cfg)
 
-            output_dic = model(signal_log_mel_spec)
+            transformed_signal = transform(signals)
+
+            output_dic = model(transformed_signal)
 
             # Infer predictions
-            predicted_dic = {}
-            for param in synth.classification_param_list:
-                predicted_dic[param] = torch.argmax(output_dic[param], dim=1)
-            for index, param in enumerate(synth.regression_param_list):
-                predicted_dic[param] = output_dic['regression_params'][:, index]
+            denormalized_output_dict = normalizer.denormalize(output_dic)
+            predicted_param_dict = helper.clamp_regression_params(denormalized_output_dict, synth_cfg, cfg)
 
-            predicted_dic = helper.map_classification_params_from_ints(predicted_dic)
+            update_params = []
+            for index, operation_dict in predicted_param_dict.items():
+                synth_modular_cell = SynthModularCell(index=index, parameters=operation_dict['params'])
+                update_params.append(synth_modular_cell)
 
-            normalizer.denormalize(predicted_dic)
-            helper.clamp_regression_params(predicted_dic)
+            modular_synth.update_cells(update_params)
+            modular_synth.generate_signal(num_sounds=len(transformed_signal))
 
-            # Init criteria
-            criterion_osc1_freq = criterion_osc1_wave = criterion_lfo1_wave \
-                = criterion_osc2_freq = criterion_osc2_wave = criterion_lfo2_wave \
-                = criterion_filter_type \
-                = nn.CrossEntropyLoss()
-            criterion_regression_params = criterion_spectrogram = nn.MSELoss()
+            if cfg.spectrogram_loss_type == 'MULTI-SPECTRAL':
+                multi_spec_loss = helper.SpectralLoss(cfg, device=device_arg)
+                signals = signals.squeeze()
+                loss = multi_spec_loss.call(signals, modular_synth.signal)
+            else:
+                ValueError("SYNTH_TYPE 'MODULAR' supports only SPECTROGRAM_LOSS_TYPE of type 'MULTI-SPECTRAL'")
 
-            loss_spectrogram_total = 0
-            current_predicted_dic = {}
-            predicted_params_list = []
-
-            # todo: refactor code. try to implement SynthBasicFlow in matrix, to prevent for loop.
-            #  compute all spectrogram loss all at once using mean function
-            for i in range(batch_size):
-
-                # todo: include the index of audio file in the dataset parameters
-                # Infer original audio from
-                original_dic = {}
-                for param in synth.classification_param_list:
-                    original_dic[param] = target_params_dic['classification_params'][param][i]
-                for index, param in enumerate(synth.regression_param_list):
-                    original_dic[param] = target_params_dic['regression_params'][param][i]
-
-                for key, value in original_dic.items():
-                    if torch.is_tensor(original_dic[key]):
-                        original_dic[key] = original_dic[key].item()
-                    else:
-                        original_dic[key] = original_dic[key]
-
-                print(original_dic)
-
-                for key, value in predicted_dic.items():
-                    if torch.is_tensor(predicted_dic[key][i]):
-                        current_predicted_dic[key] = predicted_dic[key][i].item()
-                    else:
-                        current_predicted_dic[key] = predicted_dic[key][i]
-                print(current_predicted_dic)
-
-                print("------original parameters--------")
-                print('osc1_freq: ', classification_target_params['osc1_freq'][i].item())
-                print('osc1_wave: ', classification_target_params['osc1_wave'][i])
-                print('lfo1_wave: ', classification_target_params['lfo1_wave'][i])
-                print('osc2_freq: ', classification_target_params['osc2_freq'][i].item())
-                print('osc2_wave: ', classification_target_params['osc2_wave'][i])
-                print('lfo2_wave: ', classification_target_params['lfo2_wave'][i])
-                print('osc1_amp: ', regression_target_parameters['osc1_amp'][i].item())
-                print('osc1_mod_index: ', regression_target_parameters['osc1_mod_index'][i].item())
-                print('lfo1_freq: ', regression_target_parameters['lfo1_freq'][i].item())
-                print('lfo1_phase: ', regression_target_parameters['lfo1_phase'][i].item())
-                print('osc2_amp: ', regression_target_parameters['osc2_amp'][i].item())
-                print('osc2_mod_index: ', regression_target_parameters['osc2_mod_index'][i].item())
-                print('lfo2_freq: ', regression_target_parameters['lfo2_freq'][i].item())
-                print('lfo2_phase: ', regression_target_parameters['lfo2_phase'][i].item())
-                print('filter_freq: ', regression_target_parameters['filter_freq'][i].item())
-                print('attack_t: ', regression_target_parameters['attack_t'][i].item())
-                print('decay_t: ', regression_target_parameters['decay_t'][i].item())
-                print('sustain_t: ', regression_target_parameters['sustain_t'][i].item())
-                print('release_t: ', regression_target_parameters['release_t'][i].item())
-                print('sustain_level: ', regression_target_parameters['sustain_level'][i].item())
-
-                print("\n")
-                print("------predictions--------")
-                print('osc1_freq: ', current_predicted_dic['osc1_freq'])
-                print('osc1_wave: ', current_predicted_dic['osc1_wave'])
-                print('lfo1_wave: ', current_predicted_dic['lfo1_wave'])
-                print('osc2_freq: ', current_predicted_dic['osc2_freq'])
-                print('osc2_wave: ', current_predicted_dic['osc2_wave'])
-                print('lfo2_wave: ', current_predicted_dic['lfo2_wave'])
-                print('osc1_amp: ', current_predicted_dic['osc1_amp'])
-                print('osc1_mod_index: ', current_predicted_dic['osc1_mod_index'])
-                print('lfo1_freq: ', current_predicted_dic['lfo1_freq'])
-                print('lfo1_phase: ', current_predicted_dic['lfo1_phase'])
-                print('osc2_amp: ', current_predicted_dic['osc2_amp'])
-                print('osc2_mod_index: ', current_predicted_dic['osc2_mod_index'])
-                print('lfo2_freq: ', current_predicted_dic['lfo2_freq'])
-                print('lfo2_phase: ', current_predicted_dic['lfo2_phase'])
-                print('filter_freq: ', current_predicted_dic['filter_freq'])
-                print('attack_t: ', current_predicted_dic['attack_t'])
-                print('decay_t: ', current_predicted_dic['decay_t'])
-                print('sustain_t: ', current_predicted_dic['sustain_t'])
-                print('release_t: ', current_predicted_dic['release_t'])
-                print('sustain_level: ', current_predicted_dic['sustain_level'])
-                print("\n")
-
-                orig_synth_obj = SynthBasicFlow(parameters_dict=original_dic)
-                pred_synth_obj = SynthBasicFlow(parameters_dict=current_predicted_dic)
-
-                # save synth audio signal output
-                orig_audio = orig_synth_obj.signal
-                pred_audio = pred_synth_obj.signal
-                orig_file_name = f"sound{i}_orig.wav"
-                pred_file_name = f"sound{i}_pred.wav"
-                path_parent = os.path.dirname(os.getcwd())
-                if OS == 'WINDOWS':
-                    orig_audio_path = path_parent + f"\\dataset\\test\\inference_wav_files\\original\\{orig_file_name}"
-                    pred_audio_path = path_parent + f"\\dataset\\test\\inference_wav_files\\predicted\\{pred_file_name}"
-                elif OS == 'LINUX':
-                    orig_audio_path = path_parent + f"/dataset/test/inference_wav_files/original/{orig_file_name}"
-                    pred_audio_path = path_parent + f"/dataset/test/inference_wav_files/predicted/{pred_file_name}"
-                orig_audio = orig_audio.detach().cpu().numpy()
-                pred_audio = pred_audio.detach().cpu().numpy()
-                scipy.io.wavfile.write(orig_audio_path, 44100, orig_audio)
-                scipy.io.wavfile.write(pred_audio_path, 44100, pred_audio)
+            for i in range(len(signals)):
 
                 # save synth parameters output
-                predicted_parameters = pred_synth_obj.params_dict
-                predicted_params_list.append(predicted_parameters)
+                params_dict = {}
+                for layer in range(synth_cfg.num_layers):
+                    for channel in range(synth_cfg.num_channels):
+                        cell = modular_synth.architecture[channel][layer]
+                        if cell.operation is not None:
+                            operation = cell.operation
+                        else:
+                            operation = 'None'
+                        if cell.parameters is not None:
+                            parameters = cell.parameters
+                            parameters_of_current_signal = {}
+                            for key in parameters:
+                                if parameters[key].shape[1] <= 1:
+                                    a = parameters[key][i].item()
+                                    parameters_of_current_signal[key] = a
+                                else:
+                                    if key == 'waveform':
+                                        waveform = synth_cfg.wave_type_dic_inv[parameters[key][i].argmax().item()]
+                                        parameters_of_current_signal[key] = waveform
+                                    if key == 'filter_type':
+                                        filter_type = synth_cfg.filter_type_dic_inv[parameters[key][i].argmax().item()]
+                                        parameters_of_current_signal[key] = filter_type
 
-                predicted_mel_spec_sound_signal = helper.mel_spectrogram_transform(pred_synth_obj.signal)
-                predicted_log_mel_spec_sound_signal = helper.amplitude_to_db_transform(predicted_mel_spec_sound_signal)
+                        else:
+                            parameters_of_current_signal = 'None'
+                        params_dict[cell.index] = {'operation': operation, 'parameters': parameters_of_current_signal}
+                predicted_params_list.append(params_dict)
 
-                predicted_log_mel_spec_sound_signal = helper.move_to(predicted_log_mel_spec_sound_signal, device_arg)
-                signal_log_mel_spec = torch.squeeze(signal_log_mel_spec)
+                signal_index = signals_indices[i]
 
-                current_loss_spectrogram = criterion_spectrogram(predicted_log_mel_spec_sound_signal,
-                                                                 signal_log_mel_spec[i])
-                loss_spectrogram_total = loss_spectrogram_total + current_loss_spectrogram
+                orig_audio = signals[i]
+                pred_audio = modular_synth.signal[i]
+                orig_audio_np = orig_audio.detach().cpu().numpy()
+                pred_audio_np = pred_audio.detach().cpu().numpy()
 
-            dataframe = pd.DataFrame(predicted_params_list)
-            path_parent = os.path.dirname(os.getcwd())
-            if OS == 'WINDOWS':
-                parameters_path = path_parent + "\\dataset\\test\\inference_wav_files\\dataset.csv"
-            elif OS == 'LINUX':
-                parameters_path = path_parent + "/dataset/test/inference_wav_files/dataset.csv"
-            dataframe.to_csv(parameters_path)
+                orig_audio_transformed = librosa.feature.melspectrogram(y=orig_audio_np,
+                                                                        sr=cfg.sample_rate,
+                                                                        n_fft=1024,
+                                                                        hop_length=512,
+                                                                        n_mels=64)
+                orig_audio_transformed_db = librosa.power_to_db(orig_audio_transformed, ref=np.max)
+                pred_audio_transformed = librosa.feature.melspectrogram(y=pred_audio_np,
+                                                                        sr=cfg.sample_rate,
+                                                                        n_fft=1024,
+                                                                        hop_length=512,
+                                                                        n_mels=64)
+                pred_audio_transformed_db = librosa.power_to_db(pred_audio_transformed, ref=np.max)
 
-            loss_spectrogram_total = loss_spectrogram_total / batch_size
+                # save synth audio signal output
+                pred_file_name = f"sound{signal_index}_pred.wav"
+                pred_audio_path = dataset_cfg.inference_audio_dir.joinpath(pred_file_name)
+                scipy.io.wavfile.write(pred_audio_path, cfg.sample_rate, pred_audio_np)
 
-            loss_osc1_freq = criterion_osc1_freq(output_dic['osc1_freq'], translated_classification_target_params['osc1_freq'])
-            loss_osc1_wave = criterion_osc1_wave(output_dic['osc1_wave'], translated_classification_target_params['osc1_wave'])
-            loss_lfo1_wave = criterion_lfo1_wave(output_dic['lfo1_wave'], translated_classification_target_params['lfo1_wave'])
-            loss_osc2_freq = criterion_osc2_freq(output_dic['osc2_freq'], translated_classification_target_params['osc2_freq'])
-            loss_osc2_wave = criterion_osc2_wave(output_dic['osc2_wave'], translated_classification_target_params['osc2_wave'])
-            loss_lfo2_wave = criterion_lfo2_wave(output_dic['lfo2_wave'], translated_classification_target_params['lfo2_wave'])
-            loss_filter_type = \
-                criterion_filter_type(output_dic['filter_type'], translated_classification_target_params['filter_type'])
+                # plot original vs predicted signal
+                plt.figure(figsize=[30, 20])
+                plt.ion()
+                plt.subplot(2, 2, 1)
+                plt.title(f"original audio")
+                plt.ylim([-1, 1])
+                plt.plot(orig_audio_np)
+                plt.subplot(2, 2, 2)
+                plt.ylim([-1, 1])
+                plt.title("predicted audio")
+                plt.plot(pred_audio_np)
+                plt.subplot(2, 2, 3)
+                librosa.display.specshow(orig_audio_transformed_db, sr=cfg.sample_rate, hop_length=512, x_axis='time', y_axis='mel')
+                plt.colorbar(format='%+2.0f dB')
+                plt.subplot(2, 2, 4)
+                librosa.display.specshow(pred_audio_transformed_db, sr=cfg.sample_rate, hop_length=512, x_axis='time', y_axis='mel')
+                plt.colorbar(format='%+2.0f dB')
+                plt.ioff()
+                plots_path = dataset_cfg.inference_plots_dir.joinpath(f"sound{signal_index}_plots.png")
+                plt.savefig(plots_path)
 
-            # todo: refactor code. the code gets dictionary of tensors (regression_target_parameters) and return 2d tensor
-            regression_target_parameters_tensor = torch.empty((len(translated_regression_target_parameters['osc1_amp']), 1))
-            regression_target_parameters_tensor = helper.move_to(regression_target_parameters_tensor, device_arg)
-            for key, value in translated_regression_target_parameters.items():
-                regression_target_parameters_tensor = \
-                    torch.cat([regression_target_parameters_tensor, translated_regression_target_parameters[key].unsqueeze(dim=1)],
-                              dim=1)
-            regression_target_parameters_tensor = regression_target_parameters_tensor[:, 1:]
-            regression_target_parameters_tensor = regression_target_parameters_tensor.float()
-
-            loss_classification_params = \
-                loss_osc1_freq + loss_osc1_wave + loss_lfo1_wave + \
-                loss_osc2_freq + loss_osc2_wave + loss_lfo2_wave + \
-                loss_filter_type
-
-            loss_regression_params = \
-                criterion_regression_params(output_dic['regression_params'], regression_target_parameters_tensor)
-
-            loss = \
-                loss_classification_params \
-                + REGRESSION_LOSS_FACTOR * loss_regression_params \
-                + SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total
-
-            if PRINT_TRAIN_STATS:
-                print("-----Classification params-----")
-                print('loss_osc1_freq', loss_osc1_freq)
-                print('loss_osc1_wave', loss_osc1_wave)
-                print('loss_lfo1_wave', loss_lfo1_wave)
-                print('loss_osc2_freq', loss_osc2_freq)
-                print('loss_osc2_wave', loss_osc2_wave)
-                print('loss_lfo2_wave', loss_lfo2_wave)
-                print('loss_filter_type', loss_filter_type)
-                print("-----Regression params-----")
-                print('loss_regression_params', REGRESSION_LOSS_FACTOR * loss_regression_params)
-                print('loss_spectrogram_total', SPECTROGRAM_LOSS_FACTOR * loss_spectrogram_total)
-                print('\n')
-                print("-----Total Loss-----")
-                print(f"loss: {loss.item()}")
-                print("--------------------")
+        predicted_params_dataframe = pd.DataFrame(predicted_params_list)
+        dataset_dir_path = Path(__file__).parent.parent.joinpath('dataset', 'test')
+        parameters_pickle_path = dataset_dir_path.joinpath("predicted_params_dataset.pkl")
+        parameters_csv_path = dataset_dir_path.joinpath("predicted_params_dataset.csv")
+        predicted_params_dataframe.to_pickle(str(parameters_pickle_path))
+        predicted_params_dataframe.to_csv(parameters_csv_path)
 
 
-if __name__ == "__main__":
-    # load back the model
+def run():
+    cfg = Config()
+    synth_cfg = SynthConfig()
+    dataset_cfg = DatasetConfig()
     device = helper.get_device()
-    synth_net = SmallSynthNetwork().to(device)
-    optimizer = torch.optim.Adam(synth_net.parameters(), lr=LEARNING_RATE)
 
-    checkpoint = torch.load(LOAD_MODEL_PATH)
+    parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter,
+                            description='Train AI Synth')
+    parser.add_argument('-g', '--gpu_index', help='index of gpu (if exist, torch indexing) -1 for cpu',
+                        type=int, default=0)
+    parser.add_argument('-t', '--transform', choices=['mel', 'spec'],
+                        help='mel: Mel Spectrogram, spec: Spectrogram', default='mel')
+    args = parser.parse_args()
+
+    transforms = {'mel': helper.mel_spectrogram_transform(cfg.sample_rate).to(device),
+                  'spec': helper.spectrogram_transform().to(device)}
+    transform = transforms[args.transform]
+
+    # load back the model
+    synth_net = BigSynthNetwork(synth_cfg=synth_cfg, device=device).to(device)
+    optimizer = torch.optim.Adam(synth_net.parameters(), lr=ModelConfig.learning_rate)
+    checkpoint = torch.load(Config.load_model_path)
     synth_net.load_state_dict(checkpoint['model_state_dict'])
     # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     epoch = checkpoint['epoch']
     loss = checkpoint['loss']
 
-    print(loss)
-
     synth_net.eval()
 
     # import test dataset
-    ai_synth_test_dataset = AiSynthDataset(TEST_PARAMETERS_FILE,
-                                           TEST_AUDIO_DIR,
+    ai_synth_test_dataset = AiSynthDataset(DatasetConfig.test_parameters_file,
+                                           DatasetConfig.test_audio_dir,
                                            device)
+    test_dataloader = create_data_loader(ai_synth_test_dataset, ModelConfig.batch_size)
 
-    test_dataloader = helper.create_data_loader(ai_synth_test_dataset, BATCH_SIZE)
+    predict(model=synth_net,
+            test_data_loader=test_dataloader,
+            transform=transform,
+            device_arg=device,
+            cfg=cfg,
+            synth_cfg=synth_cfg,
+            dataset_cfg=dataset_cfg)
 
-    predict(synth_net, test_dataloader, device)
+
+if __name__ == "__main__":
+    run()
 

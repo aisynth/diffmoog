@@ -45,7 +45,7 @@ class Config:
     use_loaded_model = False
 
     save_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'trained_synth_net.pt')
-    load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'synth_net_epoch901.pth')
+    load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'synth_net_epoch0.pt')
 
     txt_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.txt')
     numpy_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.npy')
@@ -97,10 +97,12 @@ class DatasetConfig:
     dataset_size = 1000
     num_epochs_to_print_stats = 100
     num_epochs_to_save_model = 100
-    train_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'train', 'dataset.pkl')
+    train_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'train', 'params_dataset.pkl')
     train_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'train', 'wav_files')
-    test_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'test', 'dataset.pkl')
+    test_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'test', 'params_dataset.pkl')
     test_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'test', 'wav_files')
+    inference_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'test', 'inference_wav_files')
+    inference_plots_dir = Path(__file__).parent.parent.joinpath('dataset', 'test', 'inference_plots')
 
 
 @dataclass
