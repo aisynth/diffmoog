@@ -99,7 +99,7 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size = 1000
+    dataset_size = 10000
     num_epochs_to_print_stats = 100
     num_epochs_to_save_model = 100
     train_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'train', 'params_dataset.pkl')
