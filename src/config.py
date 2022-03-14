@@ -13,7 +13,7 @@ class Config:
     " Mode - define a common configuration for the whole system     "
     "   0 -                     Use custom configurations           "
     "   Any other number -      Use predefined configuration preset. See below "
-    mode: int = 2
+    mode: int = 3
 
     " The architecture of the system, that defines the data flow and the loss functions:                    "
     "   1. SPECTROGRAM_ONLY (input -> CNN -> parameters -> Synth -> output; Loss over spectrograms)         "
@@ -90,6 +90,11 @@ class Config:
             self.architecture = 'SPECTROGRAM_ONLY'
             self.spectrogram_loss_type = 'MULTI-SPECTRAL'
             self.model_frequency_output = 'SINGLE'
+        elif self.mode == 3:
+            self.preset = 'OSC'
+            self.architecture = 'SPECTROGRAM_ONLY'
+            self.spectrogram_loss_type = 'MULTI-SPECTRAL'
+            self.model_frequency_output = 'SINGLE'
 
 
 @dataclass
@@ -118,7 +123,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset = 'FM'
+    preset = 'OSC'
     wave_type_dict = {"sine": 0,
                      "square": 1,
                      "sawtooth": 2}

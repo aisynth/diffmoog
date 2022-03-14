@@ -350,6 +350,8 @@ class SynthModular:
     def get_preset(self, preset: str):
         if preset == 'BASIC_FLOW':
             preset_list = synth_modular_presets.BASIC_FLOW
+        elif preset == 'OSC':
+            preset_list = synth_modular_presets.OSC
         elif preset == 'FM':
             preset_list = synth_modular_presets.FM
 

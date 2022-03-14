@@ -101,6 +101,8 @@ class BigSynthNetwork(nn.Module):
         self.module_dict = {}
         if synth_cfg.preset == 'BASIC_FLOW':
             self.preset = synth_modular_presets.BASIC_FLOW
+        elif synth_cfg.preset == 'OSC':
+            self.preset = synth_modular_presets.OSC
         elif synth_cfg.preset == 'FM':
             self.preset = synth_modular_presets.FM
         else:

@@ -13,6 +13,10 @@ BASIC_FLOW = [
     {'index': (0, 4), 'operation': 'env_adsr', 'default_connection': True, 'synth_config': synth_cfg}
 ]
 
+OSC = [
+    {'index': (0, 0), 'operation': 'osc', 'default_connection': True, 'synth_config': synth_cfg}
+]
+
 FM = [
     {'index': (0, 0), 'operation': 'osc', 'default_connection': True, 'synth_config': synth_cfg},
     {'index': (0, 1), 'operation': 'fm', 'default_connection': True, 'synth_config': synth_cfg}
