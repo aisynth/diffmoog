@@ -198,7 +198,7 @@ def run():
         checkpoint = torch.load(cfg.load_model_path)
         synth_net.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        cur_epoch = checkpoint['epoch']
+        cur_epoch = checkpoint['epoch'] + 1
         loss = checkpoint['loss']
     else:
         cur_epoch = 0
