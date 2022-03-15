@@ -25,7 +25,7 @@ def train_single_epoch(model,
     sum_epoch_loss = 0
     num_of_mini_batches = 0
     with tqdm(data_loader, unit="batch") as tepoch:
-        for target_signal, target_param_dic in tepoch:
+        for target_signal, target_param_dic, signal_index in tepoch:
 
             tepoch.set_description(f"Epoch {epoch}")
             batch_start_time = time.time()
@@ -186,6 +186,7 @@ def run():
 
     # construct model and assign it to device
     synth_net = BigSynthNetwork(synth_cfg, device).to(device)
+
     optimizer = torch.optim.Adam(synth_net.parameters(),
                                  lr=model_cfg.learning_rate,
                                  weight_decay=model_cfg.optimizer_weight_decay)

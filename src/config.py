@@ -45,7 +45,7 @@ class Config:
     use_loaded_model = False
 
     save_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'trained_synth_net.pt')
-    load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'synth_net_epoch0.pt')
+    load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'synth_net_epoch10.pt')
 
     txt_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.txt')
     numpy_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.npy')
@@ -114,8 +114,8 @@ class DatasetConfig:
 class ModelConfig:
     batch_size = 64
     num_epochs = 20
-    learning_rate = 0.001
-    optimizer_weight_decay = 1e-4
+    learning_rate = 0.000001
+    optimizer_weight_decay = 0
     optimizer_scheduler_lr = 30
     optimizer_scheduler_gamma = 0.1
     reinforcement_epsilon = 0.15

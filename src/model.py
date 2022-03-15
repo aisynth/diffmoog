@@ -98,7 +98,6 @@ class BigSynthNetwork(nn.Module):
         )
         self.flatten = nn.Flatten()
 
-        self.module_dict = {}
         if synth_cfg.preset == 'BASIC_FLOW':
             self.preset = synth_modular_presets.BASIC_FLOW
         elif synth_cfg.preset == 'OSC':
@@ -108,10 +107,10 @@ class BigSynthNetwork(nn.Module):
         else:
             ValueError("Unknown self.cfg.PRESET")
 
+        self.heads_module_dict = nn.ModuleDict({})
         for cell in self.preset:
             index = cell.get('index')
             operation = cell.get('operation')
-
             if operation == 'osc':
                 amplitude_head = nn.Sequential(
                     nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
@@ -125,11 +124,10 @@ class BigSynthNetwork(nn.Module):
                     nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
                     nn.Linear(HIDDEN_IN_CHANNELS, len(synth_cfg.wave_type_dict))
                 )
-                self.module_dict[index] = {'operation': operation,
-                                           'module_dict': nn.ModuleDict({
-                                               'amp': amplitude_head,
-                                               'freq': frequency_head,
-                                               'waveform': waveform_head}).to(device=device)}
+                self.heads_module_dict[self.get_key(index, operation, 'amp')] = amplitude_head
+                self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
+                self.heads_module_dict[self.get_key(index, operation, 'waveform')] = waveform_head
+
             elif operation == 'fm':
                 carrier_amplitude_head = nn.Sequential(
                     nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
@@ -147,12 +145,11 @@ class BigSynthNetwork(nn.Module):
                     nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
                     nn.Linear(HIDDEN_IN_CHANNELS, 1)
                 )
-                self.module_dict[index] = {'operation': operation,
-                                           'module_dict': nn.ModuleDict({
-                                               'amp_c': carrier_amplitude_head,
-                                               'freq_c': carrier_frequency_head,
-                                               'waveform': carrier_waveform_head,
-                                               'mod_index': modulation_index_head}).to(device=device)}
+                self.heads_module_dict[self.get_key(index, operation, 'amp_c')] = carrier_amplitude_head
+                self.heads_module_dict[self.get_key(index, operation, 'freq_c')] = carrier_frequency_head
+                self.heads_module_dict[self.get_key(index, operation, 'waveform')] = carrier_waveform_head
+                self.heads_module_dict[self.get_key(index, operation, 'mod_index')] = modulation_index_head
+
             elif operation == 'filter':
                 filter_type_head = nn.Sequential(
                     nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
@@ -162,10 +159,9 @@ class BigSynthNetwork(nn.Module):
                     nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
                     nn.Linear(HIDDEN_IN_CHANNELS, 1)
                 )
-                self.module_dict[index] = {'operation': operation,
-                                           'module_dict': nn.ModuleDict({
-                                               'filter_type': filter_type_head,
-                                               'filter_freq': filter_freq_head}).to(device=device)}
+                self.heads_module_dict[self.get_key(index, operation, 'filter_type')] = filter_type_head
+                self.heads_module_dict[self.get_key(index, operation, 'filter_freq')] = filter_freq_head
+
             elif operation == 'env_adsr':
                 attack_t_head = nn.Sequential(
                     nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
@@ -187,13 +183,11 @@ class BigSynthNetwork(nn.Module):
                     nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
                     nn.Linear(HIDDEN_IN_CHANNELS, 1)
                 )
-                self.module_dict[index] = {'operation': operation,
-                                           'module_dict': nn.ModuleDict({
-                                               'attack_t': attack_t_head,
-                                               'decay_t': decay_t_head,
-                                               'sustain_t': sustain_t_head,
-                                               'sustain_level': sustain_level_head,
-                                               'release_t': release_t_head}).to(device=device)}
+                self.heads_module_dict[self.get_key(index, operation, 'attack_t')] = attack_t_head
+                self.heads_module_dict[self.get_key(index, operation, 'decay_t')] = decay_t_head
+                self.heads_module_dict[self.get_key(index, operation, 'sustain_t')] = sustain_t_head
+                self.heads_module_dict[self.get_key(index, operation, 'sustain_level')] = sustain_level_head
+                self.heads_module_dict[self.get_key(index, operation, 'release_t')] = release_t_head
 
         self.softmax = nn.Softmax(dim=1)
         self.sigmoid = nn.Sigmoid()
@@ -203,8 +197,10 @@ class BigSynthNetwork(nn.Module):
         nn.init.kaiming_normal_(self.conv2[0].weight, mode='fan_in', nonlinearity='relu')
         nn.init.kaiming_normal_(self.conv3[0].weight, mode='fan_in', nonlinearity='relu')
         nn.init.kaiming_normal_(self.conv4[0].weight, mode='fan_in', nonlinearity='relu')
-        # nn.init.kaiming_normal_(self.classification_params, mode='fan_in', nonlinearity='relu')
-        # nn.init.kaiming_normal_(self.classification_params, mode='fan_in', nonlinearity='relu')
+
+    @staticmethod
+    def get_key(index: tuple, operation: str, parameter: str) -> str:
+        return f'{index}' + '_' + operation + '_' + parameter
 
     def forward(self, input_data):
         """
@@ -221,15 +217,15 @@ class BigSynthNetwork(nn.Module):
 
         # Apply different heads to predict each synth parameter
         output_dic = {}
-
         for cell in self.preset:
             index = cell.get('index')
             operation = cell.get('operation')
 
             if operation == 'osc':
-                amplitude_head = self.module_dict[index]['module_dict']['amp']
-                frequency_head = self.module_dict[index]['module_dict']['freq']
-                waveform_head = self.module_dict[index]['module_dict']['waveform']
+                amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp')]
+                frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq')]
+                waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]
+
                 predicted_amplitude = amplitude_head(latent)
                 predicted_amplitude = self.sigmoid(predicted_amplitude)
                 predicted_frequency = frequency_head(latent)
@@ -243,10 +239,11 @@ class BigSynthNetwork(nn.Module):
                                                 'waveform': waveform_probabilities
                                                 }}
             elif operation == 'fm':
-                carrier_amplitude_head = self.module_dict[index]['module_dict']['amp_c']
-                carrier_frequency_head = self.module_dict[index]['module_dict']['freq_c']
-                waveform_head = self.module_dict[index]['module_dict']['waveform']
-                mod_index_head = self.module_dict[index]['module_dict']['mod_index']
+                carrier_amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp_c')]
+                carrier_frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq_c')]
+                waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]
+                mod_index_head = self.heads_module_dict[self.get_key(index, operation, 'mod_index')]
+
                 predicted_carrier_amplitude = carrier_amplitude_head(latent)
                 predicted_carrier_amplitude = self.sigmoid(predicted_carrier_amplitude)
                 predicted_carrier_frequency = carrier_frequency_head(latent)
@@ -264,8 +261,9 @@ class BigSynthNetwork(nn.Module):
                                                 }}
 
             elif operation == 'filter':
-                filter_type_head = self.module_dict[index]['module_dict']['filter_type']
-                filter_freq_head = self.module_dict[index]['module_dict']['filter_freq']
+                filter_type_head = self.heads_module_dict[self.get_key(index, operation, 'filter_type')]
+                filter_freq_head = self.heads_module_dict[self.get_key(index, operation, 'filter_freq')]
+
                 filter_type_logits = filter_type_head(latent)
                 filter_type_probabilities = self.softmax(filter_type_logits)
                 predicted_filter_freq = filter_freq_head(latent)
@@ -277,11 +275,11 @@ class BigSynthNetwork(nn.Module):
                                                 }}
 
             elif operation == 'env_adsr':
-                attack_t_head = self.module_dict[index]['module_dict']['attack_t']
-                decay_t_head = self.module_dict[index]['module_dict']['decay_t']
-                sustain_t_head = self.module_dict[index]['module_dict']['sustain_t']
-                sustain_level_head = self.module_dict[index]['module_dict']['sustain_level']
-                release_t_head = self.module_dict[index]['module_dict']['release_t']
+                attack_t_head = self.heads_module_dict[self.get_key(index, operation, 'attack_t')]
+                decay_t_head = self.heads_module_dict[self.get_key(index, operation, 'decay_t')]
+                sustain_t_head = self.heads_module_dict[self.get_key(index, operation, 'sustain_t')]
+                sustain_level_head = self.heads_module_dict[self.get_key(index, operation, 'sustain_level')]
+                release_t_head = self.heads_module_dict[self.get_key(index, operation, 'release_t')]
 
                 predicted_attack_t = attack_t_head(latent)
                 predicted_attack_t = self.sigmoid(predicted_attack_t)
