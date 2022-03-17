@@ -62,7 +62,14 @@ def train_single_epoch(model,
             loss_start_time = time.time()
 
             if cfg.spectrogram_loss_type == 'MULTI-SPECTRAL':
-                multi_spec_loss = helper.SpectralLoss(cfg, device=device)
+                multi_spec_loss = helper.SpectralLoss(cfg=cfg,
+                                                      loss_type=cfg.multi_spectral_loss_type,
+                                                      mag_weight=cfg.multi_spectral_mag_weight,
+                                                      delta_time_weight=cfg.multi_spectral_delta_time_weight,
+                                                      delta_freq_weight=cfg.multi_spectral_delta_freq_weight,
+                                                      cumsum_freq_weight=cfg.multi_spectral_cumsum_freq_weight,
+                                                      logmag_weight=cfg.multi_spectral_logmag_weight,
+                                                      device=device)
                 target_signal = target_signal.squeeze()
                 loss = multi_spec_loss.call(target_signal, modular_synth.signal)
             else:

@@ -53,7 +53,14 @@ def predict(model,
                 modular_synth.generate_signal(num_sounds=len(transformed_signal))
 
                 if cfg.spectrogram_loss_type == 'MULTI-SPECTRAL':
-                    multi_spec_loss = helper.SpectralLoss(cfg, device=device_arg)
+                    multi_spec_loss = helper.SpectralLoss(cfg=cfg,
+                                                          loss_type=cfg.multi_spectral_loss_type,
+                                                          mag_weight=cfg.multi_spectral_mag_weight,
+                                                          delta_time_weight=cfg.multi_spectral_delta_time_weight,
+                                                          delta_freq_weight=cfg.multi_spectral_delta_freq_weight,
+                                                          cumsum_freq_weight=cfg.multi_spectral_cumsum_freq_weight,
+                                                          logmag_weight=cfg.multi_spectral_logmag_weight,
+                                                          device=device_arg)
                     signals = signals.squeeze()
                     loss = multi_spec_loss.call(signals, modular_synth.signal)
                 else:
@@ -82,12 +89,14 @@ def predict(model,
                                             waveform = synth_cfg.wave_type_dic_inv[parameters[key][i].argmax().item()]
                                             parameters_of_current_signal[key] = waveform
                                         if key == 'filter_type':
-                                            filter_type = synth_cfg.filter_type_dic_inv[parameters[key][i].argmax().item()]
+                                            filter_type = synth_cfg.filter_type_dic_inv[
+                                                parameters[key][i].argmax().item()]
                                             parameters_of_current_signal[key] = filter_type
 
                             else:
                                 parameters_of_current_signal = 'None'
-                            params_dict[cell.index] = {'operation': operation, 'parameters': parameters_of_current_signal}
+                            params_dict[cell.index] = {'operation': operation,
+                                                       'parameters': parameters_of_current_signal}
                     predicted_params_list.append(params_dict)
 
                     signal_index = signals_indices[i]
@@ -127,10 +136,12 @@ def predict(model,
                     plt.title("predicted audio")
                     plt.plot(pred_audio_np)
                     plt.subplot(2, 2, 3)
-                    librosa.display.specshow(orig_audio_transformed_db, sr=cfg.sample_rate, hop_length=512, x_axis='time', y_axis='mel')
+                    librosa.display.specshow(orig_audio_transformed_db, sr=cfg.sample_rate, hop_length=512,
+                                             x_axis='time', y_axis='mel')
                     plt.colorbar(format='%+2.0f dB')
                     plt.subplot(2, 2, 4)
-                    librosa.display.specshow(pred_audio_transformed_db, sr=cfg.sample_rate, hop_length=512, x_axis='time', y_axis='mel')
+                    librosa.display.specshow(pred_audio_transformed_db, sr=cfg.sample_rate, hop_length=512,
+                                             x_axis='time', y_axis='mel')
                     plt.colorbar(format='%+2.0f dB')
                     plt.ioff()
                     plots_path = dataset_cfg.inference_plots_dir.joinpath(f"sound{signal_index}_plots.png")
@@ -190,4 +201,3 @@ def run():
 
 if __name__ == "__main__":
     run()
-

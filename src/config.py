@@ -57,6 +57,14 @@ class Config:
     freq_mse_loss_factor = 1e-3
     freq_reinforce_loss_factor = 1e5
 
+    # multi-spectral loss configs
+    multi_spectral_loss_type = 'L1'
+    multi_spectral_mag_weight = 1/100
+    multi_spectral_delta_time_weight = 1/100
+    multi_spectral_delta_freq_weight = 1/100
+    multi_spectral_cumsum_freq_weight = 1/27400
+    multi_spectral_logmag_weight = 1
+
     # Debug
     debug_mode = False
     plot_spec = False
