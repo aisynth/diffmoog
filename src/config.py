@@ -71,7 +71,7 @@ class Config:
     def __post_init__(self):
 
         if self.log_spectrogram_mse_loss:
-           self.spectrogram_loss_factor = 1000
+            self.spectrogram_loss_factor = 1000
 
         if self.freq_param_loss_type == 'CE':
             self.model_frequency_output = 'LOGITS'
@@ -108,6 +108,8 @@ class DatasetConfig:
     test_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'test', 'wav_files')
     inference_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'test', 'inference_wav_files')
     inference_plots_dir = Path(__file__).parent.parent.joinpath('dataset', 'test', 'inference_plots')
+    train_dataset_dir_path = Path(__file__).parent.parent.joinpath('dataset', 'train')
+    test_dataset_dir_path = Path(__file__).parent.parent.joinpath('dataset', 'test')
 
 
 @dataclass
@@ -125,11 +127,11 @@ class ModelConfig:
 class SynthConfig:
     preset = 'OSC'
     wave_type_dict = {"sine": 0,
-                     "square": 1,
-                     "sawtooth": 2}
+                      "square": 1,
+                      "sawtooth": 2}
 
     filter_type_dict = {"low_pass": 0,
-                       "high_pass": 1}
+                        "high_pass": 1}
 
     semitones_max_offset: int = 24
     middle_c_freq: float = 261.6255653005985
@@ -149,8 +151,9 @@ class SynthConfig:
     num_layers = 5
 
     # Modular synth possible modules from synth_modules.py
-    modular_synth_operations = ['osc', 'fm', 'mix', 'filter', 'env_adsr']
+    modular_synth_operations = ['osc', 'fm', 'lfo', 'mix', 'filter', 'env_adsr']
     modular_synth_params = {'osc': ['amp', 'freq', 'waveform'],
+                            'lfo': ['amp', 'freq', 'waveform'],
                             'fm': ['amp_c', 'freq_c', 'waveform', 'mod_index'],
                             'mix': None,
                             'filter': ['filter_freq', 'filter_type'],
@@ -165,4 +168,4 @@ class SynthConfig:
         self.osc_freq_list = [self.middle_c_freq * (2 ** (1 / 12)) ** x for x in self.semitones_list]
         self.osc_freq_dic = {round(key, 4): value for value, key in enumerate(self.osc_freq_list)}
         self.osc_freq_dic_inv = {v: k for k, v in self.osc_freq_dic.items()}
-        self.max_carrier_oscillator_freq = self.osc_freq_list[-1] + self.margin
+        self.oscillator_freq = self.osc_freq_list[-1] + self.margin

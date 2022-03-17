@@ -61,28 +61,6 @@ amplitude_to_db_transform = torchaudio.transforms.AmplitudeToDB()
 
 # log_mel_spec_transform = torch.nn.Sequential(mel_spectrogram_transform, amplitude_to_db_transform).to(get_device())
 
-
-# def map_classification_params_to_ints(params_dic: dict):
-#     """ map classification params to ints, to input them for a neural network """
-#     mapped_params_dict = {}
-#     for key, val in params_dic.items():
-#         if key in synth_config.CLASSIFICATION_PARAM_LIST:
-#             if key == "osc1_freq" or key == "osc2_freq":
-#                 # todo: inspect which of these are needed (i think only the middle one)
-#                 if torch.is_tensor(val):
-#                     mapped_params_dict[key] = [synth_config.OSC_FREQ_DIC[round(x.item(), 4)] for x in val]
-#                 if isinstance(val, float):
-#                     mapped_params_dict[key] = synth_config.OSC_FREQ_DIC[round(val, 4)]
-#                 else:
-#                     mapped_params_dict[key] = [synth_config.OSC_FREQ_DIC[round(x, 4)] for x in val]
-#             if "wave" in key:
-#                 mapped_params_dict[key] = synth_config.WAVE_TYPE_DIC[val]
-#             elif "filter_type" == key:
-#                 mapped_params_dict[key] = synth_config.FILTER_TYPE_DIC[val]
-#
-#     return mapped_params_dict
-
-
 def map_classification_params_from_ints(params_dic: dict):
     """ map classification params from ints (inverse operation of map_classification_params_to_ints) """
 
@@ -114,6 +92,16 @@ def clamp_regression_params(parameters_dict: dict, synth_cfg: SynthConfig, cfg: 
                 {'operation': operation,
                  'params':
                      {'amp': operation_params['amp'],
+                      'freq': torch.clamp(operation_params['freq'], min=0, max=synth_cfg.oscillator_freq),
+                      'waveform': operation_params['waveform']
+                      }
+                 }
+
+        if operation == 'lfo':
+            clamped_params_dict[key] = \
+                {'operation': operation,
+                 'params':
+                     {'amp': operation_params['amp'],
                       'freq': torch.clamp(operation_params['freq'], min=0, max=synth_cfg.max_lfo_freq),
                       'waveform': operation_params['waveform']
                       }
@@ -126,7 +114,7 @@ def clamp_regression_params(parameters_dict: dict, synth_cfg: SynthConfig, cfg: 
                      {'amp_c': operation_params['amp_c'],
                       'freq_c':
                           torch.clamp(operation_params['freq_c'],
-                                      min=0, max=synth_cfg.max_carrier_oscillator_freq),
+                                      min=0, max=synth_cfg.oscillator_freq),
                       'waveform': operation_params['waveform'],
                       'mod_index': torch.clamp(operation_params['freq_c'], min=0, max=synth_cfg.max_mod_index)
                       }
@@ -209,10 +197,6 @@ def clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t, cfg: Confi
 
 class Normalizer:
     """ normalize/de-normalise regression parameters"""
-    '''
-    ['osc1_amp', 'osc1_mod_index', 'lfo1_freq', 'lfo1_phase',
-     'osc2_amp', 'osc2_mod_index', 'lfo2_freq', 'lfo2_phase',
-     'filter_freq', 'attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']'''
 
     def __init__(self, signal_duration_sec, synth_cfg: SynthConfig):
         self.mod_index_normalizer = MinMaxNormaliser(target_min_val=0,
@@ -243,7 +227,7 @@ class Normalizer:
         self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                            target_max_val=1,
                                                            original_min_val=0,
-                                                           original_max_val=synth_cfg.max_carrier_oscillator_freq)
+                                                           original_max_val=synth_cfg.oscillator_freq)
 
     def normalize(self, parameters_dict: dict):
         normalized_params_dict = {
@@ -268,6 +252,16 @@ class Normalizer:
             params = val['params']
 
             if operation == 'osc':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'params':
+                         {'amp': params['amp'],
+                          'freq': self.oscillator_freq_normalizer.denormalise(params['freq']),
+                          'waveform': params['waveform']
+                          }
+                     }
+
+            elif operation == 'lfo':
                 denormalized_params_dict[key] = \
                     {'operation': operation,
                      'params':
@@ -534,9 +528,9 @@ class TablePrinter(object):
     def row(self, data):
         return self.fmt.format(**{k: str(data.get(k, ''))[:w] for k, w in self.width.items()})
 
-    def __call__(self, dataList):
+    def __call__(self, datalist):
         _r = self.row
-        res = [_r(data) for data in dataList]
+        res = [_r(data) for data in datalist]
         res.insert(0, _r(self.head))
         if self.ul:
             res.insert(1, _r(self.ul))
@@ -557,25 +551,8 @@ def kullback_leibler(y_hat, y):
 
 
 def earth_mover_distance(y_true, y_pred):
-    # y_pred_flatten = torch.flatten(y_pred, start_dim=1, end_dim=2)
-    # y_true_flatten = torch.flatten(y_true, start_dim=1, end_dim=2)
     y_pred_cumsum0 = torch.cumsum(y_pred, dim=1)
     y_true_cumsum0 = torch.cumsum(y_true, dim=1)
-    # y_pred_cumsum1 = torch.cumsum(y_pred, dim=1)
-    # y_true_cumsum1 = torch.cumsum(y_true, dim=1)
-
-    # plot_spectrogram(y_pred.cpu().detach().numpy(),
-    #                  title=f"spec_diffs",
-    #                  x_label='freq_id',
-    #                  ylabel='freq_id')
-    #
-    # plot_spectrogram(y_pred_cumsum0.cpu().detach().numpy(),
-    #                         title=f"spec_diffs",
-    #                         x_label='freq_id',
-    #                         ylabel='freq_id')
-
-    # y_pred_cumsum = (y_pred_cumsum0 + y_pred_cumsum1) / 2
-    # y_true_cumsum = (y_true_cumsum0 + y_true_cumsum1) / 2
     square = torch.square(y_true_cumsum0 - y_pred_cumsum0)
     final = torch.mean(square)
     return final
@@ -681,15 +658,6 @@ class SpectralLoss:
         for loss_op in self.spectrogram_ops:
             target_mag = loss_op(target_audio)
             value_mag = loss_op(audio)
-            #
-            freq_id = 2
-            # plot_spectrogram(target_mag[freq_id].cpu().detach().numpy(),
-            #                  title=f"Target MelSpectrogram (dB)",
-            #                  ylabel='mel freq')
-            # plot_spectrogram(value_mag[freq_id].cpu().detach().numpy(),
-            #                  title=f"Predicted MelSpectrogram (dB)",
-            #                  ylabel='mel freq')
-            # print(self.mag_weight * criterion(target_mag[freq_id], value_mag[freq_id]))
 
             # Add magnitude loss.
             if self.mag_weight > 0:
@@ -708,34 +676,13 @@ class SpectralLoss:
             # TODO(kyriacos) normalize cumulative spectrogram
             if self.cumsum_freq_weight > 0:
                 target = torch.cumsum(target_mag, dim=1)
-                # print(target_mag[2][0])
-                # print(target[2][0])
-                # print(target_mag[2][:, 0])
-                # print(target[2][:, 0])
                 value = torch.cumsum(value_mag, dim=1)
-                # freq_id = 13
-                # plot_spectrogram(target[freq_id].cpu().detach().numpy(),
-                #                  title=f"Target MelSpectrogram (dB) 86",
-                #                  ylabel='mel freq')
-                # plot_spectrogram(value[freq_id].cpu().detach().numpy(),
-                #                  title=f"Predicted MelSpectrogram (dB) 86",
-                #                  ylabel='mel freq')
-                # print(self.cumsum_freq_weight * criterion(target[freq_id], value[freq_id]))
                 loss += self.cumsum_freq_weight * criterion(target, value)
 
             # Add logmagnitude loss, reusing spectrogram.
             if self.logmag_weight > 0:
                 target = torch.log(target_mag + 1)
                 value = torch.log(value_mag + 1)
-
-                # freq_id = 13
-                # plot_spectrogram(target[freq_id].cpu().detach().numpy(),
-                #                  title=f"Target MelSpectrogram (dB) 86",
-                #                  ylabel='mel freq')
-                # plot_spectrogram(value[freq_id].cpu().detach().numpy(),
-                #                  title=f"Predicted MelSpectrogram (dB) 86",
-                #                  ylabel='mel freq')
-                # print(self.logmag_weight * criterion(target[freq_id], value[freq_id]))
                 loss += self.logmag_weight * criterion(target, value)
 
         # if self.loudness_weight > 0:

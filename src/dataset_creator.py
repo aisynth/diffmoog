@@ -25,18 +25,20 @@ Configurations settings are inside config file.
 """
 
 
-def create_dataset(train: bool, data_cfg: DatasetConfig, synth_cfg: SynthConfig, cfg: Config, device: torch.device):
+def create_dataset(train: bool, dataset_cfg: DatasetConfig, synth_cfg: SynthConfig, cfg: Config, device: torch.device):
     dataset_parameters = []
-    print(f"Creating dataset \n Size = {data_cfg.dataset_size}")
+    print(f"Creating dataset \n Size = {dataset_cfg.dataset_size}")
     print(" Type = Train \n") if train else print(" Type = Test \n")
 
-    path_parent = Path(__file__).parent.parent
+    # init paths
     if train:
-        dataset_dir_path = path_parent.joinpath('dataset', 'train')
+        dataset_dir_path = dataset_cfg.train_dataset_dir_path
     else:
-        dataset_dir_path = path_parent.joinpath('dataset', 'test')
+        dataset_dir_path = dataset_cfg.test_dataset_dir_path
+    parameters_pickle_path = dataset_dir_path.joinpath("params_dataset.pkl")
+    parameters_csv_path = dataset_dir_path.joinpath("params_dataset.csv")
 
-    for i in range(data_cfg.dataset_size):
+    for i in range(dataset_cfg.dataset_size):
         file_name = f"sound_{i}"
 
         synth_obj = SynthModular(synth_cfg=synth_cfg,
@@ -76,8 +78,6 @@ def create_dataset(train: bool, data_cfg: DatasetConfig, synth_cfg: SynthConfig,
         print(f"Generated {file_name}")
 
     parameters_dataframe = pd.DataFrame(dataset_parameters)
-    parameters_pickle_path = dataset_dir_path.joinpath("params_dataset.pkl")
-    parameters_csv_path = dataset_dir_path.joinpath("params_dataset.csv")
     parameters_dataframe.to_pickle(str(parameters_pickle_path))
     parameters_dataframe.to_csv(parameters_csv_path)
 

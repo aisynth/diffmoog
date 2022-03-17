@@ -102,6 +102,8 @@ class BigSynthNetwork(nn.Module):
             self.preset = synth_modular_presets.BASIC_FLOW
         elif synth_cfg.preset == 'OSC':
             self.preset = synth_modular_presets.OSC
+        elif synth_cfg.preset == 'LFO':
+            self.preset = synth_modular_presets.LFO
         elif synth_cfg.preset == 'FM':
             self.preset = synth_modular_presets.FM
         else:
@@ -111,7 +113,7 @@ class BigSynthNetwork(nn.Module):
         for cell in self.preset:
             index = cell.get('index')
             operation = cell.get('operation')
-            if operation == 'osc':
+            if operation == 'osc' or operation == 'lfo':
                 amplitude_head = nn.Sequential(
                     nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
                     nn.Linear(HIDDEN_IN_CHANNELS, 1)
@@ -221,7 +223,7 @@ class BigSynthNetwork(nn.Module):
             index = cell.get('index')
             operation = cell.get('operation')
 
-            if operation == 'osc':
+            if operation == 'osc' or operation == 'lfo':
                 amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp')]
                 frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq')]
                 waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]

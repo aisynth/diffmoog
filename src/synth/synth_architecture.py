@@ -189,6 +189,10 @@ class SynthModular:
 
                 if operation == 'osc':
                     params = {'amp': np.random.random_sample(size=num_sounds),
+                              'freq': random.choices(synth_cfg.osc_freq_list, k=num_sounds),
+                              'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds)}
+                elif operation == 'lfo':
+                    params = {'amp': np.random.random_sample(size=num_sounds),
                               'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds),
                               'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds)}
                 elif operation == 'fm':
@@ -351,6 +355,8 @@ class SynthModular:
         if preset == 'BASIC_FLOW':
             preset_list = synth_modular_presets.BASIC_FLOW
         elif preset == 'OSC':
+            preset_list = synth_modular_presets.OSC
+        elif preset == 'LFO':
             preset_list = synth_modular_presets.OSC
         elif preset == 'FM':
             preset_list = synth_modular_presets.FM

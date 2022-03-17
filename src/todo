@@ -1,4 +1,7 @@
 # todo:
+1. add lfo along osc to dataset.
+2. try to reproduce only osc case
+3. fix lr is not updating with scheduler
 
 1. concat several mel-spec transform with different window size to be inputted into model
 2. check run in the server
