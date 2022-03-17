@@ -150,8 +150,8 @@ class SynthModular:
                 input_cell = self.architecture[input[0]][input[1]]
                 input_cell.output = cell.index
         if operation is not None:
-            if operation == 'osc' and len(cell.input_list) != 0:
-                AttributeError('Oscillator does not take input audio')
+            if operation == 'osc' or operation == 'lfo' and len(cell.input_list) != 0:
+                AttributeError(f'Operation {operation} does not take input audio')
             elif operation in ['filter', 'env_adsr'] and len(cell.input_list) != 1:
                 AttributeError(f'{operation} must have single input')
             elif operation == 'mix' and len(cell.input_list) != 2:
@@ -193,8 +193,7 @@ class SynthModular:
                               'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds)}
                 elif operation == 'lfo':
                     params = {'amp': np.random.random_sample(size=num_sounds),
-                              'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds),
-                              'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds)}
+                              'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds)}
                 elif operation == 'fm':
                     params = {'amp_c': np.random.random_sample(size=num_sounds),
                               'freq_c': random.choices(synth_cfg.osc_freq_list, k=num_sounds),
@@ -275,6 +274,12 @@ class SynthModular:
                                                           freq=cell.parameters['freq'],
                                                           phase=0,
                                                           waveform=cell.parameters['waveform'],
+                                                          num_sounds=num_sounds)
+                elif operation == 'lfo':
+                    cell.signal = synth_module.oscillator(amp=cell.parameters['amp'],
+                                                          freq=cell.parameters['freq'],
+                                                          phase=0,
+                                                          waveform='sine',
                                                           num_sounds=num_sounds)
                 elif operation == 'fm':
                     if len(cell.input_list) == 1:
@@ -357,7 +362,7 @@ class SynthModular:
         elif preset == 'OSC':
             preset_list = synth_modular_presets.OSC
         elif preset == 'LFO':
-            preset_list = synth_modular_presets.OSC
+            preset_list = synth_modular_presets.LFO
         elif preset == 'FM':
             preset_list = synth_modular_presets.FM
 
@@ -402,9 +407,9 @@ if __name__ == "__main__":
     # a = SynthOscOnly('audio_example', num_sounds=10)
 
     modular_synth_basic_flow = [
-        SynthModularCell(index=(0, 0), operation='osc', default_connection=True),
+        SynthModularCell(index=(0, 0), operation='lfo', default_connection=True),
         SynthModularCell(index=(0, 1), operation='fm', default_connection=True),
-        SynthModularCell(index=(1, 0), operation='osc', default_connection=True),
+        SynthModularCell(index=(1, 0), operation='lfo', default_connection=True),
         SynthModularCell(index=(1, 1), operation='fm', input_list=[[1, 0]], output=[0, 2]),
         SynthModularCell(index=(1, 2), operation=None, input_list=None),
         SynthModularCell(index=(0, 2),

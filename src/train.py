@@ -127,7 +127,7 @@ def train(model,
                                  signal_duration_sec=cfg.signal_duration_sec,
                                  num_sounds=1,
                                  device=device,
-                                 preset=cfg.preset
+                                 preset=synth_cfg.preset
                                  )
 
     for epoch in range(num_epochs):

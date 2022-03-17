@@ -94,4 +94,4 @@ if __name__ == '__main__':
     dataset_cfg = DatasetConfig()
 
     device = helper.get_device(args.gpu_index)
-    create_dataset(train=args.train, data_cfg=dataset_cfg, synth_cfg=synth_cfg, cfg=cfg, device=device)
+    create_dataset(train=args.train, dataset_cfg=dataset_cfg, synth_cfg=synth_cfg, cfg=cfg, device=device)

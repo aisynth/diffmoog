@@ -13,7 +13,7 @@ class Config:
     " Mode - define a common configuration for the whole system     "
     "   0 -                     Use custom configurations           "
     "   Any other number -      Use predefined configuration preset. See below "
-    mode: int = 3
+    mode: int = 1
 
     " The architecture of the system, that defines the data flow and the loss functions:                    "
     "   1. SPECTROGRAM_ONLY (input -> CNN -> parameters -> Synth -> output; Loss over spectrograms)         "
@@ -45,7 +45,7 @@ class Config:
     use_loaded_model = False
 
     save_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'trained_synth_net.pt')
-    load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'synth_net_epoch10.pt')
+    load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'synth_net_epoch1.pt')
 
     txt_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.txt')
     numpy_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.npy')
@@ -78,28 +78,19 @@ class Config:
 
         if self.spectrogram_loss_type == 'MULTI-SPECTRAL':
             # one of ['BOTH', 'MEL_SPECTROGRAM', 'SPECTROGRAM']
-            self.multi_spectral_loss_spec_type = 'SPECTROGRAM'
+            self.multi_spectral_loss_spec_type = 'MEL_SPECTROGRAM'
 
         if self.mode == 1:
-            self.preset = 'BASIC_FLOW'
             self.architecture = 'SPECTROGRAM_ONLY'
             self.spectrogram_loss_type = 'MULTI-SPECTRAL'
             self.model_frequency_output = 'SINGLE'
-        elif self.mode == 2:
-            self.preset = 'FM'
-            self.architecture = 'SPECTROGRAM_ONLY'
-            self.spectrogram_loss_type = 'MULTI-SPECTRAL'
-            self.model_frequency_output = 'SINGLE'
-        elif self.mode == 3:
-            self.preset = 'OSC'
-            self.architecture = 'SPECTROGRAM_ONLY'
-            self.spectrogram_loss_type = 'MULTI-SPECTRAL'
-            self.model_frequency_output = 'SINGLE'
+
+
 
 
 @dataclass
 class DatasetConfig:
-    dataset_size = 10000
+    dataset_size = 1000
     num_epochs_to_print_stats = 100
     num_epochs_to_save_model = 100
     train_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'train', 'params_dataset.pkl')
@@ -114,9 +105,9 @@ class DatasetConfig:
 
 @dataclass
 class ModelConfig:
-    batch_size = 64
+    batch_size = 32
     num_epochs = 20
-    learning_rate = 0.000001
+    learning_rate = 0.0001
     optimizer_weight_decay = 0
     optimizer_scheduler_lr = 30
     optimizer_scheduler_gamma = 0.1
@@ -125,7 +116,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset = 'OSC'
+    preset = 'LFO'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}

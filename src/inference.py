@@ -28,7 +28,7 @@ def predict(model,
                                      signal_duration_sec=cfg.signal_duration_sec,
                                      num_sounds=1,
                                      device=device_arg,
-                                     preset=cfg.preset
+                                     preset=synth_cfg.preset
                                      )
 
         predicted_params_list = []
@@ -111,7 +111,7 @@ def predict(model,
                     pred_audio_transformed_db = librosa.power_to_db(pred_audio_transformed, ref=np.max)
 
                     # save synth audio signal output
-                    pred_file_name = f"sound{signal_index}_pred.wav"
+                    pred_file_name = f"sound_{signal_index}_pred.wav"
                     pred_audio_path = dataset_cfg.inference_audio_dir.joinpath(pred_file_name)
                     scipy.io.wavfile.write(pred_audio_path, cfg.sample_rate, pred_audio_np)
 

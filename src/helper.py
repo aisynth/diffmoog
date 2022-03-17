@@ -102,8 +102,7 @@ def clamp_regression_params(parameters_dict: dict, synth_cfg: SynthConfig, cfg: 
                 {'operation': operation,
                  'params':
                      {'amp': operation_params['amp'],
-                      'freq': torch.clamp(operation_params['freq'], min=0, max=synth_cfg.max_lfo_freq),
-                      'waveform': operation_params['waveform']
+                      'freq': torch.clamp(operation_params['freq'], min=0, max=synth_cfg.max_lfo_freq)
                       }
                  }
 
@@ -266,8 +265,7 @@ class Normalizer:
                     {'operation': operation,
                      'params':
                          {'amp': params['amp'],
-                          'freq': self.lfo_freq_normalizer.denormalise(params['freq']),
-                          'waveform': params['waveform']
+                          'freq': self.lfo_freq_normalizer.denormalise(params['freq'])
                           }
                      }
 
@@ -572,10 +570,10 @@ class SpectralLoss:
                  cfg: Config,
                  fft_sizes=(2048, 1024, 512, 256, 128, 64),
                  loss_type='L1',
-                 mag_weight=1.0,
-                 delta_time_weight=0.0,
-                 delta_freq_weight=0.0,
-                 cumsum_freq_weight=1.0,
+                 mag_weight=1/100,
+                 delta_time_weight=1/100,
+                 delta_freq_weight=1/100,
+                 cumsum_freq_weight=1/27400,
                  logmag_weight=1,
                  loudness_weight=0.0,
                  device='cuda:0',

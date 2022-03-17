@@ -113,7 +113,7 @@ class BigSynthNetwork(nn.Module):
         for cell in self.preset:
             index = cell.get('index')
             operation = cell.get('operation')
-            if operation == 'osc' or operation == 'lfo':
+            if operation == 'osc':
                 amplitude_head = nn.Sequential(
                     nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
                     nn.Linear(HIDDEN_IN_CHANNELS, 1)
@@ -129,6 +129,18 @@ class BigSynthNetwork(nn.Module):
                 self.heads_module_dict[self.get_key(index, operation, 'amp')] = amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = waveform_head
+
+            if operation == 'lfo':
+                amplitude_head = nn.Sequential(
+                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
+                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
+                )
+                frequency_head = nn.Sequential(
+                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
+                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
+                )
+                self.heads_module_dict[self.get_key(index, operation, 'amp')] = amplitude_head
+                self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
 
             elif operation == 'fm':
                 carrier_amplitude_head = nn.Sequential(
@@ -223,7 +235,7 @@ class BigSynthNetwork(nn.Module):
             index = cell.get('index')
             operation = cell.get('operation')
 
-            if operation == 'osc' or operation == 'lfo':
+            if operation == 'osc':
                 amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp')]
                 frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq')]
                 waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]
@@ -239,6 +251,19 @@ class BigSynthNetwork(nn.Module):
                                      'params': {'amp': predicted_amplitude,
                                                 'freq': predicted_frequency,
                                                 'waveform': waveform_probabilities
+                                                }}
+            if operation == 'lfo':
+                amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp')]
+                frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq')]
+
+                predicted_amplitude = amplitude_head(latent)
+                predicted_amplitude = self.sigmoid(predicted_amplitude)
+                predicted_frequency = frequency_head(latent)
+                predicted_frequency = self.sigmoid(predicted_frequency)
+
+                output_dic[index] = {'operation': operation,
+                                     'params': {'amp': predicted_amplitude,
+                                                'freq': predicted_frequency
                                                 }}
             elif operation == 'fm':
                 carrier_amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp_c')]
