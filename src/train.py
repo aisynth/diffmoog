@@ -256,7 +256,7 @@ def run():
     transform = transforms[args.transform]
 
     ai_synth_dataset = AiSynthDataset(dataset_cfg.train_parameters_file, dataset_cfg.train_audio_dir, device)
-    train_dataloader = create_data_loader(ai_synth_dataset, model_cfg.batch_size)
+    train_dataloader = create_data_loader(ai_synth_dataset, model_cfg.batch_size, ModelConfig.num_workers)
 
     # construct model and assign it to device
     synth_net = BigSynthNetwork(synth_cfg, device).to(device)

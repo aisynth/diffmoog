@@ -59,8 +59,7 @@ class AiSynthDataset(Dataset):
         return cells_dict
 
 
-def create_data_loader(train_data, batch_size):
-    num_workers = 0
+def create_data_loader(train_data, batch_size, num_workers=0):
     train_dataloader = DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
                                   persistent_workers=num_workers != 0)
     return train_dataloader

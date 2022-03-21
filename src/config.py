@@ -121,6 +121,7 @@ class ModelConfig:
     optimizer_scheduler_lr = 30
     optimizer_scheduler_gamma = 0.1
     reinforcement_epsilon = 0.15
+    num_workers = 0
 
 
 @dataclass

@@ -188,7 +188,7 @@ def run():
     ai_synth_test_dataset = AiSynthDataset(DatasetConfig.test_parameters_file,
                                            DatasetConfig.test_audio_dir,
                                            device)
-    test_dataloader = create_data_loader(ai_synth_test_dataset, ModelConfig.batch_size)
+    test_dataloader = create_data_loader(ai_synth_test_dataset, ModelConfig.batch_size, ModelConfig.num_workers)
 
     predict(model=synth_net,
             test_data_loader=test_dataloader,

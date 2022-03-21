@@ -207,10 +207,10 @@ class BigSynthNetwork(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
         # Initialization
-        nn.init.kaiming_normal_(self.conv1[0].weight, mode='fan_in', nonlinearity='relu')
-        nn.init.kaiming_normal_(self.conv2[0].weight, mode='fan_in', nonlinearity='relu')
-        nn.init.kaiming_normal_(self.conv3[0].weight, mode='fan_in', nonlinearity='relu')
-        nn.init.kaiming_normal_(self.conv4[0].weight, mode='fan_in', nonlinearity='relu')
+        # nn.init.kaiming_normal_(self.conv1[0].weight, mode='fan_in', nonlinearity='relu')
+        # nn.init.kaiming_normal_(self.conv2[0].weight, mode='fan_in', nonlinearity='relu')
+        # nn.init.kaiming_normal_(self.conv3[0].weight, mode='fan_in', nonlinearity='relu')
+        # nn.init.kaiming_normal_(self.conv4[0].weight, mode='fan_in', nonlinearity='relu')
 
     @staticmethod
     def get_key(index: tuple, operation: str, parameter: str) -> str:
