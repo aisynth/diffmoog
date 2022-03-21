@@ -1,5 +1,10 @@
 import torch
 from torch import nn
+
+import numpy as np
+
+from torch.utils.tensorboard import SummaryWriter
+
 from config import Config, SynthConfig, DatasetConfig, ModelConfig
 from ai_synth_dataset import AiSynthDataset, create_data_loader
 from model import BigSynthNetwork
@@ -21,19 +26,29 @@ def train_single_epoch(model,
                        modular_synth,
                        normalizer,
                        synth_cfg,
-                       cfg):
+                       cfg,
+                       activations_dict: dict,
+                       summary_writer: SummaryWriter):
     sum_epoch_loss = 0
     num_of_mini_batches = 0
     with tqdm(data_loader, unit="batch") as tepoch:
         for target_signal, target_param_dic, signal_index in tepoch:
 
+            step = epoch * len(data_loader) + num_of_mini_batches
+
             tepoch.set_description(f"Epoch {epoch}")
             batch_start_time = time.time()
+
+            target_signal = target_signal.to(device)
 
             # set_to_none as advised in page 6:
             # https://tigress-web.princeton.edu/~jdh4/PyTorchPerformanceTuningGuide_GTC2021.pdf
             model.zero_grad(set_to_none=True)
             transformed_signal = transform(target_signal)
+
+            # Log model to tensorboard
+            # if epoch == 0 and num_of_mini_batches == 0:
+            #     summary_writer.add_graph(model, transformed_signal)
 
             # -------------------------------------
             # -----------Run Model-----------------
@@ -41,12 +56,16 @@ def train_single_epoch(model,
             model_start_time = time.time()
 
             output_dic = model(transformed_signal)
+            log_dict_recursive('raw_output', output_dic, summary_writer, step)
 
             model_end_time = time.time()
             synth_start_time = time.time()
 
             denormalized_output_dict = normalizer.denormalize(output_dic)
+            log_dict_recursive('denormalized_output', denormalized_output_dict, summary_writer, step)
+
             predicted_param_dict = helper.clamp_regression_params(denormalized_output_dict, synth_cfg, cfg)
+            log_dict_recursive('clamped_output', predicted_param_dict, summary_writer, step)
 
             update_params = []
             for index, operation_dict in predicted_param_dict.items():
@@ -72,6 +91,7 @@ def train_single_epoch(model,
                                                       device=device)
                 target_signal = target_signal.squeeze()
                 loss = multi_spec_loss.call(target_signal, modular_synth.signal)
+                summary_writer.add_scalar('loss/train_multi_spectral', loss, step)
             else:
                 ValueError("SYNTH_TYPE 'MODULAR' supports only SPECTROGRAM_LOSS_TYPE of type 'MULTI-SPECTRAL'")
 
@@ -83,6 +103,9 @@ def train_single_epoch(model,
             loss.backward()
             optimizer.step()
             scheduler.step()
+
+            summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
+            log_gradients_in_model(model, summary_writer, step)
 
             backward_end_time = time.time()
             batch_end_time = time.time()
@@ -102,6 +125,7 @@ def train_single_epoch(model,
             tepoch.set_postfix(loss=loss.item())
 
     avg_epoch_loss = sum_epoch_loss / num_of_mini_batches
+    summary_writer.add_scalar('loss/train_multi_spectral_epoch', avg_epoch_loss, epoch)
 
     return avg_epoch_loss
 
@@ -115,7 +139,9 @@ def train(model,
           num_epochs: int,
           cfg: Config,
           model_cfg: ModelConfig,
-          synth_cfg: SynthConfig):
+          synth_cfg: SynthConfig,
+          activations_dict: dict,
+          summary_writer: SummaryWriter):
 
     # Initializations
     model.train()
@@ -123,9 +149,7 @@ def train(model,
 
     loss_list = []
 
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer=optimizer,
-                                                step_size=model_cfg.optimizer_scheduler_lr,
-                                                gamma=model_cfg.optimizer_scheduler_gamma)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=num_epochs * len(data_loader))
     normalizer = helper.Normalizer(cfg.signal_duration_sec, synth_cfg)
 
     # init modular synth
@@ -149,7 +173,9 @@ def train(model,
                                modular_synth=modular_synth,
                                normalizer=normalizer,
                                synth_cfg=synth_cfg,
-                               cfg=cfg)
+                               cfg=cfg,
+                               activations_dict=activations_dict,
+                               summary_writer=summary_writer)
 
         # Sum stats over multiple epochs
         loss_list.append(avg_epoch_loss)
@@ -168,6 +194,45 @@ def train(model,
     print("Finished training")
 
 
+def log_gradients_in_model(model, logger, step):
+    for tag, value in model.named_parameters():
+        if value.grad is not None:
+            grad_val = value.grad.cpu()
+            logger.add_histogram(tag + "/grad", grad_val, step)
+            if np.linalg.norm(grad_val) < 1e-4 and 'bias' not in tag:
+                print(f"Op {tag} gradient approaching 0")
+
+
+def log_dict_recursive(tag: str, data_to_log, writer: SummaryWriter, step: int):
+
+    if type(data_to_log) in [torch.Tensor, np.ndarray, int, float]:
+        if len(data_to_log) > 1:
+            writer.add_histogram(tag, data_to_log, step)
+        else:
+            writer.add_scalar(tag, data_to_log, step)
+        return
+
+    if not isinstance(data_to_log, dict):
+        return
+
+    if 'operation' in data_to_log:
+        tag += '_' + data_to_log['operation']
+
+    for k, v in data_to_log.items():
+        log_dict_recursive(f'{tag}/{k}', v, writer, step)
+
+    return
+
+
+def get_activation(name, activations_dict: dict):
+
+    def hook(layer, layer_input, layer_output):
+        activations_dict[name] = layer_output.detach()
+
+    return hook
+
+
+
 def run():
     cfg = Config()
     synth_cfg = SynthConfig()
@@ -180,6 +245,8 @@ def run():
                         type=int, default=0)
     parser.add_argument('-t', '--transform', choices=['mel', 'spec'],
                         help='mel: Mel Spectrogram, spec: Spectrogram', default='mel')
+
+    summary_writer = SummaryWriter(cfg.tensorboard_logdir)
 
     args = parser.parse_args()
     device = helper.get_device(args.gpu_index)
@@ -194,8 +261,12 @@ def run():
     # construct model and assign it to device
     synth_net = BigSynthNetwork(synth_cfg, device).to(device)
 
+    activations_dict = {}
+    # for name, layer in synth_net.named_modules():
+    #     layer.register_forward_hook(get_activation(name, activations_dict))
+
     optimizer = torch.optim.Adam(synth_net.parameters(),
-                                 lr=model_cfg.learning_rate,
+                                 lr=3e-5,
                                  weight_decay=model_cfg.optimizer_weight_decay)
 
     print(f"Training model start")
@@ -220,7 +291,9 @@ def run():
           num_epochs=model_cfg.num_epochs,
           cfg=cfg,
           model_cfg=model_cfg,
-          synth_cfg=synth_cfg)
+          synth_cfg=synth_cfg,
+          activations_dict=activations_dict,
+          summary_writer=summary_writer)
 
     # save model
     torch.save(synth_net.state_dict(), cfg.save_model_path)

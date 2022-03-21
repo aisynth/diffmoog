@@ -44,6 +44,9 @@ class Config:
 
     use_loaded_model = False
 
+    project_root = Path(__file__).parent.parent
+    tensorboard_logdir = project_root.joinpath('tensorboard')
+
     save_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'trained_synth_net.pt')
     load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'synth_net_epoch1.pt')
 
@@ -94,8 +97,6 @@ class Config:
             self.model_frequency_output = 'SINGLE'
 
 
-
-
 @dataclass
 class DatasetConfig:
     dataset_size = 1000
@@ -140,7 +141,7 @@ class SynthConfig:
     min_filter_freq = 0
     max_filter_freq = 20000
 
-    # When predicting the oscillator frequency by regression, the defines are used to normalize the output from the model
+    # When predicting oscillator frequency by regression, the defines are used to normalize the output from the model
     margin = 200
     # --------------------------------------
     # -----------Modular Synth--------------

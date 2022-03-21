@@ -1,7 +1,7 @@
+import os
 import torch
 import pandas as pd
 import torchaudio
-import os
 import helper
 from torch.utils.data import Dataset
 from config import Config
@@ -28,7 +28,6 @@ class AiSynthDataset(Dataset):
         self.device = device_arg
 
     def __len__(self):
-        a = len(self.params)
         return len(self.params)
 
     def __getitem__(self, index):
@@ -36,7 +35,7 @@ class AiSynthDataset(Dataset):
         audio_path = self._get_audio_path(index)
 
         signal, _ = torchaudio.load(audio_path)
-        signal = signal.to(self.device)
+        # signal = signal.to(self.device)
 
         return signal, params_dic, index
 
@@ -61,7 +60,9 @@ class AiSynthDataset(Dataset):
 
 
 def create_data_loader(train_data, batch_size):
-    train_dataloader = DataLoader(train_data, batch_size=batch_size)
+    num_workers = 0
+    train_dataloader = DataLoader(train_data, batch_size=batch_size, num_workers=num_workers,
+                                  persistent_workers=num_workers != 0)
     return train_dataloader
 
 if __name__ == "__main__":

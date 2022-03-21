@@ -12,7 +12,7 @@
     <content url="file://$MODULE_DIR$/julius">
       <sourceFolder url="file://$MODULE_DIR$/julius" isTestSource="false" />
     </content>
-    <orderEntry type="inheritedJdk" />
+    <orderEntry type="jdk" jdkName="gi_torch_infrastructure_venv" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>
