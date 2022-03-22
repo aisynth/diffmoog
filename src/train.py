@@ -90,7 +90,7 @@ def train_single_epoch(model,
                                                       logmag_weight=cfg.multi_spectral_logmag_weight,
                                                       device=device)
                 target_signal = target_signal.squeeze()
-                loss = multi_spec_loss.call(target_signal, modular_synth.signal)
+                loss = multi_spec_loss.call(target_signal, modular_synth.signal, summary_writer, step)
                 summary_writer.add_scalar('loss/train_multi_spectral', loss, step)
             else:
                 ValueError("SYNTH_TYPE 'MODULAR' supports only SPECTROGRAM_LOSS_TYPE of type 'MULTI-SPECTRAL'")
@@ -135,7 +135,7 @@ def train(model,
           transform,
           optimizer,
           device,
-          cur_epoch: int,
+          start_epoch: int,
           num_epochs: int,
           cfg: Config,
           model_cfg: ModelConfig,
@@ -162,6 +162,7 @@ def train(model,
                                  )
 
     for epoch in range(num_epochs):
+        cur_epoch = start_epoch + epoch
         avg_epoch_loss = \
             train_single_epoch(model=model,
                                epoch=cur_epoch,
@@ -181,15 +182,14 @@ def train(model,
         loss_list.append(avg_epoch_loss)
 
         # save model checkpoint
-        helper.save_model(cur_epoch,
-                          model,
-                          optimizer,
-                          avg_epoch_loss,
-                          loss_list,
-                          cfg.txt_path,
-                          cfg.numpy_path)
-
-        cur_epoch += 1
+        if cur_epoch % cfg.num_epochs_to_save_model == 0:
+            helper.save_model(cur_epoch,
+                              model,
+                              optimizer,
+                              avg_epoch_loss,
+                              loss_list,
+                              cfg.txt_path,
+                              cfg.numpy_path)
 
     print("Finished training")
 
@@ -266,7 +266,7 @@ def run():
     #     layer.register_forward_hook(get_activation(name, activations_dict))
 
     optimizer = torch.optim.Adam(synth_net.parameters(),
-                                 lr=3e-5,
+                                 lr=ModelConfig.learning_rate,
                                  weight_decay=model_cfg.optimizer_weight_decay)
 
     print(f"Training model start")
@@ -287,7 +287,7 @@ def run():
           transform=transform,
           optimizer=optimizer,
           device=device,
-          cur_epoch=cur_epoch,
+          start_epoch=cur_epoch,
           num_epochs=model_cfg.num_epochs,
           cfg=cfg,
           model_cfg=model_cfg,

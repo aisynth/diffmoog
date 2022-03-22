@@ -48,12 +48,13 @@ class Config:
     tensorboard_logdir = project_root.joinpath('tensorboard')
 
     save_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'trained_synth_net.pt')
-    load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'synth_net_epoch1.pt')
+    # load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'trained_synth_net.pt')
+    load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'synth_net_epoch19.pt')
 
     txt_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.txt')
     numpy_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.npy')
 
-    num_epochs_to_save_model = 2
+    num_epochs_to_save_model = 1
 
     regression_loss_factor = 1e-1
     spectrogram_loss_factor = 1e-5
@@ -101,7 +102,6 @@ class Config:
 class DatasetConfig:
     dataset_size = 1000
     num_epochs_to_print_stats = 100
-    num_epochs_to_save_model = 100
     train_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'train', 'params_dataset.pkl')
     train_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'train', 'wav_files')
     test_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'test', 'params_dataset.pkl')
@@ -114,14 +114,14 @@ class DatasetConfig:
 
 @dataclass
 class ModelConfig:
-    batch_size = 32
+    batch_size = 512
     num_epochs = 20
-    learning_rate = 0.0001
+    learning_rate = 3e-5
     optimizer_weight_decay = 0
-    optimizer_scheduler_lr = 30
+    optimizer_scheduler_lr = 0
     optimizer_scheduler_gamma = 0.1
     reinforcement_epsilon = 0.15
-    num_workers = 0
+    num_workers = 16
 
 
 @dataclass

@@ -5,6 +5,8 @@ import torchaudio
 import matplotlib
 import matplotlib.pyplot as plt
 import librosa
+from torch.utils.tensorboard import SummaryWriter
+
 from synth import synth_config
 from torch import nn
 from config import SynthConfig, Config
@@ -636,12 +638,13 @@ class SpectralLoss:
                 ).to(self.device)
                 self.spectrogram_ops.append(mel_spec_transform)
 
-    def call(self, target_audio, audio, weights=None):
+    def call(self, target_audio, audio, summary_writer: SummaryWriter, global_step: int):
         """ execute multi-spectral loss computation between two audio signals
 
         Args:
           target_audio: target audio signal
           audio:        audio signal
+          :param summary_writer:
         """
         loss = 0.0
 
@@ -653,35 +656,46 @@ class SpectralLoss:
             criterion = -1
             ValueError("unknown loss type")
         # Compute loss for each fft size.
+        loss_dict = {}
         for loss_op in self.spectrogram_ops:
             target_mag = loss_op(target_audio)
             value_mag = loss_op(audio)
 
             # Add magnitude loss.
             if self.mag_weight > 0:
-                loss += self.mag_weight * criterion(target_mag, value_mag)
+                magnitude_loss = criterion(target_mag, value_mag)
+                loss_dict[f"{loss_op.n_fft}_magnitude"] = magnitude_loss
+                loss += self.mag_weight * magnitude_loss
 
             if self.delta_time_weight > 0:
                 target = diff(target_mag, axis=1)
                 value = diff(value_mag, axis=1)
-                loss += self.delta_time_weight * criterion(target, value)
+                delta_time_loss = criterion(target, value)
+                loss_dict[f"{loss_op.n_fft}_delta_time"] = delta_time_loss
+                loss += self.delta_time_weight * delta_time_loss
 
             if self.delta_freq_weight > 0:
                 target = diff(target_mag, axis=2)
                 value = diff(value_mag, axis=2)
-                loss += self.delta_freq_weight * criterion(target, value)
+                delta_freq_loss = criterion(target, value)
+                loss_dict[f"{loss_op.n_fft}_delta_freq"] = delta_freq_loss
+                loss += self.delta_freq_weight * delta_freq_loss
 
             # TODO(kyriacos) normalize cumulative spectrogram
             if self.cumsum_freq_weight > 0:
                 target = torch.cumsum(target_mag, dim=1)
                 value = torch.cumsum(value_mag, dim=1)
-                loss += self.cumsum_freq_weight * criterion(target, value)
+                emd_loss = criterion(target, value)
+                loss_dict[f"{loss_op.n_fft}_emd"] = emd_loss
+                loss += self.cumsum_freq_weight * emd_loss
 
             # Add logmagnitude loss, reusing spectrogram.
             if self.logmag_weight > 0:
                 target = torch.log(target_mag + 1)
                 value = torch.log(value_mag + 1)
-                loss += self.logmag_weight * criterion(target, value)
+                logmag_loss = criterion(target, value)
+                loss_dict[f"{loss_op.n_fft}_logmag"] = logmag_loss
+                loss += self.logmag_weight * logmag_loss
 
         # if self.loudness_weight > 0:
         #     target = spectral_ops.compute_loudness(target_audio, n_fft=2048,
@@ -689,6 +703,8 @@ class SpectralLoss:
         #     value = spectral_ops.compute_loudness(audio, n_fft=2048, use_tf=True)
         #     loss += self.loudness_weight * mean_difference(
         #         target, value, self.loss_type, weights=weights)
+
+        summary_writer.add_scalars(main_tag="sub_losses", tag_scalar_dict=loss_dict, global_step=global_step)
 
         return loss
 

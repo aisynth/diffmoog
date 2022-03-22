@@ -86,7 +86,7 @@ if __name__ == '__main__':
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter, description='Train AI Synth')
     parser.add_argument('-g', '--gpu_index', help='index of gpu (if exist, torch indexing) -1 for cpu',
                         type=int, default=0)
-    parser.add_argument('-t', '--train', action='store_true', default=True)
+    parser.add_argument('-t', '--train', action='store_true', default=False)
     args = parser.parse_args()
 
     cfg = Config()

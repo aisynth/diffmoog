@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import torch
+from torch.utils.tensorboard import SummaryWriter
+
 import helper
 from model import BigSynthNetwork
 from ai_synth_dataset import AiSynthDataset, create_data_loader
@@ -13,6 +15,8 @@ import librosa
 import librosa.display
 import numpy as np
 from tqdm import tqdm
+
+summary_writer = SummaryWriter()
 
 
 def predict(model,
@@ -32,8 +36,10 @@ def predict(model,
                                      )
 
         predicted_params_list = []
+        step = 0
         with tqdm(test_data_loader, unit="batch") as tepoch:
             for signals, target_params_dic, signals_indices in tepoch:
+                signals = helper.move_to(signals, device_arg)
                 normalizer = helper.Normalizer(cfg.signal_duration_sec, synth_cfg)
 
                 transformed_signal = transform(signals)
@@ -62,7 +68,7 @@ def predict(model,
                                                           logmag_weight=cfg.multi_spectral_logmag_weight,
                                                           device=device_arg)
                     signals = signals.squeeze()
-                    loss = multi_spec_loss.call(signals, modular_synth.signal)
+                    loss = multi_spec_loss.call(signals, modular_synth.signal, summary_writer, step)
                 else:
                     ValueError("SYNTH_TYPE 'MODULAR' supports only SPECTROGRAM_LOSS_TYPE of type 'MULTI-SPECTRAL'")
 
@@ -147,6 +153,8 @@ def predict(model,
                     plots_path = dataset_cfg.inference_plots_dir.joinpath(f"sound{signal_index}_plots.png")
                     plt.savefig(plots_path)
 
+                    step += 1
+
         predicted_params_dataframe = pd.DataFrame(predicted_params_list)
         dataset_dir_path = Path(__file__).parent.parent.joinpath('dataset', 'test')
         parameters_pickle_path = dataset_dir_path.joinpath("predicted_params_dataset.pkl")
@@ -196,7 +204,7 @@ def run():
             device_arg=device,
             cfg=cfg,
             synth_cfg=synth_cfg,
-            dataset_cfg=dataset_cfg)
+            dataset_cfg=dataset_cfg,)
 
 
 if __name__ == "__main__":
