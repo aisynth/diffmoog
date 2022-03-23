@@ -1,14 +1,25 @@
+import json
 import os
-from dataclasses import dataclass, field
-from pathlib import Path
-
+from json import dump
+from dataclasses import dataclass, field, asdict
+from pathlib import Path, WindowsPath
+from shutil import rmtree
+from termcolor import colored
 
 # from synth_config import BASIC_FLOW
+from typing import Dict, List
+
+from torch.utils.tensorboard import SummaryWriter
+
+EXP_ROOT = Path(__file__).parent.parent.joinpath('experiments')
+DATA_ROOT = Path(__file__).parent.parent.joinpath('data')
+
 
 @dataclass
 class Config:
-    sample_rate = 16000
-    signal_duration_sec = 1.0
+
+    sample_rate: int = 16000
+    signal_duration_sec: float = 1.0
 
     " Mode - define a common configuration for the whole system     "
     "   0 -                     Use custom configurations           "
@@ -23,7 +34,7 @@ class Config:
     "      Loss over spectrograms)                                                                          "
     "   5. REINFORCE - (input -> CNN -> parameters); Loss is computed to maximize rewards for correct       "
     "       classification. Using the classical REINFORCE algorithm                                         "
-    architecture = 'SPECTROGRAM_ONLY'  # SPECTROGRAM_ONLY, PARAMETERS_ONLY, SPEC_NO_SYNTH or FULL (Spectrogram + parameters)
+    architecture: str = 'SPECTROGRAM_ONLY'  # SPECTROGRAM_ONLY, PARAMETERS_ONLY, SPEC_NO_SYNTH or FULL (Spectrogram + parameters)
 
     " Spectrogram loss type options:" \
     "1. MSE" \
@@ -31,54 +42,76 @@ class Config:
     "3. KL (Kullback-Leibler)" \
     "4. EMD (earth movers distance)" \
     "5. MULTI-SPECTRAL"
-    spectrogram_loss_type = 'MULTI-SPECTRAL'
-    freq_param_loss_type = 'MSE'  # MSE or CE (Cross Entropy)
+    spectrogram_loss_type: str = 'MULTI-SPECTRAL'
+    freq_param_loss_type: str = 'MSE'  # MSE or CE (Cross Entropy)
 
     " The model can output the oscillator frequency as:                                 "
     "   1. LOGITS (size is num of frequencies, for cross entropy loss)                  "
     "   2. PROBS (same as LOGITS, but softmax is applied)                               "
     "   3. WEIGHTED - inner product of <probabilities, original frequencies>. size is 1 "
     "   4. SINGLE - linear layer outputs single neuron. size is 1                       "
-    model_frequency_output = 'SINGLE'
-    transform = 'MEL_SPECTROGRAM'  # MEL_SPECTROGRAM or SPECTROGRAM- to be used in the data loader and at the synth output
+    model_frequency_output: str = 'SINGLE'
+    transform: str = 'MEL_SPECTROGRAM'  # MEL_SPECTROGRAM or SPECTROGRAM- to be used in the data loader and at the synth output
 
     use_loaded_model = False
 
-    project_root = Path(__file__).parent.parent
-    tensorboard_logdir = project_root.joinpath('tensorboard')
+    project_root: str = None
+    tensorboard_logdir: str = None
+    ckpts_dir: str = None
+    artifacts_dir: str = None
 
-    save_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'trained_synth_net.pt')
+    save_model_path: str = None
     # load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'trained_synth_net.pt')
-    load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'synth_net_epoch19.pt')
+    load_model_path: str = None
 
-    txt_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.txt')
-    numpy_path = Path(__file__).parent.parent.joinpath('trained_models', 'loss_list.npy')
+    txt_path: str = None
+    numpy_path: str = None
 
-    num_epochs_to_save_model = 1
+    num_epochs_to_save_model: int = 1
 
-    regression_loss_factor = 1e-1
-    spectrogram_loss_factor = 1e-5
-    freq_mse_loss_factor = 1e-3
-    freq_reinforce_loss_factor = 1e5
+    regression_loss_factor: float = 1e-1
+    spectrogram_loss_factor: float = 1e-5
+    freq_mse_loss_factor: float = 1e-3
+    freq_reinforce_loss_factor: float = 1e5
 
     # multi-spectral loss configs
-    multi_spectral_loss_type = 'L1'
-    multi_spectral_mag_weight = 1/100
-    multi_spectral_delta_time_weight = 1/100
-    multi_spectral_delta_freq_weight = 1/100
-    multi_spectral_cumsum_freq_weight = 1/27400
-    multi_spectral_logmag_weight = 1
+    multi_spectral_loss_type: str = 'L1'
+    multi_spectral_loss_spec_type: str = 'MEL_SPECTROGRAM'
+    multi_spectral_mag_weight: float = 1/100
+    multi_spectral_delta_time_weight: float = 1/100
+    multi_spectral_delta_freq_weight: float = 1/100
+    multi_spectral_cumsum_freq_weight: float = 1/27400
+    multi_spectral_logmag_weight: float = 1
 
     # Debug
-    debug_mode = False
-    plot_spec = False
-    print_train_batch_stats = False
-    print_timings = True
-    print_synth_param_stats = True
-    print_accuracy_stats = False
-    print_per_accuracy_stats_multiple_epochs = True
+    debug_mode: bool = False
+    plot_spec: bool = False
+    print_train_batch_stats: bool = False
+    print_timings: bool = True
+    print_synth_param_stats: bool = True
+    print_accuracy_stats: bool = False
+    print_per_accuracy_stats_multiple_epochs: bool = True
 
-    log_spectrogram_mse_loss = False
+    log_spectrogram_mse_loss: bool = False
+
+    def __init__(self, project_root):
+        self.project_root = project_root
+
+        self.tensorboard_logdir = os.path.join(project_root, 'tensorboard', '')
+        self.ckpts_dir = os.path.join(project_root, 'ckpts', '')
+        os.makedirs(self.ckpts_dir, exist_ok=True)
+
+        self.save_model_path = os.path.join(project_root, 'ckpts', 'trained_synth_net.pt')
+        # load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'trained_synth_net.pt')
+        self.load_model_path = os.path.join(project_root, 'ckpts', 'synth_net_epoch19.pt')
+
+        self.artifacts_dir = os.path.join(project_root, 'artifacts', '')
+        os.makedirs(self.artifacts_dir, exist_ok=True)
+
+        self.txt_path = os.path.join(project_root, 'artifacts', 'loss_list.txt')
+        self.numpy_path = os.path.join(project_root, 'artifacts', 'loss_list.npy')
+
+        self.__post_init__()
 
     def __post_init__(self):
 
@@ -100,33 +133,46 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size = 1000
-    num_epochs_to_print_stats = 100
-    train_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'train', 'params_dataset.pkl')
-    train_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'train', 'wav_files')
-    test_parameters_file = Path(__file__).parent.parent.joinpath('dataset', 'test', 'params_dataset.pkl')
-    test_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'test', 'wav_files')
-    inference_audio_dir = Path(__file__).parent.parent.joinpath('dataset', 'test', 'inference_wav_files')
-    inference_plots_dir = Path(__file__).parent.parent.joinpath('dataset', 'test', 'inference_plots')
-    train_dataset_dir_path = Path(__file__).parent.parent.joinpath('dataset', 'train')
-    test_dataset_dir_path = Path(__file__).parent.parent.joinpath('dataset', 'test')
+    dataset_size: int = 1000
+    num_epochs_to_print_stats: int = 100
+    train_parameters_file: str = None
+    train_audio_dir: str = None
+    test_parameters_file: str = None
+    test_audio_dir: str = None
+    inference_audio_dir: str = None
+    inference_plots_dir: str = None
+    train_dataset_dir_path: str = None
+    test_dataset_dir_path: str = None
+
+    def __init__(self, dataset_name):
+
+        dataset_dir = os.path.join(DATA_ROOT, dataset_name, '')
+
+        self.train_parameters_file: str = os.path.join(dataset_dir, 'train', 'params_dataset.pkl')
+        self.train_audio_dir: str = os.path.join(dataset_dir, 'train', 'wav_files')
+        self.test_parameters_file: str = os.path.join(dataset_dir, 'test', 'params_dataset.pkl')
+        self.test_audio_dir: str = os.path.join(dataset_dir, 'test', 'wav_files')
+        self.inference_audio_dir: str = os.path.join(dataset_dir, 'test', 'inference_wav_files')
+        self.inference_plots_dir: str = os.path.join(dataset_dir, 'test', 'inference_plots')
+        self.train_dataset_dir_path: str = os.path.join(dataset_dir, 'train')
+        self.test_dataset_dir_path: str = os.path.join(dataset_dir, 'test')
 
 
 @dataclass
 class ModelConfig:
-    batch_size = 512
-    num_epochs = 20
-    learning_rate = 3e-5
-    optimizer_weight_decay = 0
-    optimizer_scheduler_lr = 0
-    optimizer_scheduler_gamma = 0.1
-    reinforcement_epsilon = 0.15
-    num_workers = 16
+    batch_size: int = 32
+    num_epochs: int = 20
+    learning_rate: float = 3e-5
+    optimizer_weight_decay: float = 0
+    optimizer_scheduler_lr: float = 0
+    optimizer_scheduler_gamma: float = 0.1
+    reinforcement_epsilon: float = 0.15
+    num_workers: int = 0
 
 
 @dataclass
 class SynthConfig:
-    preset = 'LFO'
+    preset: str = 'LFO'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}
@@ -136,20 +182,20 @@ class SynthConfig:
 
     semitones_max_offset: int = 24
     middle_c_freq: float = 261.6255653005985
-    max_amp = 1
-    max_mod_index = 100
-    max_lfo_freq = 20
-    min_filter_freq = 0
-    max_filter_freq = 20000
+    max_amp: float = 1
+    max_mod_index: float = 100
+    max_lfo_freq: float = 20
+    min_filter_freq: float = 0
+    max_filter_freq: float = 20000
 
     # When predicting oscillator frequency by regression, the defines are used to normalize the output from the model
-    margin = 200
+    margin: float = 200
     # --------------------------------------
     # -----------Modular Synth--------------
     # --------------------------------------
     # Modular Synth attributes:
-    num_channels = 4
-    num_layers = 5
+    num_channels: int = 4
+    num_layers: int = 5
 
     # Modular synth possible modules from synth_modules.py
     modular_synth_operations = ['osc', 'fm', 'lfo', 'mix', 'filter', 'env_adsr']
@@ -170,3 +216,37 @@ class SynthConfig:
         self.osc_freq_dic = {round(key, 4): value for value, key in enumerate(self.osc_freq_list)}
         self.osc_freq_dic_inv = {v: k for k, v in self.osc_freq_dic.items()}
         self.oscillator_freq = self.osc_freq_list[-1] + self.margin
+
+
+def configure_experiment(exp_name: str, dataset_name: str):
+
+    project_root = os.path.join(EXP_ROOT, exp_name, '')
+
+    if os.path.isdir(project_root):
+        overwrite = input(colored(f"Folder {project_root} already exists. Overwrite previous experiment (Y/N)?"
+                                  f"\n\tThis will delete all files related to the previous run!",
+                                  'yellow'))
+        if overwrite.lower() != 'y':
+            print('Exiting...')
+            exit()
+
+        print("Deleting previous experiment...")
+        rmtree(project_root)
+
+    cfg = Config(project_root)
+    synth_cfg = SynthConfig()
+    dataset_cfg = DatasetConfig(dataset_name)
+    model_cfg = ModelConfig()
+
+    config_dump_path = os.path.join(cfg.project_root, 'config_dump', '')
+    os.makedirs(config_dump_path, exist_ok=True)
+
+    for fname, t_cfg in zip(['general', 'model', 'synth', 'dataset'], [cfg, model_cfg, synth_cfg, dataset_cfg]):
+
+        config_output_path = os.path.join(config_dump_path, fname + '.json')
+        cfg_dict = asdict(t_cfg)
+
+        with open(config_output_path, 'w') as f:
+            json.dump(cfg_dict, f)
+
+    return cfg, model_cfg, synth_cfg, dataset_cfg

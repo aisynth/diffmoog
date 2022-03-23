@@ -1,3 +1,5 @@
+import os.path
+
 import torch
 from torch import nn
 
@@ -5,7 +7,7 @@ import numpy as np
 
 from torch.utils.tensorboard import SummaryWriter
 
-from config import Config, SynthConfig, DatasetConfig, ModelConfig
+from config import Config, SynthConfig, DatasetConfig, ModelConfig, configure_experiment
 from ai_synth_dataset import AiSynthDataset, create_data_loader
 from model import BigSynthNetwork
 from synth.synth_architecture import SynthModular, SynthModularCell
@@ -183,11 +185,13 @@ def train(model,
 
         # save model checkpoint
         if cur_epoch % cfg.num_epochs_to_save_model == 0:
+            ckpt_path = os.path.join(cfg.ckpts_dir, f'synth_net_epoch{cur_epoch}.pt')
             helper.save_model(cur_epoch,
                               model,
                               optimizer,
                               avg_epoch_loss,
                               loss_list,
+                              ckpt_path,
                               cfg.txt_path,
                               cfg.numpy_path)
 
@@ -232,12 +236,10 @@ def get_activation(name, activations_dict: dict):
     return hook
 
 
+def run(exp_name: str, dataset_name: str):
 
-def run():
-    cfg = Config()
-    synth_cfg = SynthConfig()
-    dataset_cfg = DatasetConfig()
-    model_cfg = ModelConfig()
+    cfg, model_cfg, synth_cfg, dataset_cfg = configure_experiment(exp_name, dataset_name)
+    summary_writer = SummaryWriter(cfg.tensorboard_logdir)
 
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter,
                             description='Train AI Synth')
@@ -245,8 +247,6 @@ def run():
                         type=int, default=0)
     parser.add_argument('-t', '--transform', choices=['mel', 'spec'],
                         help='mel: Mel Spectrogram, spec: Spectrogram', default='mel')
-
-    summary_writer = SummaryWriter(cfg.tensorboard_logdir)
 
     args = parser.parse_args()
     device = helper.get_device(args.gpu_index)
@@ -301,4 +301,4 @@ def run():
 
 
 if __name__ == "__main__":
-    run()
+    run('test', 'toy_data')

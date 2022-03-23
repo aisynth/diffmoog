@@ -704,21 +704,22 @@ class SpectralLoss:
         #     loss += self.loudness_weight * mean_difference(
         #         target, value, self.loss_type, weights=weights)
 
-        summary_writer.add_scalars(main_tag="sub_losses", tag_scalar_dict=loss_dict, global_step=global_step)
+        for loss_name, loss_val in loss_dict.items():
+            summary_writer.add_scalar(f"sub_losses/{loss_name}", loss_val, global_step=global_step)
 
         return loss
 
 
-def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, txt_path, numpy_path):
+def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, ckpt_path, txt_path, numpy_path):
     # save model checkpoint
-    model_checkpoint_path = Path(__file__).parent.parent.joinpath('trained_models', f'synth_net_epoch{cur_epoch}.pt')
+
     np.save(numpy_path, np.asarray(loss_list))
     torch.save({
         'epoch': cur_epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimiser_arg.state_dict(),
         'loss': avg_epoch_loss
-    }, model_checkpoint_path)
+    }, ckpt_path)
 
     text_file = open(txt_path, 'a')
     text_file.write(f"epoch:{cur_epoch}\tloss: " + str(avg_epoch_loss) + "\n")
