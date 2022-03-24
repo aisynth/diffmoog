@@ -104,8 +104,8 @@ def train_single_epoch(model,
                     signal_vis = visualize_signal_prediction(target_signal[i], modular_synth.signal[i],
                                                              [specs['target'][i]],
                                                              [specs['pred'][i]], cfg.sample_rate)
-                    signal_vis_t = torch.Tensor(signal_vis)
-                    # summary_writer.add_image(f'{k}_input{i}', signal_vis_t, global_step=step, dataformats='HWC')
+                    signal_vis_t = torch.tensor(signal_vis, dtype=torch.uint8)
+                    summary_writer.add_image(f'{k}_input{i}', signal_vis_t, global_step=step, dataformats='HWC')
 
             loss_end_time = time.time()
             backward_start_time = time.time()

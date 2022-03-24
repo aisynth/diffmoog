@@ -164,7 +164,7 @@ def predict(model,
         predicted_params_dataframe.to_csv(parameters_csv_path)
 
 
-def visualize_signal_prediction(orig_audio, pred_audio, orig_spectograms, pred_spectograms, sample_rate, db=True):
+def visualize_signal_prediction(orig_audio, pred_audio, orig_spectograms, pred_spectograms, sample_rate, db=False):
 
     orig_audio_np = orig_audio.detach().cpu().numpy()
     pred_audio_np = pred_audio.detach().cpu().numpy()
@@ -178,7 +178,7 @@ def visualize_signal_prediction(orig_audio, pred_audio, orig_spectograms, pred_s
 
     # plot original vs predicted signal
     n_rows = len(orig_spectograms_np) + 1
-    fig, ax = plt.subplots(n_rows, 2, figsize=(30, 20))
+    fig, ax = plt.subplots(n_rows, 2, figsize=(15, 10))
 
     canvas = FigureCanvasAgg(fig)
 
@@ -198,7 +198,7 @@ def visualize_signal_prediction(orig_audio, pred_audio, orig_spectograms, pred_s
     s, (width, height) = canvas.print_to_buffer()
 
     # Option 2a: Convert to a NumPy array.
-    X = np.fromstring(s, np.uint8).reshape((height, width, 4))
+    X = np.fromstring(s, np.uint8).reshape((height, width, 4))[:, :, :3]
     plt.close()
 
     return X
