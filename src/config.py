@@ -172,7 +172,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'LFO'
+    preset: str = 'FM'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}

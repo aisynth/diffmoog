@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import torch
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from torch.utils.tensorboard import SummaryWriter
 
 import helper
@@ -161,6 +162,46 @@ def predict(model,
         parameters_csv_path = dataset_dir_path.joinpath("predicted_params_dataset.csv")
         predicted_params_dataframe.to_pickle(str(parameters_pickle_path))
         predicted_params_dataframe.to_csv(parameters_csv_path)
+
+
+def visualize_signal_prediction(orig_audio, pred_audio, orig_spectograms, pred_spectograms, sample_rate, db=True):
+
+    orig_audio_np = orig_audio.detach().cpu().numpy()
+    pred_audio_np = pred_audio.detach().cpu().numpy()
+
+    orig_spectograms_np = [orig_spectogram.detach().cpu().numpy() for orig_spectogram in orig_spectograms]
+    pred_spectograms_np = [pred_spectogram.detach().cpu().numpy() for pred_spectogram in pred_spectograms]
+
+    if db:
+        orig_spectograms_np = [librosa.power_to_db(orig_spectogram_np) for orig_spectogram_np in orig_spectograms_np]
+        pred_spectograms_np = [librosa.power_to_db(pred_spectogram_np) for pred_spectogram_np in pred_spectograms_np]
+
+    # plot original vs predicted signal
+    n_rows = len(orig_spectograms_np) + 1
+    fig, ax = plt.subplots(n_rows, 2, figsize=(30, 20))
+
+    canvas = FigureCanvasAgg(fig)
+
+    ax[0][0].set_title(f"original audio")
+    ax[0][0].set_ylim([-1, 1])
+    ax[0][0].plot(orig_audio_np)
+
+    ax[0][1].set_title(f"predicted audio")
+    ax[0][1].set_ylim([-1, 1])
+    ax[0][1].plot(pred_audio_np)
+
+    for i in range(1, n_rows):
+        ax[i][0].imshow(orig_spectograms_np[i-1], origin='lower', aspect='auto')
+        ax[i][1].imshow(pred_spectograms_np[i-1], origin='lower', aspect='auto')
+
+    canvas.draw()
+    s, (width, height) = canvas.print_to_buffer()
+
+    # Option 2a: Convert to a NumPy array.
+    X = np.fromstring(s, np.uint8).reshape((height, width, 4))
+    plt.close()
+
+    return X
 
 
 def run():

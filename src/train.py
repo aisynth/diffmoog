@@ -9,6 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from config import Config, SynthConfig, DatasetConfig, ModelConfig, configure_experiment
 from ai_synth_dataset import AiSynthDataset, create_data_loader
+from inference import visualize_signal_prediction
 from model import BigSynthNetwork
 from synth.synth_architecture import SynthModular, SynthModularCell
 import helper
@@ -92,10 +93,19 @@ def train_single_epoch(model,
                                                       logmag_weight=cfg.multi_spectral_logmag_weight,
                                                       device=device)
                 target_signal = target_signal.squeeze()
-                loss = multi_spec_loss.call(target_signal, modular_synth.signal, summary_writer, step)
+                loss, ret_spectrograms = multi_spec_loss.call(target_signal, modular_synth.signal, summary_writer, step,
+                                                              return_spectrogram=True)
                 summary_writer.add_scalar('loss/train_multi_spectral', loss, step)
             else:
                 ValueError("SYNTH_TYPE 'MODULAR' supports only SPECTROGRAM_LOSS_TYPE of type 'MULTI-SPECTRAL'")
+
+            for i in range(2):
+                for k, specs in ret_spectrograms.items():
+                    signal_vis = visualize_signal_prediction(target_signal[i], modular_synth.signal[i],
+                                                             [specs['target'][i]],
+                                                             [specs['pred'][i]], cfg.sample_rate)
+                    signal_vis_t = torch.Tensor(signal_vis)
+                    # summary_writer.add_image(f'{k}_input{i}', signal_vis_t, global_step=step, dataformats='HWC')
 
             loss_end_time = time.time()
             backward_start_time = time.time()
@@ -301,4 +311,4 @@ def run(exp_name: str, dataset_name: str):
 
 
 if __name__ == "__main__":
-    run('test', 'toy_data')
+    run('fm_test', 'fm_toy_dataset')

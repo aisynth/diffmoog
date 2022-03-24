@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 import scipy.io.wavfile
 import torch
@@ -35,8 +37,12 @@ def create_dataset(train: bool, dataset_cfg: DatasetConfig, synth_cfg: SynthConf
         dataset_dir_path = dataset_cfg.train_dataset_dir_path
     else:
         dataset_dir_path = dataset_cfg.test_dataset_dir_path
-    parameters_pickle_path = dataset_dir_path.joinpath("params_dataset.pkl")
-    parameters_csv_path = dataset_dir_path.joinpath("params_dataset.csv")
+
+    wav_files_dir = os.path.join(dataset_dir_path, 'wav_files', '')
+    os.makedirs(wav_files_dir, exist_ok=True)
+
+    parameters_pickle_path = os.path.join(dataset_dir_path, "params_dataset.pkl")
+    parameters_csv_path = os.path.join(dataset_dir_path, "params_dataset.csv")
 
     for i in range(dataset_cfg.dataset_size):
         file_name = f"sound_{i}"
@@ -69,7 +75,7 @@ def create_dataset(train: bool, dataset_cfg: DatasetConfig, synth_cfg: SynthConf
                 params_dict[cell.index] = {'operation': operation, 'parameters': parameters}
         dataset_parameters.append(params_dict)
 
-        audio_path = dataset_dir_path.joinpath("wav_files", f"{file_name}.wav")
+        audio_path = os.path.join(wav_files_dir, f"{file_name}.wav")
 
         audio = torch.squeeze(audio)
         audio = audio.detach().cpu().numpy()
@@ -89,9 +95,9 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--train', action='store_true', default=False)
     args = parser.parse_args()
 
-    cfg = Config()
+    cfg = Config('fm_test')
     synth_cfg = SynthConfig()
-    dataset_cfg = DatasetConfig()
+    dataset_cfg = DatasetConfig('fm_toy_dataset')
 
     device = helper.get_device(args.gpu_index)
     create_dataset(train=args.train, dataset_cfg=dataset_cfg, synth_cfg=synth_cfg, cfg=cfg, device=device)

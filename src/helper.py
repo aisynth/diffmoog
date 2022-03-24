@@ -1,5 +1,7 @@
 import torch
 import os
+
+from matplotlib.backends.backend_agg import FigureCanvasAgg
 from torch import Tensor
 import torchaudio
 import matplotlib
@@ -617,14 +619,14 @@ class SpectralLoss:
         self.loudness_weight = loudness_weight
         self.device = device
 
-        self.spectrogram_ops = []
+        self.spectrogram_ops = {}
         for size in self.fft_sizes:
             if cfg.multi_spectral_loss_spec_type == 'BOTH' or cfg.multi_spectral_loss_spec_type == 'SPECTROGRAM':
                 spec_transform = torchaudio.transforms.Spectrogram(
                     n_fft=size,
                     power=2.0
                 ).to(self.device)
-                self.spectrogram_ops.append(spec_transform)
+                self.spectrogram_ops[f'{size}_spectrogram'] = spec_transform
 
             if cfg.multi_spectral_loss_spec_type == 'BOTH' or cfg.multi_spectral_loss_spec_type == 'MEL_SPECTROGRAM':
                 mel_spec_transform = torchaudio.transforms.MelSpectrogram(
@@ -636,9 +638,9 @@ class SpectralLoss:
                     f_min=0,
                     f_max=1300
                 ).to(self.device)
-                self.spectrogram_ops.append(mel_spec_transform)
+                self.spectrogram_ops[f'{size}_mel'] = mel_spec_transform
 
-    def call(self, target_audio, audio, summary_writer: SummaryWriter, global_step: int):
+    def call(self, target_audio, audio, summary_writer: SummaryWriter, global_step: int, return_spectrogram: bool=False):
         """ execute multi-spectral loss computation between two audio signals
 
         Args:
@@ -657,28 +659,31 @@ class SpectralLoss:
             ValueError("unknown loss type")
         # Compute loss for each fft size.
         loss_dict = {}
-        for loss_op in self.spectrogram_ops:
+        spectrograms_dict = {}
+        for loss_name, loss_op in self.spectrogram_ops.items():
             target_mag = loss_op(target_audio)
             value_mag = loss_op(audio)
+
+            spectrograms_dict[loss_name] = {'pred': value_mag, 'target': target_mag}
 
             # Add magnitude loss.
             if self.mag_weight > 0:
                 magnitude_loss = criterion(target_mag, value_mag)
-                loss_dict[f"{loss_op.n_fft}_magnitude"] = magnitude_loss
+                loss_dict[f"{loss_name}_magnitude"] = magnitude_loss
                 loss += self.mag_weight * magnitude_loss
 
             if self.delta_time_weight > 0:
                 target = diff(target_mag, axis=1)
                 value = diff(value_mag, axis=1)
                 delta_time_loss = criterion(target, value)
-                loss_dict[f"{loss_op.n_fft}_delta_time"] = delta_time_loss
+                loss_dict[f"{loss_name}_delta_time"] = delta_time_loss
                 loss += self.delta_time_weight * delta_time_loss
 
             if self.delta_freq_weight > 0:
                 target = diff(target_mag, axis=2)
                 value = diff(value_mag, axis=2)
                 delta_freq_loss = criterion(target, value)
-                loss_dict[f"{loss_op.n_fft}_delta_freq"] = delta_freq_loss
+                loss_dict[f"{loss_name}_delta_freq"] = delta_freq_loss
                 loss += self.delta_freq_weight * delta_freq_loss
 
             # TODO(kyriacos) normalize cumulative spectrogram
@@ -686,7 +691,7 @@ class SpectralLoss:
                 target = torch.cumsum(target_mag, dim=1)
                 value = torch.cumsum(value_mag, dim=1)
                 emd_loss = criterion(target, value)
-                loss_dict[f"{loss_op.n_fft}_emd"] = emd_loss
+                loss_dict[f"{loss_name}_emd"] = emd_loss
                 loss += self.cumsum_freq_weight * emd_loss
 
             # Add logmagnitude loss, reusing spectrogram.
@@ -694,7 +699,7 @@ class SpectralLoss:
                 target = torch.log(target_mag + 1)
                 value = torch.log(value_mag + 1)
                 logmag_loss = criterion(target, value)
-                loss_dict[f"{loss_op.n_fft}_logmag"] = logmag_loss
+                loss_dict[f"{loss_name}_logmag"] = logmag_loss
                 loss += self.logmag_weight * logmag_loss
 
         # if self.loudness_weight > 0:
@@ -706,6 +711,9 @@ class SpectralLoss:
 
         for loss_name, loss_val in loss_dict.items():
             summary_writer.add_scalar(f"sub_losses/{loss_name}", loss_val, global_step=global_step)
+
+        if return_spectrogram:
+            return loss, spectrograms_dict
 
         return loss
 
