@@ -164,7 +164,8 @@ def predict(model,
         predicted_params_dataframe.to_csv(parameters_csv_path)
 
 
-def visualize_signal_prediction(orig_audio, pred_audio, orig_spectograms, pred_spectograms, sample_rate, db=False):
+def visualize_signal_prediction(orig_audio, pred_audio, orig_spectograms, pred_spectograms, orig_params, pred_params,
+                                db=False):
 
     orig_audio_np = orig_audio.detach().cpu().numpy()
     pred_audio_np = pred_audio.detach().cpu().numpy()
@@ -182,11 +183,13 @@ def visualize_signal_prediction(orig_audio, pred_audio, orig_spectograms, pred_s
 
     canvas = FigureCanvasAgg(fig)
 
-    ax[0][0].set_title(f"original audio")
+    orig_params_str = '\n'.join([f'{k}: {v}' for k, v in orig_params.items()])
+    ax[0][0].set_title(f"original audio\n{orig_params_str}", fontsize=10)
     ax[0][0].set_ylim([-1, 1])
     ax[0][0].plot(orig_audio_np)
 
-    ax[0][1].set_title(f"predicted audio")
+    pred_params_str = '\n'.join([f'{k}: {v}' for k, v in pred_params.items()])
+    ax[0][1].set_title(f"predicted audio\n{pred_params_str}", fontsize=10)
     ax[0][1].set_ylim([-1, 1])
     ax[0][1].plot(pred_audio_np)
 

@@ -86,9 +86,9 @@ class Config:
     # Debug
     debug_mode: bool = False
     plot_spec: bool = False
-    print_train_batch_stats: bool = False
+    print_train_batch_stats: bool = True
     print_timings: bool = True
-    print_synth_param_stats: bool = True
+    print_synth_param_stats: bool = False
     print_accuracy_stats: bool = False
     print_per_accuracy_stats_multiple_epochs: bool = True
 
@@ -172,7 +172,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'FM'
+    preset: str = 'LFO'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}

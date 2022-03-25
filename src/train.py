@@ -34,20 +34,25 @@ def train_single_epoch(model,
                        summary_writer: SummaryWriter):
     sum_epoch_loss = 0
     num_of_mini_batches = 0
+    data_loading_time_start = time.time()
     with tqdm(data_loader, unit="batch") as tepoch:
         for target_signal, target_param_dic, signal_index in tepoch:
 
+            data_loading_time_end = time.time()
             step = epoch * len(data_loader) + num_of_mini_batches
 
             tepoch.set_description(f"Epoch {epoch}")
             batch_start_time = time.time()
 
-            target_signal = target_signal.to(device)
 
             # set_to_none as advised in page 6:
             # https://tigress-web.princeton.edu/~jdh4/PyTorchPerformanceTuningGuide_GTC2021.pdf
             model.zero_grad(set_to_none=True)
+
+            input_transform_start = time.time()
+            target_signal = target_signal.to(device)
             transformed_signal = transform(target_signal)
+            input_transform_end = time.time()
 
             # Log model to tensorboard
             # if epoch == 0 and num_of_mini_batches == 0:
@@ -99,15 +104,17 @@ def train_single_epoch(model,
             else:
                 ValueError("SYNTH_TYPE 'MODULAR' supports only SPECTROGRAM_LOSS_TYPE of type 'MULTI-SPECTRAL'")
 
-            for i in range(2):
-                for k, specs in ret_spectrograms.items():
-                    signal_vis = visualize_signal_prediction(target_signal[i], modular_synth.signal[i],
-                                                             [specs['target'][i]],
-                                                             [specs['pred'][i]], cfg.sample_rate)
-                    signal_vis_t = torch.tensor(signal_vis, dtype=torch.uint8)
-                    summary_writer.add_image(f'{k}_input{i}', signal_vis_t, global_step=step, dataformats='HWC')
-
             loss_end_time = time.time()
+
+            # for i in range(2):
+            #     sample_params_orig, sample_params_pred = _parse_synth_params(target_param_dic, predicted_param_dict, i)
+            #     for k, specs in ret_spectrograms.items():
+            #         signal_vis = visualize_signal_prediction(target_signal[i], modular_synth.signal[i],
+            #                                                  [specs['target'][i]],
+            #                                                  [specs['pred'][i]], sample_params_orig, sample_params_pred)
+            #         signal_vis_t = torch.tensor(signal_vis, dtype=torch.uint8)
+            #         summary_writer.add_image(f'{k}_input{i}', signal_vis_t, global_step=step, dataformats='HWC')
+
             backward_start_time = time.time()
 
             num_of_mini_batches += 1
@@ -116,8 +123,8 @@ def train_single_epoch(model,
             optimizer.step()
             scheduler.step()
 
-            summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
-            log_gradients_in_model(model, summary_writer, step)
+            # summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
+            # log_gradients_in_model(model, summary_writer, step)
 
             backward_end_time = time.time()
             batch_end_time = time.time()
@@ -130,11 +137,14 @@ def train_single_epoch(model,
                         f"model processing time: {round(model_end_time - model_start_time, 2)}s, \t"
                         f"synth processing time: {round(synth_end_time - synth_start_time, 2)}s, \t"
                         f"backward processing time: {round(backward_end_time - backward_start_time, 2)}s, \t"
-                        f"loss processing time: {round(loss_end_time - loss_start_time, 2)}s\n")
+                        f"loss processing time: {round(loss_end_time - loss_start_time, 2)}s\n"
+                        f"input transform time: {round(input_transform_end - input_transform_start, 2)}s\n"
+                        f"data loading time: {round(data_loading_time_end - data_loading_time_start, 2)}s\n")
                 if cfg.print_synth_param_stats:
                     helper.print_synth_param_stats(predicted_param_dict, target_param_dic, synth_cfg, device)
 
             tepoch.set_postfix(loss=loss.item())
+            data_loading_time_start = time.time()
 
     avg_epoch_loss = sum_epoch_loss / num_of_mini_batches
     summary_writer.add_scalar('loss/train_multi_spectral_epoch', avg_epoch_loss, epoch)
@@ -215,6 +225,39 @@ def log_gradients_in_model(model, logger, step):
             logger.add_histogram(tag + "/grad", grad_val, step)
             if np.linalg.norm(grad_val) < 1e-4 and 'bias' not in tag:
                 print(f"Op {tag} gradient approaching 0")
+
+
+def _parse_synth_params(original_params: dict, predicted_params: dict, sample_idx: int) -> (dict, dict):
+
+    pred_res, orig_res = {}, {}
+
+    for k, d in predicted_params.items():
+        op = d['operation']
+        pred_res[op] = {}
+        orig_res[op] = {}
+        for param, vals in d['params'].items():
+            pred_res[op][param] = _np_to_str(vals[sample_idx].detach().cpu().numpy().squeeze(),
+                                                             precision=2)
+
+            if param == 'waveform':
+                orig_res[op][param] = original_params[k]['parameters'][param][sample_idx]
+            else:
+                orig_res[op][param] = \
+                    _np_to_str(original_params[k]['parameters'][param][sample_idx].detach().cpu().numpy(),
+                                 precision=2)
+
+    return orig_res, pred_res
+
+
+def _np_to_str(val: np.ndarray, precision=2) -> str:
+
+    if val.size == 1:
+        return np.format_float_positional(val.squeeze(), precision=precision)
+
+    if val.size > 1:
+        return np.array_str(val.squeeze(), precision=precision)
+
+    return ''
 
 
 def log_dict_recursive(tag: str, data_to_log, writer: SummaryWriter, step: int):
@@ -311,4 +354,4 @@ def run(exp_name: str, dataset_name: str):
 
 
 if __name__ == "__main__":
-    run('fm_test', 'fm_toy_dataset')
+    run('lfo_test', 'toy_data')
