@@ -96,6 +96,7 @@ def train_single_epoch(model,
                                                       delta_freq_weight=cfg.multi_spectral_delta_freq_weight,
                                                       cumsum_freq_weight=cfg.multi_spectral_cumsum_freq_weight,
                                                       logmag_weight=cfg.multi_spectral_logmag_weight,
+                                                      normalize_by_size=cfg.normalize_loss_by_nfft,
                                                       device=device)
                 target_signal = target_signal.squeeze()
                 loss, ret_spectrograms = multi_spec_loss.call(target_signal, modular_synth.signal, summary_writer, step,

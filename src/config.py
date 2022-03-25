@@ -82,6 +82,7 @@ class Config:
     multi_spectral_delta_freq_weight: float = 1/100
     multi_spectral_cumsum_freq_weight: float = 1/27400
     multi_spectral_logmag_weight: float = 1
+    normalize_loss_by_nfft: bool = True
 
     # Debug
     debug_mode: bool = False

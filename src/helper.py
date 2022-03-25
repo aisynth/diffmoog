@@ -489,13 +489,17 @@ def diff(x, axis=-1):
     if axis >= ndim:
         raise ValueError('Invalid axis index: %d for tensor with only %d axes.' % (axis, ndim))
 
-    begin_back = [0 for _ in range(ndim)]
-    begin_front = [0 for _ in range(ndim)]
-    begin_front[axis] = 1
+    # begin_back = [0 for _ in range(ndim)]
+    # begin_front = [0 for _ in range(ndim)]
+    # begin_front[axis] = 1
 
     shape[axis] -= 1
-    slice_front = x[begin_front[0]:begin_front[0] + shape[0], begin_front[1]:begin_front[1] + shape[1]]
-    slice_back = x[begin_back[0]:begin_back[0] + shape[0], begin_back[1]:begin_back[1] + shape[1]]
+    # slice_front = x[begin_front[0]:begin_front[0] + shape[0], begin_front[1]:begin_front[1] + shape[1]]
+    # slice_back = x[begin_back[0]:begin_back[0] + shape[0], begin_back[1]:begin_back[1] + shape[1]]
+
+    slice_front = torch.narrow(x, axis, 1, shape[axis])
+    slice_back = torch.narrow(x, axis, 0, shape[axis])
+
     d = slice_front - slice_back
     return d
 
@@ -581,6 +585,7 @@ class SpectralLoss:
                  logmag_weight=1,
                  loudness_weight=0.0,
                  device='cuda:0',
+                 normalize_by_size=False,
                  name='spectral_loss'):
         """Constructor, set loss weights of various components.
     Args:
@@ -609,6 +614,7 @@ class SpectralLoss:
         logmag losses.
       name: Name of the module.
     """
+        self.normalize_by_size = normalize_by_size
         self.fft_sizes = fft_sizes
         self.loss_type = loss_type
         self.mag_weight = mag_weight
@@ -664,27 +670,30 @@ class SpectralLoss:
             target_mag = loss_op(target_audio)
             value_mag = loss_op(audio)
 
+            n_fft = loss_op.n_fft
+            c_loss = 0.0
+
             spectrograms_dict[loss_name] = {'pred': value_mag, 'target': target_mag}
 
             # Add magnitude loss.
             if self.mag_weight > 0:
                 magnitude_loss = criterion(target_mag, value_mag)
                 loss_dict[f"{loss_name}_magnitude"] = magnitude_loss
-                loss += self.mag_weight * magnitude_loss
+                c_loss += self.mag_weight * magnitude_loss
 
             if self.delta_time_weight > 0:
-                target = diff(target_mag, axis=1)
-                value = diff(value_mag, axis=1)
+                target = torch.diff(target_mag, n=1, dim=1)
+                value = torch.diff(value_mag, n=1, dim=1)
                 delta_time_loss = criterion(target, value)
                 loss_dict[f"{loss_name}_delta_time"] = delta_time_loss
-                loss += self.delta_time_weight * delta_time_loss
+                c_loss += self.delta_time_weight * delta_time_loss
 
             if self.delta_freq_weight > 0:
-                target = diff(target_mag, axis=2)
-                value = diff(value_mag, axis=2)
+                target = torch.diff(target_mag, n=1, dim=2)
+                value = torch.diff(value_mag, n=1, dim=2)
                 delta_freq_loss = criterion(target, value)
                 loss_dict[f"{loss_name}_delta_freq"] = delta_freq_loss
-                loss += self.delta_freq_weight * delta_freq_loss
+                c_loss += self.delta_freq_weight * delta_freq_loss
 
             # TODO(kyriacos) normalize cumulative spectrogram
             if self.cumsum_freq_weight > 0:
@@ -692,7 +701,7 @@ class SpectralLoss:
                 value = torch.cumsum(value_mag, dim=1)
                 emd_loss = criterion(target, value)
                 loss_dict[f"{loss_name}_emd"] = emd_loss
-                loss += self.cumsum_freq_weight * emd_loss
+                c_loss += self.cumsum_freq_weight * emd_loss
 
             # Add logmagnitude loss, reusing spectrogram.
             if self.logmag_weight > 0:
@@ -700,7 +709,12 @@ class SpectralLoss:
                 value = torch.log(value_mag + 1)
                 logmag_loss = criterion(target, value)
                 loss_dict[f"{loss_name}_logmag"] = logmag_loss
-                loss += self.logmag_weight * logmag_loss
+                c_loss += self.logmag_weight * logmag_loss
+
+            if self.normalize_by_size:
+                c_loss /= n_fft
+
+            loss += c_loss
 
         # if self.loudness_weight > 0:
         #     target = spectral_ops.compute_loudness(target_audio, n_fft=2048,
