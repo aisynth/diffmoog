@@ -1,9 +1,11 @@
+from typing import Sequence
+
 from torch import nn
-import torch
+from torchvision.models import resnet18
 import helper
 from torchsummary import summary
 from dataclasses import dataclass
-from synth import synth_modular_presets
+from synth.synth_modular_presets import synth_presets_dict
 from config import SynthConfig
 
 # todo: this is value from Valerio Tutorial. has to check
@@ -48,65 +50,14 @@ class BigSynthNetwork(nn.Module):
     def __init__(self, synth_cfg: SynthConfig, device):
         super().__init__()
         self.device = device
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=1,
-                out_channels=64,
-                kernel_size=3,
-                stride=1,
-                padding=2
-            ),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2)
-        )
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=64,
-                out_channels=128,
-                kernel_size=3,
-                stride=1,
-                padding=2
-            ),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2)
-        )
-        self.conv3 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=128,
-                out_channels=256,
-                kernel_size=3,
-                stride=1,
-                padding=2
-            ),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2)
-        )
-        self.conv4 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=256,
-                out_channels=512,
-                kernel_size=3,
-                stride=1,
-                padding=2
-            ),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2)
-        )
+        self.conv1 = ConvBlock(1, 64)
+        self.conv2 = ConvBlock(64, 128)
+        self.conv3 = ConvBlock(128, 256)
+        self.conv4 = ConvBlock(256, 512)
         self.flatten = nn.Flatten()
 
-        if synth_cfg.preset == 'BASIC_FLOW':
-            self.preset = synth_modular_presets.BASIC_FLOW
-        elif synth_cfg.preset == 'OSC':
-            self.preset = synth_modular_presets.OSC
-        elif synth_cfg.preset == 'LFO':
-            self.preset = synth_modular_presets.LFO
-        elif synth_cfg.preset == 'FM':
-            self.preset = synth_modular_presets.FM
-        else:
+        self.preset = synth_presets_dict.get(synth_cfg.preset, None)
+        if self.preset is None:
             ValueError("Unknown self.cfg.PRESET")
 
         self.heads_module_dict = nn.ModuleDict({})
@@ -114,89 +65,42 @@ class BigSynthNetwork(nn.Module):
             index = cell.get('index')
             operation = cell.get('operation')
             if operation == 'osc':
-                amplitude_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
-                )
-                frequency_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
-                )
-                waveform_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, len(synth_cfg.wave_type_dict))
-                )
+                amplitude_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
+                frequency_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
+                waveform_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, len(synth_cfg.wave_type_dict)])
                 self.heads_module_dict[self.get_key(index, operation, 'amp')] = amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = waveform_head
 
             if operation == 'lfo':
-                amplitude_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
-                )
-                frequency_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
-                )
+                amplitude_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
+                frequency_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'amp')] = amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
 
             elif operation == 'fm':
-                carrier_amplitude_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
-                )
-                carrier_frequency_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
-                )
-                carrier_waveform_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, len(synth_cfg.wave_type_dict))
-                )
-                modulation_index_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
-                )
+                carrier_amplitude_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
+                carrier_frequency_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
+                carrier_waveform_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS,
+                                                  len(synth_cfg.wave_type_dict)])
+                modulation_index_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'amp_c')] = carrier_amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq_c')] = carrier_frequency_head
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = carrier_waveform_head
                 self.heads_module_dict[self.get_key(index, operation, 'mod_index')] = modulation_index_head
 
             elif operation == 'filter':
-                filter_type_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, len(synth_cfg.filter_type_dict))
-                )
-                filter_freq_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
-                )
+                filter_type_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, len(synth_cfg.wave_type_dict)])
+                filter_freq_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'filter_type')] = filter_type_head
                 self.heads_module_dict[self.get_key(index, operation, 'filter_freq')] = filter_freq_head
 
             elif operation == 'env_adsr':
-                attack_t_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
-                )
-                decay_t_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
-                )
-                sustain_t_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
-                )
-                sustain_level_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
-                )
-                release_t_head = nn.Sequential(
-                    nn.Linear(BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS),
-                    nn.Linear(HIDDEN_IN_CHANNELS, 1)
-                )
+                attack_t_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
+                decay_t_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
+                sustain_t_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
+                sustain_level_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
+                release_t_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'attack_t')] = attack_t_head
                 self.heads_module_dict[self.get_key(index, operation, 'decay_t')] = decay_t_head
                 self.heads_module_dict[self.get_key(index, operation, 'sustain_t')] = sustain_t_head
@@ -332,6 +236,215 @@ class BigSynthNetwork(nn.Module):
                                                 }}
 
         return output_dic
+
+
+class SimpleSynthNetwork(nn.Module):
+
+    def __init__(self, synth_cfg: SynthConfig, device):
+        super().__init__()
+
+        self.preset = synth_presets_dict.get(synth_cfg.preset, None)
+        if self.preset is None:
+            ValueError("Unknown self.cfg.PRESET")
+
+        self.device = device
+
+        self.backbone = resnet18(pretrained=False)
+        self.backbone.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+
+        num_ftrs = self.backbone.fc.in_features
+        self.backbone.fc = nn.Linear(num_ftrs, HIDDEN_IN_CHANNELS)
+
+        self.heads_module_dict = nn.ModuleDict({})
+        for cell in self.preset:
+            index = cell.get('index')
+            operation = cell.get('operation')
+            if operation == 'osc':
+                amplitude_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                frequency_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                waveform_head = MLPBlock([HIDDEN_IN_CHANNELS, len(synth_cfg.wave_type_dict)])
+                self.heads_module_dict[self.get_key(index, operation, 'amp')] = amplitude_head
+                self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
+                self.heads_module_dict[self.get_key(index, operation, 'waveform')] = waveform_head
+
+            if operation == 'lfo':
+                amplitude_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                frequency_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                self.heads_module_dict[self.get_key(index, operation, 'amp')] = amplitude_head
+                self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
+
+            elif operation == 'fm':
+                carrier_amplitude_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                carrier_frequency_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                carrier_waveform_head = MLPBlock([HIDDEN_IN_CHANNELS, len(synth_cfg.wave_type_dict)])
+                modulation_index_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                self.heads_module_dict[self.get_key(index, operation, 'amp_c')] = carrier_amplitude_head
+                self.heads_module_dict[self.get_key(index, operation, 'freq_c')] = carrier_frequency_head
+                self.heads_module_dict[self.get_key(index, operation, 'waveform')] = carrier_waveform_head
+                self.heads_module_dict[self.get_key(index, operation, 'mod_index')] = modulation_index_head
+
+            elif operation == 'filter':
+                filter_type_head = MLPBlock([HIDDEN_IN_CHANNELS, len(synth_cfg.wave_type_dict)])
+                filter_freq_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                self.heads_module_dict[self.get_key(index, operation, 'filter_type')] = filter_type_head
+                self.heads_module_dict[self.get_key(index, operation, 'filter_freq')] = filter_freq_head
+
+            elif operation == 'env_adsr':
+                attack_t_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                decay_t_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                sustain_t_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                sustain_level_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                release_t_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                self.heads_module_dict[self.get_key(index, operation, 'attack_t')] = attack_t_head
+                self.heads_module_dict[self.get_key(index, operation, 'decay_t')] = decay_t_head
+                self.heads_module_dict[self.get_key(index, operation, 'sustain_t')] = sustain_t_head
+                self.heads_module_dict[self.get_key(index, operation, 'sustain_level')] = sustain_level_head
+                self.heads_module_dict[self.get_key(index, operation, 'release_t')] = release_t_head
+
+        self.softmax = nn.Softmax(dim=1)
+        self.sigmoid = nn.Sigmoid()
+
+    @staticmethod
+    def get_key(index: tuple, operation: str, parameter: str) -> str:
+        return f'{index}' + '_' + operation + '_' + parameter
+
+    def forward(self, x):
+        latent = self.backbone(x)
+
+        # Apply different heads to predict each synth parameter
+        output_dic = {}
+        for cell in self.preset:
+            index = cell.get('index')
+            operation = cell.get('operation')
+
+            if operation == 'osc':
+                amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp')]
+                frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq')]
+                waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]
+
+                predicted_amplitude = amplitude_head(latent)
+                predicted_amplitude = self.sigmoid(predicted_amplitude)
+                predicted_frequency = frequency_head(latent)
+                predicted_frequency = self.sigmoid(predicted_frequency)
+                waveform_logits = waveform_head(latent)
+                waveform_probabilities = self.softmax(waveform_logits)
+
+                output_dic[index] = {'operation': operation,
+                                     'params': {'amp': predicted_amplitude,
+                                                'freq': predicted_frequency,
+                                                'waveform': waveform_probabilities
+                                                }}
+            if operation == 'lfo':
+                amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp')]
+                frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq')]
+
+                predicted_amplitude = amplitude_head(latent)
+                predicted_amplitude = self.sigmoid(predicted_amplitude)
+                predicted_frequency = frequency_head(latent)
+                predicted_frequency = self.sigmoid(predicted_frequency)
+
+                output_dic[index] = {'operation': operation,
+                                     'params': {'amp': predicted_amplitude,
+                                                'freq': predicted_frequency
+                                                }}
+            elif operation == 'fm':
+                carrier_amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp_c')]
+                carrier_frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq_c')]
+                waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]
+                mod_index_head = self.heads_module_dict[self.get_key(index, operation, 'mod_index')]
+
+                predicted_carrier_amplitude = carrier_amplitude_head(latent)
+                predicted_carrier_amplitude = self.sigmoid(predicted_carrier_amplitude)
+                predicted_carrier_frequency = carrier_frequency_head(latent)
+                predicted_carrier_frequency = self.sigmoid(predicted_carrier_frequency)
+                waveform_logits = waveform_head(latent)
+                waveform_probabilities = self.softmax(waveform_logits)
+                predicted_mod_index = mod_index_head(latent)
+                predicted_mod_index = self.sigmoid(predicted_mod_index)
+
+                output_dic[index] = {'operation': operation,
+                                     'params': {'amp_c': predicted_carrier_amplitude,
+                                                'freq_c': predicted_carrier_frequency,
+                                                'waveform': waveform_probabilities,
+                                                'mod_index': predicted_mod_index
+                                                }}
+
+            elif operation == 'filter':
+                filter_type_head = self.heads_module_dict[self.get_key(index, operation, 'filter_type')]
+                filter_freq_head = self.heads_module_dict[self.get_key(index, operation, 'filter_freq')]
+
+                filter_type_logits = filter_type_head(latent)
+                filter_type_probabilities = self.softmax(filter_type_logits)
+                predicted_filter_freq = filter_freq_head(latent)
+                predicted_filter_freq = self.sigmoid(predicted_filter_freq)
+
+                output_dic[index] = {'operation': operation,
+                                     'params': {'filter_type': filter_type_probabilities,
+                                                'filter_freq': predicted_filter_freq
+                                                }}
+
+            elif operation == 'env_adsr':
+                attack_t_head = self.heads_module_dict[self.get_key(index, operation, 'attack_t')]
+                decay_t_head = self.heads_module_dict[self.get_key(index, operation, 'decay_t')]
+                sustain_t_head = self.heads_module_dict[self.get_key(index, operation, 'sustain_t')]
+                sustain_level_head = self.heads_module_dict[self.get_key(index, operation, 'sustain_level')]
+                release_t_head = self.heads_module_dict[self.get_key(index, operation, 'release_t')]
+
+                predicted_attack_t = attack_t_head(latent)
+                predicted_attack_t = self.sigmoid(predicted_attack_t)
+
+                predicted_decay_t = decay_t_head(latent)
+                predicted_decay_t = self.sigmoid(predicted_decay_t)
+
+                predicted_sustain_t = sustain_t_head(latent)
+                predicted_sustain_t = self.sigmoid(predicted_sustain_t)
+
+                predicted_sustain_level = sustain_level_head(latent)
+                predicted_sustain_level = self.sigmoid(predicted_sustain_level)
+
+                predicted_release_t = release_t_head(latent)
+                predicted_release_t = self.sigmoid(predicted_release_t)
+
+                output_dic[index] = {'operation': operation,
+                                     'params': {'attack_t': predicted_attack_t,
+                                                'decay_t': predicted_decay_t,
+                                                'sustain_t': predicted_sustain_t,
+                                                'sustain_level': predicted_sustain_level,
+                                                'release_t': predicted_release_t
+                                                }}
+
+        return output_dic
+
+
+class ConvBlock(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        self.conv_op = nn.Sequential(
+                            nn.Conv2d(
+                                in_channels=in_channels,
+                                out_channels=out_channels,
+                                kernel_size=3,
+                                stride=1,
+                                padding=2
+                            ),
+                            nn.BatchNorm2d(out_channels),
+                            nn.ReLU(),
+                            nn.MaxPool2d(kernel_size=2)
+                        )
+
+    def forward(self, x):
+        return self.conv_op(x)
+
+
+class MLPBlock(nn.Module):
+
+    def __init__(self, layer_sizes: Sequence[int]):
+        super(MLPBlock, self).__init__()
+        layers = [nn.Linear(layer_sizes[i], layer_sizes[i+1]) for i in range(len(layer_sizes) - 1)]
+        self.mlp = nn.Sequential(*layers)
+
+    def forward(self, x):
+        return self.mlp(x)
 
 
 if __name__ == "__main__":

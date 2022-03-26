@@ -10,7 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 from config import Config, SynthConfig, DatasetConfig, ModelConfig, configure_experiment
 from ai_synth_dataset import AiSynthDataset, create_data_loader
 from inference import visualize_signal_prediction
-from model import BigSynthNetwork
+from model import BigSynthNetwork, SimpleSynthNetwork
 from synth.synth_architecture import SynthModular, SynthModularCell
 import helper
 import time
@@ -127,7 +127,7 @@ def train_single_epoch(model,
 
             summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
 
-            if num_of_mini_batches % 10 == 0:
+            if num_of_mini_batches % 1 == 0:
                 log_gradients_in_model(model, summary_writer, step)
 
             backward_end_time = time.time()
@@ -316,7 +316,11 @@ def run(exp_name: str, dataset_name: str):
     train_dataloader = create_data_loader(ai_synth_dataset, model_cfg.batch_size, ModelConfig.num_workers)
 
     # construct model and assign it to device
-    synth_net = BigSynthNetwork(synth_cfg, device).to(device)
+    if model_cfg.model_type == 'simple':
+        synth_net = SimpleSynthNetwork(synth_cfg, device).to(device)
+    else:
+        synth_net = BigSynthNetwork(synth_cfg, device).to(device)
+
 
     activations_dict = {}
     # for name, layer in synth_net.named_modules():
@@ -358,4 +362,4 @@ def run(exp_name: str, dataset_name: str):
 
 
 if __name__ == "__main__":
-    run('fm_test_mel', 'fm_toy_dataset')
+    run('fm_test_mel_simple', 'fm_toy_dataset')

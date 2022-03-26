@@ -161,6 +161,7 @@ class DatasetConfig:
 
 @dataclass
 class ModelConfig:
+    model_type: str = 'simple'
     batch_size: int = 32
     num_epochs: int = 20
     learning_rate: float = 3e-5
