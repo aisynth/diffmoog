@@ -82,7 +82,7 @@ class Config:
     multi_spectral_delta_freq_weight: float = 1/100
     multi_spectral_cumsum_freq_weight: float = 1/27400
     multi_spectral_logmag_weight: float = 1
-    normalize_loss_by_nfft: bool = True
+    normalize_loss_by_nfft: bool = False
 
     # Debug
     debug_mode: bool = False
@@ -173,7 +173,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'LFO'
+    preset: str = 'FM'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}

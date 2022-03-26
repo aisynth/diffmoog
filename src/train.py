@@ -107,14 +107,15 @@ def train_single_epoch(model,
 
             loss_end_time = time.time()
 
-            # for i in range(2):
-            #     sample_params_orig, sample_params_pred = _parse_synth_params(target_param_dic, predicted_param_dict, i)
-            #     for k, specs in ret_spectrograms.items():
-            #         signal_vis = visualize_signal_prediction(target_signal[i], modular_synth.signal[i],
-            #                                                  [specs['target'][i]],
-            #                                                  [specs['pred'][i]], sample_params_orig, sample_params_pred)
-            #         signal_vis_t = torch.tensor(signal_vis, dtype=torch.uint8)
-            #         summary_writer.add_image(f'{k}_input{i}', signal_vis_t, global_step=step, dataformats='HWC')
+            if num_of_mini_batches == 1:
+                for i in range(5):
+                    sample_params_orig, sample_params_pred = _parse_synth_params(target_param_dic, predicted_param_dict, i)
+                    for k, specs in ret_spectrograms.items():
+                        signal_vis = visualize_signal_prediction(target_signal[i], modular_synth.signal[i],
+                                                                 [specs['target'][i]],
+                                                                 [specs['pred'][i]], sample_params_orig, sample_params_pred)
+                        signal_vis_t = torch.tensor(signal_vis, dtype=torch.uint8)
+                        summary_writer.add_image(f'{k}/input_{i}', signal_vis_t, global_step=epoch, dataformats='HWC')
 
             backward_start_time = time.time()
 
@@ -124,8 +125,10 @@ def train_single_epoch(model,
             optimizer.step()
             scheduler.step()
 
-            # summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
-            # log_gradients_in_model(model, summary_writer, step)
+            summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
+
+            if num_of_mini_batches % 10 == 0:
+                log_gradients_in_model(model, summary_writer, step)
 
             backward_end_time = time.time()
             batch_end_time = time.time()
@@ -355,4 +358,4 @@ def run(exp_name: str, dataset_name: str):
 
 
 if __name__ == "__main__":
-    run('lfo_test', 'toy_data')
+    run('fm_test_mel', 'fm_toy_dataset')
