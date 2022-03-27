@@ -67,7 +67,7 @@ class Config:
     txt_path: str = None
     numpy_path: str = None
 
-    num_epochs_to_save_model: int = 1
+    num_epochs_to_save_model: int = 10
 
     regression_loss_factor: float = 1e-1
     spectrogram_loss_factor: float = 1e-5
@@ -80,8 +80,9 @@ class Config:
     multi_spectral_mag_weight: float = 1/100
     multi_spectral_delta_time_weight: float = 1/100
     multi_spectral_delta_freq_weight: float = 1/100
-    multi_spectral_cumsum_freq_weight: float = 1/27400
-    multi_spectral_logmag_weight: float = 1
+    multi_spectral_cumsum_freq_weight: float = 1/6000
+    multi_spectral_logmag_weight: float = 0
+    fft_sizes: tuple = (512, 256, 128, 64)
     normalize_loss_by_nfft: bool = False
 
     # Debug
@@ -162,9 +163,9 @@ class DatasetConfig:
 @dataclass
 class ModelConfig:
     model_type: str = 'simple'
-    batch_size: int = 32
-    num_epochs: int = 20
-    learning_rate: float = 3e-5
+    batch_size: int = 64
+    num_epochs: int = 30
+    learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
     optimizer_scheduler_gamma: float = 0.1
