@@ -25,6 +25,7 @@ def train_single_epoch(model,
                        transform,
                        optimizer,
                        scheduler,
+                       loss_handler,
                        device,
                        modular_synth,
                        normalizer,
@@ -43,7 +44,6 @@ def train_single_epoch(model,
 
             tepoch.set_description(f"Epoch {epoch}")
             batch_start_time = time.time()
-
 
             # set_to_none as advised in page 6:
             # https://tigress-web.princeton.edu/~jdh4/PyTorchPerformanceTuningGuide_GTC2021.pdf
@@ -67,12 +67,13 @@ def train_single_epoch(model,
             log_dict_recursive('raw_output', output_dic, summary_writer, step)
 
             model_end_time = time.time()
+
             synth_start_time = time.time()
 
             denormalized_output_dict = normalizer.denormalize(output_dic)
             log_dict_recursive('denormalized_output', denormalized_output_dict, summary_writer, step)
 
-            predicted_param_dict = helper.clamp_regression_params(denormalized_output_dict, synth_cfg, cfg)
+            predicted_param_dict = denormalized_output_dict #helper.clamp_regression_params(denormalized_output_dict, synth_cfg, cfg)
             log_dict_recursive('clamped_output', predicted_param_dict, summary_writer, step)
 
             update_params = []
@@ -88,22 +89,10 @@ def train_single_epoch(model,
             synth_end_time = time.time()
             loss_start_time = time.time()
 
-            if cfg.spectrogram_loss_type == 'MULTI-SPECTRAL':
-                multi_spec_loss = helper.SpectralLoss(cfg=cfg,
-                                                      loss_type=cfg.multi_spectral_loss_type,
-                                                      mag_weight=cfg.multi_spectral_mag_weight,
-                                                      delta_time_weight=cfg.multi_spectral_delta_time_weight,
-                                                      delta_freq_weight=cfg.multi_spectral_delta_freq_weight,
-                                                      cumsum_freq_weight=cfg.multi_spectral_cumsum_freq_weight,
-                                                      logmag_weight=cfg.multi_spectral_logmag_weight,
-                                                      normalize_by_size=cfg.normalize_loss_by_nfft,
-                                                      device=device)
-                target_signal = target_signal.squeeze()
-                loss, ret_spectrograms = multi_spec_loss.call(target_signal, modular_synth.signal, summary_writer, step,
-                                                              return_spectrogram=True)
-                summary_writer.add_scalar('loss/train_multi_spectral', loss, step)
-            else:
-                ValueError("SYNTH_TYPE 'MODULAR' supports only SPECTROGRAM_LOSS_TYPE of type 'MULTI-SPECTRAL'")
+            target_signal = target_signal.squeeze()
+            loss, ret_spectrograms = loss_handler.call(target_signal, modular_synth.signal, summary_writer, step,
+                                                       return_spectrogram=True)
+            summary_writer.add_scalar('loss/train_multi_spectral', loss, step)
 
             loss_end_time = time.time()
 
@@ -125,12 +114,13 @@ def train_single_epoch(model,
             optimizer.step()
             scheduler.step()
 
+            backward_end_time = time.time()
+
             summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
 
-            if num_of_mini_batches % 1 == 0:
+            if num_of_mini_batches % 10 == 0:
                 log_gradients_in_model(model, summary_writer, step)
 
-            backward_end_time = time.time()
             batch_end_time = time.time()
 
             if cfg.print_train_batch_stats:
@@ -138,14 +128,16 @@ def train_single_epoch(model,
                 if cfg.print_timings:
                     print(
                         f"total batch processing time: {round(batch_end_time - batch_start_time, 2)}s, \n"
-                        f"model processing time: {round(model_end_time - model_start_time, 2)}s, \t"
-                        f"synth processing time: {round(synth_end_time - synth_start_time, 2)}s, \t"
-                        f"backward processing time: {round(backward_end_time - backward_start_time, 2)}s, \t"
+                        f"model processing time: {round(model_end_time - model_start_time, 2)}s, \n"
+                        f"synth processing time: {round(synth_end_time - synth_start_time, 2)}s, \n"
+                        f"backward processing time: {round(backward_end_time - backward_start_time, 2)}s, \n"
                         f"loss processing time: {round(loss_end_time - loss_start_time, 2)}s\n"
                         f"input transform time: {round(input_transform_end - input_transform_start, 2)}s\n"
-                        f"data loading time: {round(data_loading_time_end - data_loading_time_start, 2)}s\n")
-                if cfg.print_synth_param_stats:
-                    helper.print_synth_param_stats(predicted_param_dict, target_param_dic, synth_cfg, device)
+                        f"data loading time: {round(data_loading_time_end - data_loading_time_start, 2)}s\n",
+                        f"gradient logging time: {round(batch_end_time - backward_end_time, 2)}s\n")
+
+                    if cfg.print_synth_param_stats:
+                        helper.print_synth_param_stats(predicted_param_dict, target_param_dic, synth_cfg, device)
 
             tepoch.set_postfix(loss=loss.item())
             data_loading_time_start = time.time()
@@ -178,6 +170,20 @@ def train(model,
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=num_epochs * len(data_loader))
     normalizer = helper.Normalizer(cfg.signal_duration_sec, synth_cfg)
 
+    if cfg.spectrogram_loss_type == 'MULTI-SPECTRAL':
+        loss_handler = helper.SpectralLoss(cfg=cfg,
+                                   fft_sizes=cfg.fft_sizes,
+                                   loss_type=cfg.multi_spectral_loss_type,
+                                   mag_weight=cfg.multi_spectral_mag_weight,
+                                   delta_time_weight=cfg.multi_spectral_delta_time_weight,
+                                   delta_freq_weight=cfg.multi_spectral_delta_freq_weight,
+                                   cumsum_freq_weight=cfg.multi_spectral_cumsum_freq_weight,
+                                   logmag_weight=cfg.multi_spectral_logmag_weight,
+                                   normalize_by_size=cfg.normalize_loss_by_nfft,
+                                   device=device)
+    else:
+        ValueError("SYNTH_TYPE 'MODULAR' supports only SPECTROGRAM_LOSS_TYPE of type 'MULTI-SPECTRAL'")
+
     # init modular synth
     modular_synth = SynthModular(synth_cfg=synth_cfg,
                                  sample_rate=cfg.sample_rate,
@@ -199,6 +205,7 @@ def train(model,
                                device=device,
                                modular_synth=modular_synth,
                                normalizer=normalizer,
+                               loss_handler=loss_handler,
                                synth_cfg=synth_cfg,
                                cfg=cfg,
                                activations_dict=activations_dict,
@@ -362,4 +369,4 @@ def run(exp_name: str, dataset_name: str):
 
 
 if __name__ == "__main__":
-    run('fm_test_mel_simple', 'fm_toy_dataset')
+    run('profiling_test', 'fm_dataset')

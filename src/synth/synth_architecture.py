@@ -276,11 +276,11 @@ class SynthModular:
                                                           waveform=cell.parameters['waveform'],
                                                           num_sounds=num_sounds)
                 elif operation == 'lfo':
-                    cell.signal = synth_module.oscillator(amp=cell.parameters['amp'],
-                                                          freq=cell.parameters['freq'],
-                                                          phase=0,
-                                                          waveform='sine',
-                                                          num_sounds=num_sounds)
+                    cell.signal = synth_module.batch_oscillator(amp=cell.parameters['amp'],
+                                                                freq=cell.parameters['freq'],
+                                                                phase=0,
+                                                                waveform='sine')
+
                 elif operation == 'fm':
                     if len(cell.input_list) == 1:
                         input_cell_index = cell.input_list[0]
@@ -292,12 +292,12 @@ class SynthModular:
                         modulator = 0
                         AttributeError("Illegal cell input")
 
-                    cell.signal = synth_module.oscillator_fm(amp_c=cell.parameters['amp_c'],
-                                                             freq_c=cell.parameters['freq_c'],
-                                                             waveform=cell.parameters['waveform'],
-                                                             mod_index=cell.parameters['mod_index'],
-                                                             modulator=modulator,
-                                                             num_sounds=num_sounds)
+                    cell.signal = synth_module.batch_oscillator_fm(amp_c=cell.parameters['amp_c'],
+                                                                   freq_c=cell.parameters['freq_c'],
+                                                                   waveform=cell.parameters['waveform'],
+                                                                   mod_index=cell.parameters['mod_index'],
+                                                                   modulator=modulator)
+
                 elif operation == 'mix':
                     signal = 0
                     num_inputs = len(cell.input_list)

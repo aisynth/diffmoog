@@ -31,6 +31,7 @@ class SynthModules:
                                   requires_grad=True)
 
         self.device = device
+
         self.time_samples = helper.move_to(self.time_samples, self.device)
         self.modulation_time = helper.move_to(self.modulation_time, self.device)
         self.signal = helper.move_to(self.signal, self.device)
@@ -110,12 +111,110 @@ class SynthModules:
 
         return oscillator_tensor
 
+    def batch_oscillator(self, amp, freq, waveform, phase=0):
+        """Creates a basic oscillator.
+
+            Retrieves a waveform shape and attributes, and construct the respected signal
+
+            Args:
+                self: Self object
+                amp: batch of n amplitudes in range [0, 1]
+                freq: batch of n frequencies in range [0, 22000]
+                phase: batch of n phases in range [0, 2pi], default is 0
+                waveform: batch of n strings, one of ['sine', 'square', 'triangle', 'sawtooth'] or a probability vector
+
+            Returns:
+                A torch tensor with the constructed signal
+
+            Raises:
+                ValueError: Provided variables are out of range
+                :rtype: object
+            """
+
+        self.signal_values_sanity_check(amp, freq, waveform)
+        t = self.time_samples
+
+        sine_wave = amp * torch.sin(TWO_PI * freq * t + phase)
+        square_wave = amp * torch.sign(torch.sin(TWO_PI * freq * t + phase))
+        triangle_wave = (2 * amp / PI) * torch.arcsin(torch.sin((TWO_PI * freq * t + phase)))
+        # triangle_wave = amp * torch.sin(TWO_PI * freq_float * t + phase)
+        sawtooth_wave = 2 * (t * freq - torch.floor(0.5 + t * freq))  # Sawtooth closed form
+        # Phase shift (by normalization to range [0,1] and modulo operation)
+        sawtooth_wave = (((sawtooth_wave + 1) / 2) + phase / TWO_PI) % 1
+        sawtooth_wave = amp * (sawtooth_wave * 2 - 1)  # re-normalization to range [-amp, amp]
+
+        waves_tensor = torch.stack([sine_wave, square_wave, sawtooth_wave])
+
+        oscillator_tensor = self._mix_waveforms(waves_tensor, waveform)
+
+        return oscillator_tensor
+
     def mix_signal(self, new_signal, factor):
         """Signal superposition. factor balances the mix
         1 - original signal only, 0 - new signal only, 0.5 evenly balanced. """
         if factor < 0 or factor > 1:
             raise ValueError("Provided factor value is out of range [0, 1]")
         self.signal = factor * self.signal + (1 - factor) * new_signal
+
+    def batch_oscillator_fm(self, amp_c, freq_c, waveform, mod_index, modulator):
+        """Basic oscillator with FM modulation
+
+            Creates an oscillator and modulates its frequency by a given modulator
+
+            Args:
+                self: Self object
+                amp_c: Amplitude in range [0, 1]
+                freq_c: Frequency in range [0, 22000]
+                waveform: One of [sine, square, triangle, sawtooth]
+                mod_index: Modulation index, which affects the amount of modulation
+                modulator: Modulator signal, to affect carrier frequency
+                num_sounds: number of sounds to process
+
+            Returns:
+                A torch with the constructed FM signal
+
+            Raises:
+                ValueError: Provided variables are out of range
+            """
+
+        self.signal_values_sanity_check(amp_c, freq_c, waveform)
+        t = self.time_samples
+
+        fm_sine_wave = amp_c * torch.sin(TWO_PI * freq_c * t + mod_index * modulator)
+        fm_square_wave = amp_c * torch.sign(
+            torch.sin(TWO_PI * freq_c * t + mod_index * modulator))
+        # fm_triangle_wave = (2 * amp_float / PI) * torch.arcsin(torch.sin((TWO_PI * freq_float * t + mod_index_float * input_signal_cur)))
+        fm_triangle_wave = amp_c * torch.sin(TWO_PI * freq_c * t + mod_index * modulator)
+
+        fm_sawtooth_wave = 2 * (t * freq_c - torch.floor(0.5 + t * freq_c))
+        fm_sawtooth_wave = (((fm_sawtooth_wave + 1) / 2) + mod_index * modulator / TWO_PI) % 1
+        fm_sawtooth_wave = amp_c * (fm_sawtooth_wave * 2 - 1)
+
+        waves_tensor = torch.stack([fm_sine_wave, fm_square_wave, fm_sawtooth_wave])
+
+        oscillator_tensor = self._mix_waveforms(waves_tensor, waveform)
+
+        return oscillator_tensor
+
+    def _mix_waveforms(self, waves_tensor, raw_waveform_selector):
+
+        wave_type_indices = {'sine': torch.tensor(0, device=self.device).long(),
+                             'square': torch.tensor(1, device=self.device).long(),
+                             'sawtooth': torch.tensor(2, device=self.device).long()}
+
+        if isinstance(raw_waveform_selector, str):
+            idx = wave_type_indices[raw_waveform_selector]
+            return waves_tensor[idx]
+
+        if isinstance(raw_waveform_selector[0], str):
+            raw_waveform_selector = torch.stack([wave_type_indices[wt] for wt in raw_waveform_selector])
+            return torch.index_select(waves_tensor, 0, raw_waveform_selector)
+
+        oscillator_tensor = raw_waveform_selector.t()[0].unsqueeze(1) * waves_tensor[0] + \
+                            raw_waveform_selector.t()[1].unsqueeze(1) * waves_tensor[1] + \
+                            raw_waveform_selector.t()[2].unsqueeze(1) * waves_tensor[2]
+
+        return oscillator_tensor
 
     def oscillator_fm(self, amp_c, freq_c, waveform, mod_index, modulator, num_sounds=1):
         """Basic oscillator with FM modulation
