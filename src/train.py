@@ -18,6 +18,8 @@ from pathlib import Path
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from tqdm import tqdm
 
+from train_helper import *
+
 
 def train_single_epoch(model,
                        epoch,
@@ -31,7 +33,6 @@ def train_single_epoch(model,
                        normalizer,
                        synth_cfg,
                        cfg,
-                       activations_dict: dict,
                        summary_writer: SummaryWriter):
     sum_epoch_loss = 0
     num_of_mini_batches = 0
@@ -98,7 +99,11 @@ def train_single_epoch(model,
 
             if num_of_mini_batches == 1:
                 for i in range(5):
-                    sample_params_orig, sample_params_pred = _parse_synth_params(target_param_dic, predicted_param_dict, i)
+                    sample_params_orig, sample_params_pred = parse_synth_params(target_param_dic, predicted_param_dict, i)
+                    summary_writer.add_audio(f'input_{i}_target', target_signal[i], global_step=epoch,
+                                             sample_rate=16000)
+                    summary_writer.add_audio(f'input_{i}_pred', modular_synth.signal[i], global_step=epoch,
+                                             sample_rate=16000)
                     for k, specs in ret_spectrograms.items():
                         signal_vis = visualize_signal_prediction(target_signal[i], modular_synth.signal[i],
                                                                  [specs['target'][i]],
@@ -133,7 +138,7 @@ def train_single_epoch(model,
                         f"backward processing time: {round(backward_end_time - backward_start_time, 2)}s, \n"
                         f"loss processing time: {round(loss_end_time - loss_start_time, 2)}s\n"
                         f"input transform time: {round(input_transform_end - input_transform_start, 2)}s\n"
-                        f"data loading time: {round(data_loading_time_end - data_loading_time_start, 2)}s\n",
+                        f"data loading time: {round(data_loading_time_end - data_loading_time_start, 2)}s\n"
                         f"gradient logging time: {round(batch_end_time - backward_end_time, 2)}s\n")
 
                     if cfg.print_synth_param_stats:
@@ -158,7 +163,6 @@ def train(model,
           cfg: Config,
           model_cfg: ModelConfig,
           synth_cfg: SynthConfig,
-          activations_dict: dict,
           summary_writer: SummaryWriter):
 
     # Initializations
@@ -168,6 +172,8 @@ def train(model,
     loss_list = []
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=num_epochs * len(data_loader))
+    # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, model_cfg.learning_rate / 10, model_cfg.learning_rate,
+    #                                               mode='triangular2', cycle_momentum=False)
     normalizer = helper.Normalizer(cfg.signal_duration_sec, synth_cfg)
 
     if cfg.spectrogram_loss_type == 'MULTI-SPECTRAL':
@@ -182,7 +188,7 @@ def train(model,
                                    normalize_by_size=cfg.normalize_loss_by_nfft,
                                    device=device)
     else:
-        ValueError("SYNTH_TYPE 'MODULAR' supports only SPECTROGRAM_LOSS_TYPE of type 'MULTI-SPECTRAL'")
+        raise ValueError("SYNTH_TYPE 'MODULAR' supports only SPECTROGRAM_LOSS_TYPE of type 'MULTI-SPECTRAL'")
 
     # init modular synth
     modular_synth = SynthModular(synth_cfg=synth_cfg,
@@ -190,8 +196,7 @@ def train(model,
                                  signal_duration_sec=cfg.signal_duration_sec,
                                  num_sounds=1,
                                  device=device,
-                                 preset=synth_cfg.preset
-                                 )
+                                 preset=synth_cfg.preset)
 
     for epoch in range(num_epochs):
         cur_epoch = start_epoch + epoch
@@ -208,7 +213,6 @@ def train(model,
                                loss_handler=loss_handler,
                                synth_cfg=synth_cfg,
                                cfg=cfg,
-                               activations_dict=activations_dict,
                                summary_writer=summary_writer)
 
         # Sum stats over multiple epochs
@@ -227,77 +231,6 @@ def train(model,
                               cfg.numpy_path)
 
     print("Finished training")
-
-
-def log_gradients_in_model(model, logger, step):
-    for tag, value in model.named_parameters():
-        if value.grad is not None:
-            grad_val = value.grad.cpu()
-            logger.add_histogram(tag + "/grad", grad_val, step)
-            if np.linalg.norm(grad_val) < 1e-4 and 'bias' not in tag:
-                print(f"Op {tag} gradient approaching 0")
-
-
-def _parse_synth_params(original_params: dict, predicted_params: dict, sample_idx: int) -> (dict, dict):
-
-    pred_res, orig_res = {}, {}
-
-    for k, d in predicted_params.items():
-        op = d['operation']
-        pred_res[op] = {}
-        orig_res[op] = {}
-        for param, vals in d['params'].items():
-            pred_res[op][param] = _np_to_str(vals[sample_idx].detach().cpu().numpy().squeeze(),
-                                                             precision=2)
-
-            if param == 'waveform':
-                orig_res[op][param] = original_params[k]['parameters'][param][sample_idx]
-            else:
-                orig_res[op][param] = \
-                    _np_to_str(original_params[k]['parameters'][param][sample_idx].detach().cpu().numpy(),
-                                 precision=2)
-
-    return orig_res, pred_res
-
-
-def _np_to_str(val: np.ndarray, precision=2) -> str:
-
-    if val.size == 1:
-        return np.format_float_positional(val.squeeze(), precision=precision)
-
-    if val.size > 1:
-        return np.array_str(val.squeeze(), precision=precision)
-
-    return ''
-
-
-def log_dict_recursive(tag: str, data_to_log, writer: SummaryWriter, step: int):
-
-    if type(data_to_log) in [torch.Tensor, np.ndarray, int, float]:
-        if len(data_to_log) > 1:
-            writer.add_histogram(tag, data_to_log, step)
-        else:
-            writer.add_scalar(tag, data_to_log, step)
-        return
-
-    if not isinstance(data_to_log, dict):
-        return
-
-    if 'operation' in data_to_log:
-        tag += '_' + data_to_log['operation']
-
-    for k, v in data_to_log.items():
-        log_dict_recursive(f'{tag}/{k}', v, writer, step)
-
-    return
-
-
-def get_activation(name, activations_dict: dict):
-
-    def hook(layer, layer_input, layer_output):
-        activations_dict[name] = layer_output.detach()
-
-    return hook
 
 
 def run(exp_name: str, dataset_name: str):
@@ -328,8 +261,6 @@ def run(exp_name: str, dataset_name: str):
     else:
         synth_net = BigSynthNetwork(synth_cfg, device).to(device)
 
-
-    activations_dict = {}
     # for name, layer in synth_net.named_modules():
     #     layer.register_forward_hook(get_activation(name, activations_dict))
 
@@ -358,9 +289,8 @@ def run(exp_name: str, dataset_name: str):
           start_epoch=cur_epoch,
           num_epochs=model_cfg.num_epochs,
           cfg=cfg,
-          model_cfg=model_cfg,
           synth_cfg=synth_cfg,
-          activations_dict=activations_dict,
+          model_cfg=model_cfg,
           summary_writer=summary_writer)
 
     # save model
@@ -369,4 +299,4 @@ def run(exp_name: str, dataset_name: str):
 
 
 if __name__ == "__main__":
-    run('profiling_test', 'fm_dataset')
+    run('fm_full_mel_simple_lower_fft_mid_emd_no_freq_time_l2_no_clamp_long', 'fm_dataset')
