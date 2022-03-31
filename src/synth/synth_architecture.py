@@ -252,6 +252,7 @@ class SynthModular:
                                     signal_duration_sec=self.signal_duration_sec,
                                     device=self.device)
 
+        output_signals = {}
         for layer in range(self.num_layers):
             for channel in range(self.num_channels):
                 cell = self.architecture[channel][layer]
@@ -337,6 +338,7 @@ class SynthModular:
                                                              sustain_level=cell.parameters['sustain_level'],
                                                              release_t=cell.parameters['release_t'],
                                                              num_sounds=num_sounds)
+                output_signals[f"({channel}, {layer})"] = cell.signal
 
         # Final signal summing from all channels in the last layer
         final_signal = torch.zeros((int(self.sample_rate * self.signal_duration_sec)),
@@ -354,7 +356,7 @@ class SynthModular:
             final_signal = None
 
         self.signal = final_signal
-        return final_signal
+        return final_signal, output_signals
 
     def get_preset(self, preset: str):
         if preset == 'BASIC_FLOW':

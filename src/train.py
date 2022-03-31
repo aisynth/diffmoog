@@ -38,7 +38,7 @@ def train_single_epoch(model,
     num_of_mini_batches = 0
     data_loading_time_start = time.time()
     with tqdm(data_loader, unit="batch") as tepoch:
-        for target_signal, target_param_dic, signal_index in tepoch:
+        for target_signal, target_param_dict, signal_index in tepoch:
 
             data_loading_time_end = time.time()
             step = epoch * len(data_loader) + num_of_mini_batches
@@ -83,7 +83,20 @@ def train_single_epoch(model,
                 update_params.append(synth_modular_cell)
 
             modular_synth.update_cells(update_params)
-            modular_synth.generate_signal(num_sounds=len(transformed_signal))
+            # ------------------------------------------------------------
+            # -------------Generate Signal-------------------------------
+            # ------------------------------------------------------------
+            pred_final_signal, pred_signals_through_chain = \
+                modular_synth.generate_signal(num_sounds=len(transformed_signal))
+
+            update_params = []
+            for index, operation_dict in target_param_dict.items():
+                synth_modular_cell = SynthModularCell(index=index, parameters=operation_dict['params'])
+                update_params.append(synth_modular_cell)
+
+            modular_synth.update_cells(update_params)
+            target_final_signal, target_signals_through_chain = \
+                modular_synth.generate_signal(num_sounds=len(transformed_signal))
 
             modular_synth.signal = helper.move_to(modular_synth.signal, device)
 
@@ -91,15 +104,24 @@ def train_single_epoch(model,
             loss_start_time = time.time()
 
             target_signal = target_signal.squeeze()
-            loss, ret_spectrograms = loss_handler.call(target_signal, modular_synth.signal, summary_writer, step,
-                                                       return_spectrogram=True)
-            summary_writer.add_scalar('loss/train_multi_spectral', loss, step)
+
+            loss_total = 0
+            for index, pred_signal in pred_signals_through_chain.items():
+                target_signal = target_signals_through_chain[index]
+                loss, ret_spectrograms = loss_handler.call(target_signal,
+                                                           modular_synth.signal,
+                                                           summary_writer,
+                                                           index,
+                                                           step,
+                                                           return_spectrogram=True)
+                loss_total += loss
+            summary_writer.add_scalar('loss/train_multi_spectral', loss_total, step)
 
             loss_end_time = time.time()
 
             if num_of_mini_batches == 1:
                 for i in range(5):
-                    sample_params_orig, sample_params_pred = parse_synth_params(target_param_dic, predicted_param_dict, i)
+                    sample_params_orig, sample_params_pred = parse_synth_params(target_param_dict, predicted_param_dict, i)
                     summary_writer.add_audio(f'input_{i}_target', target_signal[i], global_step=epoch,
                                              sample_rate=16000)
                     summary_writer.add_audio(f'input_{i}_pred', modular_synth.signal[i], global_step=epoch,
@@ -142,7 +164,7 @@ def train_single_epoch(model,
                         f"gradient logging time: {round(batch_end_time - backward_end_time, 2)}s\n")
 
                     if cfg.print_synth_param_stats:
-                        helper.print_synth_param_stats(predicted_param_dict, target_param_dic, synth_cfg, device)
+                        helper.print_synth_param_stats(predicted_param_dict, target_param_dict, synth_cfg, device)
 
             tepoch.set_postfix(loss=loss.item())
             data_loading_time_start = time.time()
