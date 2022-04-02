@@ -1,7 +1,8 @@
 from typing import Sequence
 
+import torch
 from torch import nn
-from torchvision.models import resnet18
+from torchvision.models import resnet18, resnet34
 import helper
 from torchsummary import summary
 from dataclasses import dataclass
@@ -240,7 +241,7 @@ class BigSynthNetwork(nn.Module):
 
 class SimpleSynthNetwork(nn.Module):
 
-    def __init__(self, synth_cfg: SynthConfig, device):
+    def __init__(self, synth_cfg: SynthConfig, device, backbone='resnet'):
         super().__init__()
 
         self.preset = synth_presets_dict.get(synth_cfg.preset, None)
@@ -249,11 +250,13 @@ class SimpleSynthNetwork(nn.Module):
 
         self.device = device
 
-        self.backbone = resnet18(pretrained=False)
-        self.backbone.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
-
-        num_ftrs = self.backbone.fc.in_features
-        self.backbone.fc = nn.Linear(num_ftrs, HIDDEN_IN_CHANNELS)
+        if backbone in ['lstm', 'gru']:
+            self.backbone = RNNBackbone(backbone)
+        elif backbone == 'resnet':
+            self.backbone = resnet34(pretrained=False)
+            self.backbone.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+            num_ftrs = self.backbone.fc.in_features
+            self.backbone.fc = nn.Linear(num_ftrs, HIDDEN_IN_CHANNELS)
 
         self.heads_module_dict = nn.ModuleDict({})
         for cell in self.preset:
@@ -341,7 +344,7 @@ class SimpleSynthNetwork(nn.Module):
                 predicted_amplitude = amplitude_head(latent)
                 predicted_amplitude = self.sigmoid(predicted_amplitude)
                 predicted_frequency = frequency_head(latent)
-                predicted_frequency = self.sigmoid(predicted_frequency)
+                predicted_frequency = self.sigmoid(predicted_frequency) #self.sigmoid(predicted_frequency)
 
                 output_dic[index] = {'operation': operation,
                                      'params': {'amp': predicted_amplitude,
@@ -440,11 +443,45 @@ class MLPBlock(nn.Module):
 
     def __init__(self, layer_sizes: Sequence[int]):
         super(MLPBlock, self).__init__()
-        layers = [nn.Linear(layer_sizes[i], layer_sizes[i+1]) for i in range(len(layer_sizes) - 1)]
+        layers = [nn.Linear(layer_sizes[i], layer_sizes[i+1], bias=False) for i in range(len(layer_sizes) - 1)]
         self.mlp = nn.Sequential(*layers)
 
     def forward(self, x):
         return self.mlp(x)
+
+
+class RNNBackbone(nn.Module):
+
+    def __init__(self, rnn_type: str = 'lstm', input_size: int = 128, hidden_size: int = 128, output_size: int = 128,
+                 agg_mean: bool = False):
+
+        super().__init__()
+
+        self.agg_mean = agg_mean
+        self.rnn_type = rnn_type
+
+        if rnn_type.lower() == 'lstm':
+            self.rnn = nn.LSTM(input_size, hidden_size, num_layers=4, batch_first=True, bias=False)
+        elif rnn_type.lower() == 'gru':
+            self.rnn = nn.GRU(input_size, hidden_size, 1, batch_first=True)
+        else:
+            raise ValueError(f"{rnn_type} RNN not supported")
+
+        self.fc = nn.Sequential(nn.Linear(hidden_size, output_size, bias=False),
+                                nn.ReLU())
+
+    def forward(self, x):
+
+        x = torch.transpose(x.squeeze(), 2, 1)
+
+        output, hidden = self.rnn(x)
+        if self.rnn_type == 'lstm':
+            hidden = hidden[0]
+
+        rnn_pred = output[:, -1, :]
+        fc_output = self.fc(rnn_pred)
+
+        return fc_output
 
 
 if __name__ == "__main__":

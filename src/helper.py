@@ -60,6 +60,16 @@ def mel_spectrogram_transform(sample_rate):
                                                 f_max=8000)
 
 
+def alt_mel_spectrogram_transform(sample_rate):
+    return torchaudio.transforms.MelSpectrogram(sample_rate=sample_rate,
+                                                n_fft=1024,
+                                                hop_length=256,
+                                                n_mels=128,
+                                                power=1.0,
+                                                f_min=0,
+                                                f_max=8000)
+
+
 amplitude_to_db_transform = torchaudio.transforms.AmplitudeToDB()
 
 
@@ -331,8 +341,8 @@ class MinMaxNormaliser:
     def __init__(self, target_min_val, target_max_val, original_min_val, original_max_val):
         self.target_min_val = target_min_val
         self.target_max_val = target_max_val
-        self.original_max_val = original_min_val
-        self.original_min_val = original_max_val
+        self.original_max_val = original_max_val
+        self.original_min_val = original_min_val
 
     def normalise(self, array):
         norm_array = (array - self.original_min_val) / (self.original_max_val - self.original_min_val)
@@ -657,7 +667,7 @@ class SpectralLoss:
         loss = 0.0
 
         if self.loss_type == 'L1':
-            criterion = nn.L1Loss()
+            criterion = nn.L1Loss(reduction='sum')
         elif self.loss_type == 'L2':
             criterion = nn.MSELoss()
         else:
@@ -700,8 +710,8 @@ class SpectralLoss:
 
             # TODO(kyriacos) normalize cumulative spectrogram
             if self.cumsum_freq_weight > 0:
-                target = torch.cumsum(target_mag, dim=1)
-                value = torch.cumsum(value_mag, dim=1)
+                target = torch.cumsum(target_mag, dim=2)
+                value = torch.cumsum(value_mag, dim=2)
                 emd_loss = criterion(target, value)
                 loss_dict[f"{loss_name}_emd"] = emd_loss
                 weighted_loss_dict[f"{loss_name}_emd"] = self.cumsum_freq_weight * emd_loss

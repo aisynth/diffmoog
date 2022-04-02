@@ -1,4 +1,5 @@
 import os.path
+from collections import defaultdict
 
 import torch
 from torch import nn
@@ -34,9 +35,12 @@ def train_single_epoch(model,
                        synth_cfg,
                        cfg,
                        summary_writer: SummaryWriter):
+
     sum_epoch_loss = 0
     num_of_mini_batches = 0
     data_loading_time_start = time.time()
+    epoch_param_diffs = defaultdict(list)
+    epoch_param_vals_raw, epoch_param_vals = defaultdict(list), defaultdict(list)
     with tqdm(data_loader, unit="batch") as tepoch:
         for target_signal, target_param_dic, signal_index in tepoch:
 
@@ -65,17 +69,21 @@ def train_single_epoch(model,
             model_start_time = time.time()
 
             output_dic = model(transformed_signal)
-            log_dict_recursive('raw_output', output_dic, summary_writer, step)
+            for op_idx, op_dict in output_dic.items():
+                for param_name, param_vals in op_dict['params'].items():
+                    epoch_param_vals_raw[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
+
+            predicted_param_dict = normalizer.denormalize(output_dic)
+            for op_idx, op_dict in predicted_param_dict.items():
+                for param_name, param_vals in op_dict['params'].items():
+                    epoch_param_vals[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
+
+            batch_param_diffs = get_param_diffs(predicted_param_dict, target_param_dic)
+            for k, v in batch_param_diffs.items():
+                epoch_param_diffs[k].extend(v)
 
             model_end_time = time.time()
-
             synth_start_time = time.time()
-
-            denormalized_output_dict = normalizer.denormalize(output_dic)
-            log_dict_recursive('denormalized_output', denormalized_output_dict, summary_writer, step)
-
-            predicted_param_dict = denormalized_output_dict #helper.clamp_regression_params(denormalized_output_dict, synth_cfg, cfg)
-            log_dict_recursive('clamped_output', predicted_param_dict, summary_writer, step)
 
             update_params = []
             for index, operation_dict in predicted_param_dict.items():
@@ -97,7 +105,7 @@ def train_single_epoch(model,
 
             loss_end_time = time.time()
 
-            if num_of_mini_batches == 1:
+            if num_of_mini_batches == 1 and False:
                 for i in range(5):
                     sample_params_orig, sample_params_pred = parse_synth_params(target_param_dic, predicted_param_dict, i)
                     summary_writer.add_audio(f'input_{i}_target', target_signal[i], global_step=epoch,
@@ -149,6 +157,9 @@ def train_single_epoch(model,
 
     avg_epoch_loss = sum_epoch_loss / num_of_mini_batches
     summary_writer.add_scalar('loss/train_multi_spectral_epoch', avg_epoch_loss, epoch)
+    log_dict_recursive('param_diff', epoch_param_diffs, summary_writer, epoch)
+    log_dict_recursive('param_values_raw', epoch_param_vals_raw, summary_writer, epoch)
+    log_dict_recursive('param_values_normalized', epoch_param_vals, summary_writer, epoch)
 
     return avg_epoch_loss
 
@@ -171,6 +182,7 @@ def train(model,
 
     loss_list = []
 
+    # scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer=optimizer, factor=1)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=num_epochs * len(data_loader))
     # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, model_cfg.learning_rate / 10, model_cfg.learning_rate,
     #                                               mode='triangular2', cycle_momentum=False)
@@ -178,15 +190,15 @@ def train(model,
 
     if cfg.spectrogram_loss_type == 'MULTI-SPECTRAL':
         loss_handler = helper.SpectralLoss(cfg=cfg,
-                                   fft_sizes=cfg.fft_sizes,
-                                   loss_type=cfg.multi_spectral_loss_type,
-                                   mag_weight=cfg.multi_spectral_mag_weight,
-                                   delta_time_weight=cfg.multi_spectral_delta_time_weight,
-                                   delta_freq_weight=cfg.multi_spectral_delta_freq_weight,
-                                   cumsum_freq_weight=cfg.multi_spectral_cumsum_freq_weight,
-                                   logmag_weight=cfg.multi_spectral_logmag_weight,
-                                   normalize_by_size=cfg.normalize_loss_by_nfft,
-                                   device=device)
+                                           fft_sizes=cfg.fft_sizes,
+                                           loss_type=cfg.multi_spectral_loss_type,
+                                           mag_weight=cfg.multi_spectral_mag_weight,
+                                           delta_time_weight=cfg.multi_spectral_delta_time_weight,
+                                           delta_freq_weight=cfg.multi_spectral_delta_freq_weight,
+                                           cumsum_freq_weight=cfg.multi_spectral_cumsum_freq_weight,
+                                           logmag_weight=cfg.multi_spectral_logmag_weight,
+                                           normalize_by_size=cfg.normalize_loss_by_nfft,
+                                           device=device)
     else:
         raise ValueError("SYNTH_TYPE 'MODULAR' supports only SPECTROGRAM_LOSS_TYPE of type 'MULTI-SPECTRAL'")
 
@@ -257,7 +269,7 @@ def run(exp_name: str, dataset_name: str):
 
     # construct model and assign it to device
     if model_cfg.model_type == 'simple':
-        synth_net = SimpleSynthNetwork(synth_cfg, device).to(device)
+        synth_net = SimpleSynthNetwork(synth_cfg, device, backbone=model_cfg.backbone).to(device)
     else:
         synth_net = BigSynthNetwork(synth_cfg, device).to(device)
 
@@ -265,7 +277,7 @@ def run(exp_name: str, dataset_name: str):
     #     layer.register_forward_hook(get_activation(name, activations_dict))
 
     optimizer = torch.optim.Adam(synth_net.parameters(),
-                                 lr=ModelConfig.learning_rate,
+                                 lr=model_cfg.learning_rate,
                                  weight_decay=model_cfg.optimizer_weight_decay)
 
     print(f"Training model start")
@@ -299,4 +311,4 @@ def run(exp_name: str, dataset_name: str):
 
 
 if __name__ == "__main__":
-    run('fm_full_mel_simple_lower_fft_mid_emd_no_freq_time_l2_no_clamp_long', 'fm_dataset')
+    run('lfo_test', 'toy_data')

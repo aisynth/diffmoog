@@ -45,6 +45,9 @@ def _np_to_str(val: np.ndarray, precision=2) -> str:
 
 def log_dict_recursive(tag: str, data_to_log, writer: SummaryWriter, step: int):
 
+    if type(data_to_log) == list:
+        data_to_log = np.asarray(data_to_log)
+
     if type(data_to_log) in [torch.Tensor, np.ndarray, int, float]:
         if len(data_to_log) > 1:
             writer.add_histogram(tag, data_to_log, step)
@@ -62,6 +65,21 @@ def log_dict_recursive(tag: str, data_to_log, writer: SummaryWriter, step: int):
         log_dict_recursive(f'{tag}/{k}', v, writer, step)
 
     return
+
+
+def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
+
+    all_diffs = {}
+
+    for op_index, pred_op_dict in predicted_params.items():
+        target_op_dict = target_params[op_index]
+        for param_name, pred_vals in pred_op_dict['params'].items():
+            target_vals = target_op_dict['parameters'][param_name]
+            diff = torch.abs(target_vals.squeeze().cpu() - pred_vals.squeeze().cpu())
+
+            all_diffs[f'{op_index}/{param_name}'] = diff.detach().numpy()
+
+    return all_diffs
 
 
 def get_activation(name, activations_dict: dict):
