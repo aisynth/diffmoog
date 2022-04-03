@@ -2,6 +2,8 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+from config import SynthConfig
+
 
 def log_gradients_in_model(model, writer: SummaryWriter, step):
     for tag, value in model.named_parameters():
@@ -75,9 +77,15 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
         target_op_dict = target_params[op_index]
         for param_name, pred_vals in pred_op_dict['params'].items():
             target_vals = target_op_dict['parameters'][param_name]
-            diff = torch.abs(target_vals.squeeze().cpu() - pred_vals.squeeze().cpu())
 
-            all_diffs[f'{op_index}/{param_name}'] = diff.detach().numpy()
+            if param_name == 'waveform':
+                waveform_idx = [SynthConfig.wave_type_dict[wt] for wt in target_vals]
+                diff = [1 - v[idx].cpu().detach().numpy() for idx, v in zip(waveform_idx, pred_vals)]
+                diff = np.asarray(diff)
+            else:
+                diff = torch.abs(target_vals.squeeze().cpu() - pred_vals.squeeze().cpu()).detach().numpy()
+
+            all_diffs[f'{op_index}/{param_name}'] = diff
 
     return all_diffs
 

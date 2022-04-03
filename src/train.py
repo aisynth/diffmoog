@@ -105,7 +105,7 @@ def train_single_epoch(model,
 
             loss_end_time = time.time()
 
-            if num_of_mini_batches == 1 and False:
+            if num_of_mini_batches == 1:
                 for i in range(5):
                     sample_params_orig, sample_params_pred = parse_synth_params(target_param_dic, predicted_param_dict, i)
                     summary_writer.add_audio(f'input_{i}_target', target_signal[i], global_step=epoch,
@@ -113,10 +113,16 @@ def train_single_epoch(model,
                     summary_writer.add_audio(f'input_{i}_pred', modular_synth.signal[i], global_step=epoch,
                                              sample_rate=16000)
                     for k, specs in ret_spectrograms.items():
+
+                        if '256' not in k:
+                            continue
+
                         signal_vis = visualize_signal_prediction(target_signal[i], modular_synth.signal[i],
                                                                  [specs['target'][i]],
-                                                                 [specs['pred'][i]], sample_params_orig, sample_params_pred)
-                        signal_vis_t = torch.tensor(signal_vis, dtype=torch.uint8)
+                                                                 [specs['pred'][i]], sample_params_orig,
+                                                                 sample_params_pred)
+                        signal_vis_t = torch.tensor(signal_vis, dtype=torch.uint8, requires_grad=False)
+
                         summary_writer.add_image(f'{k}/input_{i}', signal_vis_t, global_step=epoch, dataformats='HWC')
 
             backward_start_time = time.time()
@@ -131,7 +137,7 @@ def train_single_epoch(model,
 
             summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
 
-            if num_of_mini_batches % 10 == 0:
+            if num_of_mini_batches % 30 == 0:
                 log_gradients_in_model(model, summary_writer, step)
 
             batch_end_time = time.time()
@@ -160,6 +166,8 @@ def train_single_epoch(model,
     log_dict_recursive('param_diff', epoch_param_diffs, summary_writer, epoch)
     log_dict_recursive('param_values_raw', epoch_param_vals_raw, summary_writer, epoch)
     log_dict_recursive('param_values_normalized', epoch_param_vals, summary_writer, epoch)
+
+    summary_writer.flush()
 
     return avg_epoch_loss
 
@@ -311,4 +319,4 @@ def run(exp_name: str, dataset_name: str):
 
 
 if __name__ == "__main__":
-    run('lfo_test', 'toy_data')
+    run('fm_full', 'fm_dataset')

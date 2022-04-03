@@ -135,7 +135,7 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 1000
+    dataset_size: int = 50000
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
     train_audio_dir: str = None
@@ -164,8 +164,8 @@ class DatasetConfig:
 class ModelConfig:
     model_type: str = 'simple'
     backbone: str = 'resnet'
-    batch_size: int = 64
-    num_epochs: int = 60
+    batch_size: int = 128
+    num_epochs: int = 20
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
@@ -176,7 +176,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'LFO'
+    preset: str = 'FM'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}
@@ -224,7 +224,7 @@ class SynthConfig:
 
 def configure_experiment(exp_name: str, dataset_name: str):
 
-    project_root = os.path.join(EXP_ROOT, exp_name, '')
+    project_root = os.path.join(EXP_ROOT, 'current', exp_name, '')
 
     if os.path.isdir(project_root):
         overwrite = input(colored(f"Folder {project_root} already exists. Overwrite previous experiment (Y/N)?"

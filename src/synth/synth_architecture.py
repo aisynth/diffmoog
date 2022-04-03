@@ -196,7 +196,7 @@ class SynthModular:
                               'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds)}
                 elif operation == 'fm':
                     params = {'amp_c': np.random.random_sample(size=num_sounds),
-                              'freq_c': random.choices(synth_cfg.osc_freq_list, k=num_sounds),
+                              'freq_c': self._sample_c_freq(synth_cfg, num_sounds),
                               'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds),
                               'mod_index': np.random.uniform(low=0, high=synth_cfg.max_mod_index, size=num_sounds)}
                 elif operation == 'mix':
@@ -382,6 +382,18 @@ class SynthModular:
 
         return preset_as_synth_input
 
+    @staticmethod
+    def _sample_c_freq(synth_cfg: SynthConfig, num_sounds: int):
+
+        osc_freq_list = np.asarray(synth_cfg.osc_freq_list)
+
+        base_freqs = np.random.uniform(low=synth_cfg.osc_freq_list[0],
+                                       high=synth_cfg.osc_freq_list[-1],
+                                       size=num_sounds)
+
+        idx = np.searchsorted(synth_cfg.osc_freq_list, base_freqs, side="left")
+        idx = idx - (np.abs(base_freqs - osc_freq_list[idx - 1]) < np.abs(base_freqs - osc_freq_list[idx]))
+        return osc_freq_list[idx]
 
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)
