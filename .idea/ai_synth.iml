@@ -10,6 +10,7 @@
       <excludeFolder url="file://$MODULE_DIR$/venv" />
       <excludeFolder url="file://$MODULE_DIR$/data" />
       <excludeFolder url="file://$MODULE_DIR$/experiments" />
+      <excludeFolder url="file://$MODULE_DIR$/experiments_archive" />
     </content>
     <content url="file://$MODULE_DIR$/julius">
       <sourceFolder url="file://$MODULE_DIR$/julius" isTestSource="false" />

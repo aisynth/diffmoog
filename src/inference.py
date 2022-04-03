@@ -1,3 +1,6 @@
+import matplotlib
+matplotlib.use('Agg')
+
 import matplotlib.pyplot as plt
 import torch
 from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -202,7 +205,8 @@ def visualize_signal_prediction(orig_audio, pred_audio, orig_spectograms, pred_s
 
     # Option 2a: Convert to a NumPy array.
     X = np.fromstring(s, np.uint8).reshape((height, width, 4))[:, :, :3]
-    plt.close()
+
+    plt.close('all')
 
     return X
 
@@ -227,12 +231,8 @@ def run():
 
     # load back the model
     synth_net = BigSynthNetwork(synth_cfg=synth_cfg, device=device).to(device)
-    optimizer = torch.optim.Adam(synth_net.parameters(), lr=ModelConfig.learning_rate)
     checkpoint = torch.load(Config.load_model_path)
     synth_net.load_state_dict(checkpoint['model_state_dict'])
-    # optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-    epoch = checkpoint['epoch']
-    loss = checkpoint['loss']
 
     synth_net.eval()
 

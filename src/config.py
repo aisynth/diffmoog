@@ -75,14 +75,14 @@ class Config:
     freq_reinforce_loss_factor: float = 1e5
 
     # multi-spectral loss configs
-    multi_spectral_loss_type: str = 'L2'
+    multi_spectral_loss_type: str = 'L1'
     multi_spectral_loss_spec_type: str = 'MEL_SPECTROGRAM'
-    multi_spectral_mag_weight: float = 1/100000#1/100
-    multi_spectral_delta_time_weight: float = 0#1/100
-    multi_spectral_delta_freq_weight: float = 0#1/100
-    multi_spectral_cumsum_freq_weight: float = 1/16000000#1/6000
-    multi_spectral_logmag_weight: float = 1
-    fft_sizes: tuple = (256, 128, 64)
+    multi_spectral_mag_weight: float = 0 # 1/10000
+    multi_spectral_delta_time_weight: float = 0#1/10000000
+    multi_spectral_delta_freq_weight: float = 0 #1/10000
+    multi_spectral_cumsum_freq_weight: float = 1/600000000
+    multi_spectral_logmag_weight: float = 0#1/10000
+    fft_sizes: tuple = (1024, 512, 256, 128, 64)
     normalize_loss_by_nfft: bool = False
 
     # Debug
@@ -135,7 +135,7 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 1000
+    dataset_size: int = 50000
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
     train_audio_dir: str = None
@@ -163,10 +163,11 @@ class DatasetConfig:
 @dataclass
 class ModelConfig:
     model_type: str = 'simple'
+    backbone: str = 'resnet'
     batch_size: int = 128
-    num_epochs: int = 30
-    learning_rate: float = 3e-5
-    optimizer_weight_decay: float = 0.25
+    num_epochs: int = 20
+    learning_rate: float = 3e-4
+    optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
     optimizer_scheduler_gamma: float = 0.1
     reinforcement_epsilon: float = 0.15
@@ -223,7 +224,7 @@ class SynthConfig:
 
 def configure_experiment(exp_name: str, dataset_name: str):
 
-    project_root = os.path.join(EXP_ROOT, exp_name, '')
+    project_root = os.path.join(EXP_ROOT, 'current', exp_name, '')
 
     if os.path.isdir(project_root):
         overwrite = input(colored(f"Folder {project_root} already exists. Overwrite previous experiment (Y/N)?"

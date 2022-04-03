@@ -97,7 +97,7 @@ if __name__ == '__main__':
 
     cfg = Config('fm_test')
     synth_cfg = SynthConfig()
-    dataset_cfg = DatasetConfig('fm_toy_dataset')
+    dataset_cfg = DatasetConfig('fm_dataset')
 
     device = helper.get_device(args.gpu_index)
     create_dataset(train=args.train, dataset_cfg=dataset_cfg, synth_cfg=synth_cfg, cfg=cfg, device=device)
