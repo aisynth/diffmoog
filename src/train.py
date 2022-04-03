@@ -78,7 +78,7 @@ def train_single_epoch(model,
                 for param_name, param_vals in op_dict['params'].items():
                     epoch_param_vals[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
 
-            batch_param_diffs = get_param_diffs(predicted_param_dict, target_param_dic)
+            batch_param_diffs = get_param_diffs(predicted_param_dict, target_param_dict)
             for k, v in batch_param_diffs.items():
                 epoch_param_diffs[k].extend(v)
 
@@ -99,7 +99,7 @@ def train_single_epoch(model,
 
             update_params = []
             for index, operation_dict in target_param_dict.items():
-                synth_modular_cell = SynthModularCell(index=index, parameters=operation_dict['params'])
+                synth_modular_cell = SynthModularCell(index=index, parameters=operation_dict['parameters'])
                 update_params.append(synth_modular_cell)
 
             modular_synth.update_cells(update_params)
@@ -341,4 +341,4 @@ def run(exp_name: str, dataset_name: str):
 
 
 if __name__ == "__main__":
-    run('fm_full', 'fm_dataset')
+    run('fm_test_chain_loss', 'fm_toy_dataset')

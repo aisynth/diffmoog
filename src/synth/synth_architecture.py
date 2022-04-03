@@ -160,7 +160,7 @@ class SynthModular:
                 AttributeError(f'{operation} must have single or no inputs')
 
             cell.operation = operation
-        if parameters is not None:
+        if parameters is not None and isinstance(parameters, dict):
             for key in parameters:
                 if key not in synth_config.modular_synth_params[cell.operation]:
                     ValueError("Illegal parameter for the provided operation")
