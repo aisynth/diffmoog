@@ -683,13 +683,11 @@ class SpectralLoss:
         loss_dict, weighted_loss_dict = {}, {}
         spectrograms_dict = {}
         for loss_name, loss_op in self.spectrogram_ops.items():
-            target_mag = loss_op(target_audio)
-            value_mag = loss_op(audio)
+            target_mag = loss_op(target_audio.float())
+            value_mag = loss_op(audio.float())
 
             n_fft = loss_op.n_fft
             c_loss = 0.0
-
-            spectrograms_dict[loss_name] = {'pred': value_mag, 'target': target_mag}
 
             # Add magnitude loss.
             if self.mag_weight > 0:
@@ -736,6 +734,8 @@ class SpectralLoss:
                 c_loss /= (n_fft / 100.0)
 
             loss += c_loss
+
+            spectrograms_dict[loss_name] = {'pred': value_mag.detach(), 'target': target_mag.detach()}
 
         # if self.loudness_weight > 0:
         #     target = spectral_ops.compute_loudness(target_audio, n_fft=2048,

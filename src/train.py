@@ -69,6 +69,7 @@ def train_single_epoch(model,
             model_start_time = time.time()
 
             output_dic = model(transformed_signal)
+
             for op_idx, op_dict in output_dic.items():
                 for param_name, param_vals in op_dict['params'].items():
                     epoch_param_vals_raw[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
@@ -79,27 +80,31 @@ def train_single_epoch(model,
                     epoch_param_vals[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
 
             batch_param_diffs = get_param_diffs(predicted_param_dict, target_param_dict)
-            for k, v in batch_param_diffs.items():
-                epoch_param_diffs[k].extend(v)
+            for op_idx, diff_vals in batch_param_diffs.items():
+                epoch_param_diffs[op_idx].extend(diff_vals)
 
             model_end_time = time.time()
             synth_start_time = time.time()
 
+            # ------------------------------------------------------------
+            # -------------Generate Signal-------------------------------
+            # ------------------------------------------------------------
+            # --------------Predicted-------------------------------------
             update_params = []
             for index, operation_dict in predicted_param_dict.items():
                 synth_modular_cell = SynthModularCell(index=index, parameters=operation_dict['params'])
                 update_params.append(synth_modular_cell)
 
             modular_synth.update_cells(update_params)
-            # ------------------------------------------------------------
-            # -------------Generate Signal-------------------------------
-            # ------------------------------------------------------------
+
             pred_final_signal, pred_signals_through_chain = \
                 modular_synth.generate_signal(num_sounds=len(transformed_signal))
 
+            # --------------Target-------------------------------------
             update_params = []
-            for index, operation_dict in target_param_dict.items():
-                synth_modular_cell = SynthModularCell(index=index, parameters=operation_dict['parameters'])
+            for op_index in output_dic.keys():
+                operation_dict = target_param_dict[op_index]
+                synth_modular_cell = SynthModularCell(index=op_index, parameters=operation_dict['parameters'])
                 update_params.append(synth_modular_cell)
 
             modular_synth.update_cells(update_params)
@@ -114,12 +119,18 @@ def train_single_epoch(model,
             target_signal = target_signal.squeeze()
 
             loss_total = 0
-            for index, pred_signal in pred_signals_through_chain.items():
-                target_signal = target_signals_through_chain[index]
+            for op_index in output_dic.keys():
+                op_index = str(op_index)
+
+                pred_signal = pred_signals_through_chain[op_index]
+                if pred_signal is None:
+                    continue
+
+                target_signal = target_signals_through_chain[op_index]
                 loss, ret_spectrograms = loss_handler.call(target_signal,
-                                                           modular_synth.signal,
+                                                           pred_signal,
                                                            summary_writer,
-                                                           index,
+                                                           op_index,
                                                            step,
                                                            return_spectrogram=True)
                 loss_total += loss
@@ -130,16 +141,17 @@ def train_single_epoch(model,
             if num_of_mini_batches == 1:
                 for i in range(5):
                     sample_params_orig, sample_params_pred = parse_synth_params(target_param_dict, predicted_param_dict, i)
-                    summary_writer.add_audio(f'input_{i}_target', target_signal[i], global_step=epoch,
+                    summary_writer.add_audio(f'input_{i}_target', target_final_signal[i], global_step=epoch,
                                              sample_rate=16000)
-                    summary_writer.add_audio(f'input_{i}_pred', modular_synth.signal[i], global_step=epoch,
+                    summary_writer.add_audio(f'input_{i}_pred', pred_final_signal[i], global_step=epoch,
                                              sample_rate=16000)
                     for k, specs in ret_spectrograms.items():
 
                         if '256' not in k:
+                            ret_spectrograms[k] = None
                             continue
 
-                        signal_vis = visualize_signal_prediction(target_signal[i], modular_synth.signal[i],
+                        signal_vis = visualize_signal_prediction(target_signal[i], pred_final_signal[i],
                                                                  [specs['target'][i]],
                                                                  [specs['pred'][i]], sample_params_orig,
                                                                  sample_params_pred)
@@ -150,8 +162,8 @@ def train_single_epoch(model,
             backward_start_time = time.time()
 
             num_of_mini_batches += 1
-            sum_epoch_loss += loss.item()
-            loss.backward()
+            sum_epoch_loss += loss_total.item()
+            loss_total.backward()
             optimizer.step()
             scheduler.step()
 
@@ -159,13 +171,13 @@ def train_single_epoch(model,
 
             summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
 
-            if num_of_mini_batches % 30 == 0:
+            if num_of_mini_batches % 100 == 0:
                 log_gradients_in_model(model, summary_writer, step)
 
             batch_end_time = time.time()
 
             if cfg.print_train_batch_stats:
-                print(f"MSE batch loss: {round(loss.item(), 7)},\n")
+                print(f"MSE batch loss: {round(loss_total.item(), 7)},\n")
                 if cfg.print_timings:
                     print(
                         f"total batch processing time: {round(batch_end_time - batch_start_time, 2)}s, \n"
@@ -180,7 +192,7 @@ def train_single_epoch(model,
                     if cfg.print_synth_param_stats:
                         helper.print_synth_param_stats(predicted_param_dict, target_param_dict, synth_cfg, device)
 
-            tepoch.set_postfix(loss=loss.item())
+            tepoch.set_postfix(loss=loss_total.item())
             data_loading_time_start = time.time()
 
     avg_epoch_loss = sum_epoch_loss / num_of_mini_batches
@@ -188,8 +200,6 @@ def train_single_epoch(model,
     log_dict_recursive('param_diff', epoch_param_diffs, summary_writer, epoch)
     log_dict_recursive('param_values_raw', epoch_param_vals_raw, summary_writer, epoch)
     log_dict_recursive('param_values_normalized', epoch_param_vals, summary_writer, epoch)
-
-    summary_writer.flush()
 
     return avg_epoch_loss
 
@@ -341,4 +351,4 @@ def run(exp_name: str, dataset_name: str):
 
 
 if __name__ == "__main__":
-    run('fm_test_chain_loss', 'fm_toy_dataset')
+    run('fm_full_chain_loss_w_logmag', 'fm_dataset')

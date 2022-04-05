@@ -134,6 +134,11 @@ class SynthModules:
         self.signal_values_sanity_check(amp, freq, waveform)
         t = self.time_samples
 
+        if amp.ndim == 1:
+            amp = torch.unsqueeze(amp, 1).cuda(device=self.device)
+        if freq.ndim == 1:
+            freq = torch.unsqueeze(freq, 1).cuda(device=self.device)
+
         sine_wave = amp * torch.sin(TWO_PI * freq * t + phase)
         square_wave = amp * torch.sign(torch.sin(TWO_PI * freq * t + phase))
         triangle_wave = (2 * amp / PI) * torch.arcsin(torch.sin((TWO_PI * freq * t + phase)))
@@ -180,6 +185,13 @@ class SynthModules:
         self.signal_values_sanity_check(amp_c, freq_c, waveform)
         t = self.time_samples
 
+        if amp_c.ndim == 1:
+            amp_c = torch.unsqueeze(amp_c, 1).cuda(device=self.device)
+        if freq_c.ndim == 1:
+            freq_c = torch.unsqueeze(freq_c, 1).cuda(device=self.device)
+        if mod_index.ndim == 1:
+            mod_index = torch.unsqueeze(mod_index, 1).cuda(device=self.device)
+
         fm_sine_wave = amp_c * torch.sin(TWO_PI * freq_c * t + mod_index * modulator)
         fm_square_wave = amp_c * torch.sign(
             torch.sin(TWO_PI * freq_c * t + mod_index * modulator))
@@ -207,8 +219,9 @@ class SynthModules:
             return waves_tensor[idx]
 
         if isinstance(raw_waveform_selector[0], str):
-            raw_waveform_selector = torch.stack([wave_type_indices[wt] for wt in raw_waveform_selector])
-            return torch.index_select(waves_tensor, 0, raw_waveform_selector)
+            oscillator_tensor = torch.stack([waves_tensor[wave_type_indices[wt]][i] for i, wt in
+                                             enumerate(raw_waveform_selector)])
+            return oscillator_tensor
 
         oscillator_tensor = raw_waveform_selector.t()[0].unsqueeze(1) * waves_tensor[0] + \
                             raw_waveform_selector.t()[1].unsqueeze(1) * waves_tensor[1] + \

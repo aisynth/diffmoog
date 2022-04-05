@@ -81,7 +81,7 @@ class Config:
     multi_spectral_delta_time_weight: float = 0#1/10000000
     multi_spectral_delta_freq_weight: float = 0 #1/10000
     multi_spectral_cumsum_freq_weight: float = 1/600000000
-    multi_spectral_logmag_weight: float = 0#1/10000
+    multi_spectral_logmag_weight: float = 1/500000
     fft_sizes: tuple = (1024, 512, 256, 128, 64)
     normalize_loss_by_nfft: bool = False
 
@@ -164,7 +164,7 @@ class DatasetConfig:
 class ModelConfig:
     model_type: str = 'simple'
     backbone: str = 'resnet'
-    batch_size: int = 128
+    batch_size: int = 100
     num_epochs: int = 20
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
