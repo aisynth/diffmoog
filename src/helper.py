@@ -592,6 +592,7 @@ class SpectralLoss:
                  delta_time_weight=0.0,
                  delta_freq_weight=0.0,
                  cumsum_freq_weight=1.0,
+                 cumsum_time_weight=1.0,
                  logmag_weight=1,
                  loudness_weight=0.0,
                  device='cuda:0',
@@ -631,6 +632,7 @@ class SpectralLoss:
         self.delta_time_weight = delta_time_weight
         self.delta_freq_weight = delta_freq_weight
         self.cumsum_freq_weight = cumsum_freq_weight
+        self.cumsum_time_weight = cumsum_time_weight
         self.logmag_weight = logmag_weight
         self.loudness_weight = loudness_weight
         self.device = device
@@ -713,12 +715,20 @@ class SpectralLoss:
                 c_loss += self.delta_freq_weight * delta_freq_loss
 
             # TODO(kyriacos) normalize cumulative spectrogram
-            if self.cumsum_freq_weight > 0:
+            if self.cumsum_time_weight > 0:
                 target = torch.cumsum(target_mag, dim=2)
                 value = torch.cumsum(value_mag, dim=2)
                 emd_loss = criterion(target, value)
-                loss_dict[f"{loss_name}_emd"] = emd_loss
-                weighted_loss_dict[f"{loss_name}_emd"] = self.cumsum_freq_weight * emd_loss
+                loss_dict[f"{loss_name}_emd_time"] = emd_loss
+                weighted_loss_dict[f"{loss_name}_emd_time"] = self.cumsum_time_weight * emd_loss
+                c_loss += self.cumsum_time_weight * emd_loss
+
+            if self.cumsum_freq_weight > 0:
+                target = torch.cumsum(target_mag, dim=1)
+                value = torch.cumsum(value_mag, dim=1)
+                emd_loss = criterion(target, value)
+                loss_dict[f"{loss_name}_emd_freq"] = emd_loss
+                weighted_loss_dict[f"{loss_name}_emd_freq"] = self.cumsum_freq_weight * emd_loss
                 c_loss += self.cumsum_freq_weight * emd_loss
 
             # Add logmagnitude loss, reusing spectrogram.

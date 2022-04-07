@@ -81,7 +81,8 @@ class Config:
     multi_spectral_delta_time_weight: float = 0#1/10000000
     multi_spectral_delta_freq_weight: float = 0 #1/10000
     multi_spectral_cumsum_freq_weight: float = 1/600000000
-    multi_spectral_logmag_weight: float = 1/500000
+    multi_spectral_cumsum_time_weight: float = 1/600000000
+    multi_spectral_logmag_weight: float = 0#1/1500000
     fft_sizes: tuple = (1024, 512, 256, 128, 64)
     normalize_loss_by_nfft: bool = False
 
@@ -135,7 +136,7 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 50000
+    dataset_size: int = 1000
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
     train_audio_dir: str = None
@@ -176,7 +177,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'FM'
+    preset: str = 'BASIC_FLOW_NO_ADSR'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}
@@ -190,7 +191,7 @@ class SynthConfig:
     max_mod_index: float = 100
     max_lfo_freq: float = 20
     min_filter_freq: float = 0
-    max_filter_freq: float = 20000
+    max_filter_freq: float = 8000
 
     # When predicting oscillator frequency by regression, the defines are used to normalize the output from the model
     margin: float = 200

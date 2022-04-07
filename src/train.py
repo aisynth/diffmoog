@@ -236,6 +236,7 @@ def train(model,
                                            delta_time_weight=cfg.multi_spectral_delta_time_weight,
                                            delta_freq_weight=cfg.multi_spectral_delta_freq_weight,
                                            cumsum_freq_weight=cfg.multi_spectral_cumsum_freq_weight,
+                                           cumsum_time_weight=cfg.multi_spectral_cumsum_time_weight,
                                            logmag_weight=cfg.multi_spectral_logmag_weight,
                                            normalize_by_size=cfg.normalize_loss_by_nfft,
                                            device=device)
@@ -351,4 +352,4 @@ def run(exp_name: str, dataset_name: str):
 
 
 if __name__ == "__main__":
-    run('fm_full_chain_loss_w_logmag', 'fm_dataset')
+    run('fm_full_w_cumsum_freq', 'fm_dataset')

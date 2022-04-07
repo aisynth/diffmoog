@@ -317,10 +317,10 @@ class SynthModular:
                     else:
                         input_signal = 0
                         AttributeError("Illegal cell input")
-                    cell.signal = synth_module.filter(input_signal,
-                                                      filter_freq=cell.parameters['filter_freq'],
-                                                      filter_type=cell.parameters['filter_type'],
-                                                      num_sounds=num_sounds)
+                    cell.signal = synth_module.batch_filter(input_signal,
+                                                            filter_freq=cell.parameters['filter_freq'],
+                                                            filter_type=cell.parameters['filter_type'],
+                                                            num_sounds=num_sounds)
 
                 elif operation == 'env_adsr':
                     if len(cell.input_list) == 1:
@@ -359,17 +359,9 @@ class SynthModular:
         return final_signal, output_signals
 
     def get_preset(self, preset: str):
-        if preset == 'BASIC_FLOW':
-            preset_list = synth_modular_presets.BASIC_FLOW
-        elif preset == 'OSC':
-            preset_list = synth_modular_presets.OSC
-        elif preset == 'LFO':
-            preset_list = synth_modular_presets.LFO
-        elif preset == 'FM':
-            preset_list = synth_modular_presets.FM
 
-        else:
-            preset_list = None
+        preset_list = synth_modular_presets.synth_presets_dict.get(preset, None)
+        if preset_list is None:
             ValueError("Unknown PRESET")
 
         preset_as_synth_input = [SynthModularCell(index=cell.get('index'),
@@ -396,6 +388,7 @@ class SynthModular:
         idx = np.searchsorted(synth_cfg.osc_freq_list, base_freqs, side="left")
         idx = idx - (np.abs(base_freqs - osc_freq_list[idx - 1]) < np.abs(base_freqs - osc_freq_list[idx]))
         return osc_freq_list[idx]
+
 
 if __name__ == "__main__":
     torch.autograd.set_detect_anomaly(True)

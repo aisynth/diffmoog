@@ -95,9 +95,11 @@ if __name__ == '__main__':
     parser.add_argument('-t', '--train', action='store_true', default=False)
     args = parser.parse_args()
 
-    cfg = Config('fm_test')
+    cfg = Config('basic_test')
     synth_cfg = SynthConfig()
-    dataset_cfg = DatasetConfig('fm_dataset')
+    dataset_cfg = DatasetConfig('basic_toy_dataset')
 
     device = helper.get_device(args.gpu_index)
     create_dataset(train=args.train, dataset_cfg=dataset_cfg, synth_cfg=synth_cfg, cfg=cfg, device=device)
+
+
