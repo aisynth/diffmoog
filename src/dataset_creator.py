@@ -44,21 +44,23 @@ def create_dataset(train: bool, dataset_cfg: DatasetConfig, synth_cfg: SynthConf
     parameters_pickle_path = os.path.join(dataset_dir_path, "params_dataset.pkl")
     parameters_csv_path = os.path.join(dataset_dir_path, "params_dataset.csv")
 
+    synth_obj = SynthModular(synth_cfg=synth_cfg,
+                             sample_rate=cfg.sample_rate,
+                             signal_duration_sec=cfg.signal_duration_sec,
+                             num_sounds=dataset_cfg.dataset_size,
+                             device=device,
+                             preset=synth_cfg.preset)
+
+    synth_obj.generate_random_params(synth_cfg=synth_cfg,
+                                     num_sounds=dataset_cfg.dataset_size)
+    synth_obj.generate_signal()
+
+    audio = synth_obj.signal
+
     for i in range(dataset_cfg.dataset_size):
         file_name = f"sound_{i}"
 
-        synth_obj = SynthModular(synth_cfg=synth_cfg,
-                                 sample_rate=cfg.sample_rate,
-                                 signal_duration_sec=cfg.signal_duration_sec,
-                                 num_sounds=1,
-                                 device=device,
-                                 preset=synth_cfg.preset)
-
-        synth_obj.generate_random_params(synth_cfg=synth_cfg,
-                                         num_sounds=1)
-        synth_obj.generate_signal()
-
-        audio = synth_obj.signal
+        c_audio = audio[i]
 
         params_dict = {}
         for layer in range(synth_cfg.num_layers):
@@ -77,10 +79,10 @@ def create_dataset(train: bool, dataset_cfg: DatasetConfig, synth_cfg: SynthConf
 
         audio_path = os.path.join(wav_files_dir, f"{file_name}.wav")
 
-        audio = torch.squeeze(audio)
-        audio = audio.detach().cpu().numpy()
+        c_audio = torch.squeeze(c_audio)
+        c_audio = c_audio.detach().cpu().numpy()
 
-        scipy.io.wavfile.write(audio_path, cfg.sample_rate, audio)
+        scipy.io.wavfile.write(audio_path, cfg.sample_rate, c_audio)
         print(f"Generated {file_name}")
 
     parameters_dataframe = pd.DataFrame(dataset_parameters)
@@ -91,7 +93,7 @@ def create_dataset(train: bool, dataset_cfg: DatasetConfig, synth_cfg: SynthConf
 if __name__ == '__main__':
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter, description='Train AI Synth')
     parser.add_argument('-g', '--gpu_index', help='index of gpu (if exist, torch indexing) -1 for cpu',
-                        type=int, default=0)
+                        type=int, default=-1)
     parser.add_argument('-t', '--train', action='store_true', default=False)
     args = parser.parse_args()
 

@@ -675,7 +675,7 @@ class SpectralLoss:
         loss = 0.0
 
         if self.loss_type == 'L1':
-            criterion = nn.L1Loss(reduction='sum')
+            criterion = nn.L1Loss()
         elif self.loss_type == 'L2':
             criterion = nn.MSELoss()
         else:
@@ -728,8 +728,8 @@ class SpectralLoss:
                 value = torch.cumsum(value_mag, dim=1)
                 emd_loss = criterion(target, value)
                 loss_dict[f"{loss_name}_emd_freq"] = emd_loss
-                weighted_loss_dict[f"{loss_name}_emd_freq"] = self.cumsum_freq_weight * emd_loss
-                c_loss += self.cumsum_freq_weight * emd_loss
+                weighted_loss_dict[f"{loss_name}_emd_freq"] = self.cumsum_freq_weight * emd_loss * (256 / n_fft)
+                c_loss += self.cumsum_freq_weight * emd_loss * (256 / n_fft)
 
             # Add logmagnitude loss, reusing spectrogram.
             if self.logmag_weight > 0:

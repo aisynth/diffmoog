@@ -5,6 +5,8 @@ Created on Mon May 31 15:41:38 2021
 
 @author: Moshe Laufer, Noy Uzrad
 """
+import numpy as np
+
 import torch
 import math
 
@@ -15,6 +17,15 @@ import helper
 import julius
 from synth.synth_config import *
 from config import SynthConfig
+
+try:
+    from functorch import vmap
+    has_vmap = True
+except ModuleNotFoundError:
+    print("Could not find an installation of functorch. Filter module will use list comprehension instead.\n\t This "
+          "may results in a drop in performance")
+    has_vmap = False
+
 
 PI = math.pi
 TWO_PI = 2 * PI
@@ -135,10 +146,8 @@ class SynthModules:
         self.signal_values_sanity_check(amp, freq, waveform)
         t = self.time_samples
 
-        if not isinstance(amp, float) and amp.ndim == 1:
-            amp = torch.unsqueeze(amp, 1).cuda(device=self.device)
-        if not isinstance(freq, float) and freq.ndim == 1:
-            freq = torch.unsqueeze(freq, 1).cuda(device=self.device)
+        amp = self._standardize_batch_input(amp, requested_dtype=torch.float32, requested_dims=2)
+        freq = self._standardize_batch_input(freq, requested_dtype=torch.float32, requested_dims=2)
 
         sine_wave = amp * torch.sin(TWO_PI * freq * t + phase)
         square_wave = amp * torch.sign(torch.sin(TWO_PI * freq * t + phase))
@@ -188,12 +197,9 @@ class SynthModules:
         self.signal_values_sanity_check(amp_c, freq_c, waveform)
         t = self.time_samples
 
-        if not isinstance(amp_c, float) and amp_c.ndim == 1:
-            amp_c = torch.unsqueeze(amp_c, 1).cuda(device=self.device)
-        if not isinstance(freq_c, float) and freq_c.ndim == 1:
-            freq_c = torch.unsqueeze(freq_c, 1).cuda(device=self.device)
-        if not isinstance(mod_index, float) and mod_index.ndim == 1:
-            mod_index = torch.unsqueeze(mod_index, 1).cuda(device=self.device)
+        amp_c = self._standardize_batch_input(amp_c, requested_dtype=torch.float32, requested_dims=2)
+        freq_c = self._standardize_batch_input(freq_c, requested_dtype=torch.float32, requested_dims=2)
+        mod_index = self._standardize_batch_input(mod_index, requested_dtype=torch.float32, requested_dims=2)
 
         fm_sine_wave = amp_c * torch.sin(TWO_PI * freq_c * t + mod_index * modulator)
         fm_square_wave = amp_c * torch.sign(
@@ -659,8 +665,21 @@ class SynthModules:
 
             """
 
-        high_pass_signal = highpass_biquad(input_signal.double(), cutoff_freq=filter_freq, sample_rate=self.sample_rate)
-        low_pass_signal = lowpass_biquad(input_signal.double(), cutoff_freq=filter_freq, sample_rate=self.sample_rate)
+        filter_freq = self._standardize_batch_input(filter_freq, requested_dtype=torch.float64, requested_dims=2)
+
+        assert torch.all(filter_freq <= (self.sample_rate / 2)), "Filter cutoff frequency higher then Nyquist." \
+                                                                 " Please check config"
+
+        if has_vmap:
+            high_pass_signal = vmap(highpass_biquad)(input_signal.double(), cutoff_freq=filter_freq,
+                                                     sample_rate=self.sample_rate)
+            low_pass_signal = vmap(lowpass_biquad)(input_signal.double(), cutoff_freq=filter_freq,
+                                                   sample_rate=self.sample_rate)
+        else:
+            high_pass_signal = torch.stack([highpass_biquad(x, self.sample_rate, ff) for x, ff in
+                                            zip(input_signal.double(), filter_freq)])
+            low_pass_signal = torch.stack([lowpass_biquad(x, self.sample_rate, ff) for x, ff in
+                                            zip(input_signal.double(), filter_freq)])
 
         if torch.any(torch.isnan(high_pass_signal)) or torch.any(torch.isnan(low_pass_signal)):
             print("Signal has NaN. Exiting...")
@@ -693,6 +712,30 @@ class SynthModules:
         else:
             filtered_waveform_new = julius.highpass_filter_new(input_signal, cutoff_freq / 44100)
             return filtered_waveform_new
+
+    def _standardize_batch_input(self, input_val, requested_dtype, requested_dims):
+
+        # Single scalar input value
+        if isinstance(input_val, (float, np.floating)):
+            return input_val
+
+        # List, ndarray or tensor input
+        if isinstance(input_val, (np.ndarray, list)):
+            output_tensor = torch.tensor(input_val, dtype=requested_dtype, device=self.device)
+        elif torch.is_tensor(input_val):
+            output_tensor = input_val.to(self.device)
+        else:
+            raise TypeError(f"Unsupported input of type {type(input_val)} to synth module")
+
+        # Add batch dim if doesn't exist
+        if output_tensor.ndim == 1:
+            output_tensor = torch.unsqueeze(output_tensor, dim=1)
+
+        assert output_tensor.ndim == requested_dims, f"Input has unexpected number of dimensions: {output_tensor.ndim}"
+
+        return output_tensor
+
+
 
     @staticmethod
     # todo: remove all except list instances

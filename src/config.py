@@ -77,11 +77,11 @@ class Config:
     # multi-spectral loss configs
     multi_spectral_loss_type: str = 'L1'
     multi_spectral_loss_spec_type: str = 'MEL_SPECTROGRAM'
-    multi_spectral_mag_weight: float = 0 # 1/10000
+    multi_spectral_mag_weight: float = 1/150
     multi_spectral_delta_time_weight: float = 0#1/10000000
     multi_spectral_delta_freq_weight: float = 0 #1/10000
-    multi_spectral_cumsum_freq_weight: float = 1/600000000
-    multi_spectral_cumsum_time_weight: float = 1/600000000
+    multi_spectral_cumsum_freq_weight: float = 1/10000
+    multi_spectral_cumsum_time_weight: float = 1/6000
     multi_spectral_logmag_weight: float = 0#1/1500000
     fft_sizes: tuple = (1024, 512, 256, 128, 64)
     normalize_loss_by_nfft: bool = False
