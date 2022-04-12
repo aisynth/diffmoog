@@ -25,7 +25,7 @@ def parse_synth_params(original_params: dict, predicted_params: dict, sample_idx
         for param, vals in d['params'].items():
             pred_res[op][param] = _np_to_str(vals[sample_idx].detach().cpu().numpy().squeeze(), precision=2)
 
-            if param == 'waveform':
+            if param in ['waveform', 'filter_type']:
                 orig_res[op][param] = original_params[k]['parameters'][param][sample_idx]
             else:
                 orig_res[op][param] = \
@@ -81,6 +81,10 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
             if param_name == 'waveform':
                 waveform_idx = [SynthConfig.wave_type_dict[wt] for wt in target_vals]
                 diff = [1 - v[idx].cpu().detach().numpy() for idx, v in zip(waveform_idx, pred_vals)]
+                diff = np.asarray(diff)
+            elif param_name == 'filter_type':
+                filter_type_idx = [SynthConfig.filter_type_dict[ft] for ft in target_vals]
+                diff = [1 - v[idx].cpu().detach().numpy() for idx, v in zip(filter_type_idx, pred_vals)]
                 diff = np.asarray(diff)
             else:
                 diff = torch.abs(target_vals.squeeze().cpu() - pred_vals.squeeze().cpu()).detach().numpy()

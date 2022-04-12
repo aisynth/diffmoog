@@ -287,7 +287,7 @@ class SimpleSynthNetwork(nn.Module):
                 self.heads_module_dict[self.get_key(index, operation, 'mod_index')] = modulation_index_head
 
             elif operation == 'filter':
-                filter_type_head = MLPBlock([HIDDEN_IN_CHANNELS, len(synth_cfg.wave_type_dict)])
+                filter_type_head = MLPBlock([HIDDEN_IN_CHANNELS, len(synth_cfg.filter_type_dict)])
                 filter_freq_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'filter_type')] = filter_type_head
                 self.heads_module_dict[self.get_key(index, operation, 'filter_freq')] = filter_freq_head

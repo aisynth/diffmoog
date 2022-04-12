@@ -47,6 +47,11 @@ class SynthModules:
         self.time_samples = helper.move_to(self.time_samples, self.device)
         self.modulation_time = helper.move_to(self.modulation_time, self.device)
         self.signal = helper.move_to(self.signal, self.device)
+
+        self.wave_type_indices = {k: torch.tensor(v, dtype=torch.long, device=self.device).squeeze()
+                                  for k, v in SynthConfig.wave_type_dict.items()}
+        self.filter_type_indices = {k: torch.tensor(v, dtype=torch.long, device=self.device).squeeze()
+                                    for k, v in SynthConfig.filter_type_dict.items()}
         # self.room_impulse_responses = torch.load('rir_for_reverb_no_amp')
 
     def oscillator(self, amp, freq, waveform, phase=0, num_sounds=1):
@@ -144,27 +149,32 @@ class SynthModules:
             """
 
         self.signal_values_sanity_check(amp, freq, waveform)
-        t = self.time_samples
 
         amp = self._standardize_batch_input(amp, requested_dtype=torch.float32, requested_dims=2)
         freq = self._standardize_batch_input(freq, requested_dtype=torch.float32, requested_dims=2)
 
-        sine_wave = amp * torch.sin(TWO_PI * freq * t + phase)
-        square_wave = amp * torch.sign(torch.sin(TWO_PI * freq * t + phase))
-        triangle_wave = (2 * amp / PI) * torch.arcsin(torch.sin((TWO_PI * freq * t + phase)))
-        # triangle_wave = amp * torch.sin(TWO_PI * freq_float * t + phase)
-        sawtooth_wave = 2 * (t * freq - torch.floor(0.5 + t * freq))  # Sawtooth closed form
-        # Phase shift (by normalization to range [0,1] and modulo operation)
-        sawtooth_wave = (((sawtooth_wave + 1) / 2) + phase / TWO_PI) % 1
-        sawtooth_wave = amp * (sawtooth_wave * 2 - 1)  # re-normalization to range [-amp, amp]
+        sine_wave, square_wave, sawtooth_wave = self._generate_wave_tensors(amp, freq, phase)
 
         waves_tensor = torch.stack([sine_wave, square_wave, sawtooth_wave])
-        wave_type_indices = {k: torch.tensor(v, dtype=torch.long, device=self.device).squeeze()
-                             for k, v in SynthConfig.wave_type_dict.items()}
-
-        oscillator_tensor = self._mix_waveforms(waves_tensor, waveform, wave_type_indices)
+        oscillator_tensor = self._mix_waveforms(waves_tensor, waveform, self.wave_type_indices)
 
         return oscillator_tensor
+
+    def _generate_wave_tensors(self, amp, freq, phase_mod):
+
+        t = self.time_samples
+
+        sine_wave = amp * torch.sin(TWO_PI * freq * t + phase_mod)
+
+        square_wave = amp * torch.sign(torch.sin(TWO_PI * freq * t + phase_mod))
+
+        sawtooth_wave = 2 * (t * freq - torch.floor(0.5 + t * freq))  # Sawtooth closed form
+
+        # Phase shift (by normalization to range [0,1] and modulo operation)
+        sawtooth_wave = (((sawtooth_wave + 1) / 2) + phase_mod / TWO_PI) % 1
+        sawtooth_wave = amp * (sawtooth_wave * 2 - 1)  # re-normalization to range [-amp, amp]
+
+        return sine_wave, square_wave, sawtooth_wave
 
     def mix_signal(self, new_signal, factor):
         """Signal superposition. factor balances the mix
@@ -195,39 +205,27 @@ class SynthModules:
             """
 
         self.signal_values_sanity_check(amp_c, freq_c, waveform)
-        t = self.time_samples
 
         amp_c = self._standardize_batch_input(amp_c, requested_dtype=torch.float32, requested_dims=2)
         freq_c = self._standardize_batch_input(freq_c, requested_dtype=torch.float32, requested_dims=2)
         mod_index = self._standardize_batch_input(mod_index, requested_dtype=torch.float32, requested_dims=2)
 
-        fm_sine_wave = amp_c * torch.sin(TWO_PI * freq_c * t + mod_index * modulator)
-        fm_square_wave = amp_c * torch.sign(
-            torch.sin(TWO_PI * freq_c * t + mod_index * modulator))
-        # fm_triangle_wave = (2 * amp_float / PI) * torch.arcsin(torch.sin((TWO_PI * freq_float * t + mod_index_float * input_signal_cur)))
-        fm_triangle_wave = amp_c * torch.sin(TWO_PI * freq_c * t + mod_index * modulator)
-
-        fm_sawtooth_wave = 2 * (t * freq_c - torch.floor(0.5 + t * freq_c))
-        fm_sawtooth_wave = (((fm_sawtooth_wave + 1) / 2) + mod_index * modulator / TWO_PI) % 1
-        fm_sawtooth_wave = amp_c * (fm_sawtooth_wave * 2 - 1)
+        fm_sine_wave, fm_square_wave, fm_sawtooth_wave = self._generate_wave_tensors(amp_c, freq_c, mod_index*modulator)
 
         waves_tensor = torch.stack([fm_sine_wave, fm_square_wave, fm_sawtooth_wave])
-
-        wave_type_indices = {k: torch.tensor(v, dtype=torch.long, device=self.device).squeeze()
-                             for k, v in SynthConfig.wave_type_dict.items()}
-        oscillator_tensor = self._mix_waveforms(waves_tensor, waveform, wave_type_indices)
+        oscillator_tensor = self._mix_waveforms(waves_tensor, waveform, self.wave_type_indices)
 
         return oscillator_tensor
 
     @staticmethod
-    def _mix_waveforms(waves_tensor, raw_waveform_selector, wave_type_indices):
+    def _mix_waveforms(waves_tensor, raw_waveform_selector, type_indices):
 
         if isinstance(raw_waveform_selector, str):
-            idx = wave_type_indices[raw_waveform_selector]
+            idx = type_indices[raw_waveform_selector]
             return waves_tensor[idx]
 
         if isinstance(raw_waveform_selector[0], str):
-            oscillator_tensor = torch.stack([waves_tensor[wave_type_indices[wt]][i] for i, wt in
+            oscillator_tensor = torch.stack([waves_tensor[type_indices[wt]][i] for i, wt in
                                              enumerate(raw_waveform_selector)])
             return oscillator_tensor
 
@@ -501,90 +499,54 @@ class SynthModules:
 
         return enveloped_signal_tensor
 
-    # def batch_adsr_envelope(self, input_signal, attack_t, decay_t, sustain_t, sustain_level, release_t):
-    #     """Apply an ADSR envelope to the signal
-    #
-    #         builds the ADSR shape and multiply by the signal
-    #
-    #         Args:
-    #             self: Self object
-    #             input_signal: target signal to apply adsr
-    #             attack_t: Length of attack in seconds. Time to go from 0 to 1 amplitude.
-    #             decay_t: Length of decay in seconds. Time to go from 1 amplitude to sustain level.
-    #             sustain_t: Length of sustain in seconds, with sustain level amplitude
-    #             sustain_level: Sustain volume level
-    #             release_t: Length of release in seconds. Time to go ftom sustain level to 0 amplitude
-    #             num_sounds: number of sounds to process
-    #
-    #         Raises:
-    #             ValueError: Provided ADSR timings are not the same as the signal length
-    #         """
-    #     if torch.any(attack_t + decay_t + sustain_t + release_t > self.sig_duration):
-    #         raise ValueError("Provided ADSR durations exceeds signal duration")
-    #
-    #     attack_num_samples = torch.floor(torch.tensor(self.sample_rate * attack_t))
-    #     decay_num_samples = torch.floor(torch.tensor(self.sample_rate * decay_t))
-    #     sustain_num_samples = torch.floor(torch.tensor(self.sample_rate * sustain_t))
-    #     release_num_samples = torch.floor(torch.tensor(self.sample_rate * release_t))
-    #
-    #     if num_sounds > 1:
-    #         # todo: change the check with sustain_level[0]
-    #         if torch.is_tensor(sustain_level[0]):
-    #             sustain_level = [sustain_level[i] for i in range(num_sounds)]
-    #             sustain_level = torch.stack(sustain_level)
-    #         else:
-    #             sustain_level = [sustain_level[i] for i in range(num_sounds)]
-    #
-    #
-    #     # sustain_level_value = sustain_level[i]
-    #     # if torch.is_tensor(sustain_level_value):
-    #     #     sustain_level_value = sustain_level_value.item()
-    #
-    #     attack = torch.tensor([torch.linspace(0, 1, int(attack_num_samples[i].item()), device=helper.get_device()) for i in range
-    #     decay = torch.linspace(1, sustain_level_value, int(decay_num_samples[i]), device=helper.get_device())
-    #     sustain = torch.full((int(sustain_num_samples[i].item()),), sustain_level_value,
-    #                          device=helper.get_device())
-    #     release = torch.linspace(sustain_level_value, 0, int(release_num_samples[i].item()),
-    #                              device=helper.get_device())
-    #
-    #         # todo: make sure ADSR behavior is differentiable. linspace has to know to get tensors
-    #         # attack_mod = helper.linspace(torch.tensor(0), torch.tensor(1), attack_num_samples[i])
-    #         # decay_mod = helper.linspace(torch.tensor(1), sustain_level[i], decay_num_samples[i])
-    #         # sustain_mod = torch.full((sustain_num_samples[i],), sustain_level[i])
-    #         # release_mod = helper.linspace(sustain_num_samples[i], torch.tensor(0), release_num_samples[i])
-    #
-    #         envelope = torch.cat((attack, decay, sustain, release))
-    #         envelope = helper.move_to(envelope, self.device)
-    #
-    #         # envelope = torch.cat((attack_mod, decay_mod, sustain_mod, release_mod))
-    #
-    #         envelope_len = envelope.shape[0]
-    #         signal_len = self.time_samples.shape[0]
-    #         if envelope_len <= signal_len:
-    #             padding = torch.zeros((signal_len - envelope_len), device=helper.get_device())
-    #             envelope = torch.cat((envelope, padding))
-    #         else:
-    #             raise ValueError("Envelope length exceeds signal duration")
-    #
-    #         if torch.is_tensor(input_signal) and num_sounds > 1:
-    #             signal_to_shape = input_signal[i]
-    #         else:
-    #             signal_to_shape = input_signal
-    #
-    #         enveloped_signal = signal_to_shape * envelope
-    #
-    #         if first_time:
-    #             if num_sounds == 1:
-    #                 enveloped_signal_tensor = enveloped_signal
-    #             else:
-    #                 enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped_signal), dim=0).unsqueeze(
-    #                     dim=0)
-    #                 first_time = False
-    #         else:
-    #             enveloped = enveloped_signal.unsqueeze(dim=0)
-    #             enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped), dim=0)
-    #
-    #     return enveloped_signal_tensor
+    def batch_adsr_envelope(self, input_signal, attack_t, decay_t, sustain_t, sustain_level, release_t):
+        """Apply an ADSR envelope to the signal
+
+            builds the ADSR shape and multiply by the signal
+
+            Args:
+                self: Self object
+                input_signal: target signal to apply adsr
+                attack_t: Length of attack in seconds. Time to go from 0 to 1 amplitude.
+                decay_t: Length of decay in seconds. Time to go from 1 amplitude to sustain level.
+                sustain_t: Length of sustain in seconds, with sustain level amplitude
+                sustain_level: Sustain volume level
+                release_t: Length of release in seconds. Time to go ftom sustain level to 0 amplitude
+                num_sounds: number of sounds to process
+
+            Raises:
+                ValueError: Provided ADSR timings are not the same as the signal length
+            """
+        if torch.any(attack_t + decay_t + sustain_t + release_t > self.sig_duration):
+            raise ValueError("Provided ADSR durations exceeds signal duration")
+
+        attack_num_samples = torch.floor(torch.tensor(self.sample_rate * attack_t))
+        decay_num_samples = torch.floor(torch.tensor(self.sample_rate * decay_t))
+        sustain_num_samples = torch.floor(torch.tensor(self.sample_rate * sustain_t))
+        release_num_samples = torch.floor(torch.tensor(self.sample_rate * release_t))
+
+        attack = torch.cat([torch.linspace(0, 1, int(attack_steps.item()), device=helper.get_device()) for attack_steps
+                            in attack_num_samples])
+        decay = torch.cat([torch.linspace(1, sustain_val, int(decay_steps), device=helper.get_device())
+                           for sustain_val, decay_steps in zip(sustain_level, decay_num_samples)])
+        sustain = torch.cat([torch.full(sustain_steps, sustain_val, device=helper.get_device())
+                             for sustain_steps, sustain_val in zip(sustain_num_samples, sustain_level)])
+        release = torch.cat([torch.linspace(sustain_val, 0, int(release_steps), device=helper.get_device())
+                             for sustain_val, release_steps in zip(sustain_level, release_num_samples)])
+
+        envelope = torch.cat((attack, decay, sustain, release))
+
+        envelope_len = envelope.shape[0]
+        signal_len = self.time_samples.shape[0]
+        if envelope_len <= signal_len:
+            padding = torch.zeros((signal_len - envelope_len), device=helper.get_device())
+            envelope = torch.cat((envelope, padding))
+        else:
+            raise ValueError("Envelope length exceeds signal duration")
+
+        enveloped_signal = input_signal * envelope
+
+        return enveloped_signal
 
     def filter(self, input_signal, filter_freq, filter_type, num_sounds=1):
         """Apply an ADSR envelope to the signal
@@ -648,7 +610,7 @@ class SynthModules:
 
         return filtered_signal_tensor
 
-    def batch_filter(self, input_signal, filter_freq, filter_type, num_sounds=1):
+    def batch_filter(self, input_signal, filter_freq, filter_type, num_sounds):
         """Apply an ADSR envelope to the signal
 
             builds the ADSR shape and multiply by the signal
@@ -676,22 +638,18 @@ class SynthModules:
             low_pass_signal = vmap(lowpass_biquad)(input_signal.double(), cutoff_freq=filter_freq,
                                                    sample_rate=self.sample_rate)
         else:
-            high_pass_signal = torch.stack([highpass_biquad(x, self.sample_rate, ff) for x, ff in
-                                            zip(input_signal.double(), filter_freq)])
-            low_pass_signal = torch.stack([lowpass_biquad(x, self.sample_rate, ff) for x, ff in
-                                            zip(input_signal.double(), filter_freq)])
+            low_pass_signal = [self.low_pass(input_signal[i], filter_freq[i].cpu()) for i in range(num_sounds)]
+            high_pass_signal = [self.low_pass(input_signal[i], filter_freq[i].cpu()) for i in range(num_sounds)]
+
+            low_pass_signal = torch.stack(low_pass_signal)
+            high_pass_signal = torch.stack(high_pass_signal)
 
         if torch.any(torch.isnan(high_pass_signal)) or torch.any(torch.isnan(low_pass_signal)):
-            print("Signal has NaN. Exiting...")
-            high_pass_signal = highpass_biquad(input_signal, cutoff_freq=filter_freq, sample_rate=self.sample_rate)
-            raise RuntimeError("Nan signal")
+            raise RuntimeError("Synth filter module: Signal has NaN. Exiting...")
 
         waves_tensor = torch.stack([low_pass_signal, high_pass_signal])
 
-        filter_type_indices = {k: torch.tensor(v, dtype=torch.long, device=self.device).squeeze()
-                               for k, v in SynthConfig.filter_type_dict.items()}
-
-        filtered_signal_tensor = self._mix_waveforms(waves_tensor, filter_type, filter_type_indices)
+        filtered_signal_tensor = self._mix_waveforms(waves_tensor, filter_type, self.filter_type_indices)
 
         return filtered_signal_tensor
 
@@ -701,7 +659,7 @@ class SynthModules:
         if cutoff_freq == 0:
             return input_signal
         else:
-            filtered_waveform_new = julius.lowpass_filter_new(input_signal, cutoff_freq / 44100)
+            filtered_waveform_new = julius.lowpass_filter_new(input_signal, cutoff_freq / self.sample_rate)
             return filtered_waveform_new
 
     def high_pass(self, input_signal, cutoff_freq, q=0.707, index=0):
@@ -710,7 +668,7 @@ class SynthModules:
         if cutoff_freq == 0:
             return input_signal
         else:
-            filtered_waveform_new = julius.highpass_filter_new(input_signal, cutoff_freq / 44100)
+            filtered_waveform_new = julius.highpass_filter_new(input_signal, cutoff_freq / self.sample_rate)
             return filtered_waveform_new
 
     def _standardize_batch_input(self, input_val, requested_dtype, requested_dims):

@@ -71,7 +71,7 @@ def create_dataset(train: bool, dataset_cfg: DatasetConfig, synth_cfg: SynthConf
                 else:
                     operation = 'None'
                 if cell.parameters is not None:
-                    parameters = cell.parameters
+                    parameters = {k: v[i] for k, v in cell.parameters.items()}
                 else:
                     parameters = 'None'
                 params_dict[cell.index] = {'operation': operation, 'parameters': parameters}
@@ -99,7 +99,7 @@ if __name__ == '__main__':
 
     cfg = Config('basic_test')
     synth_cfg = SynthConfig()
-    dataset_cfg = DatasetConfig('basic_toy_dataset')
+    dataset_cfg = DatasetConfig('basic_dataset')
 
     device = helper.get_device(args.gpu_index)
     create_dataset(train=args.train, dataset_cfg=dataset_cfg, synth_cfg=synth_cfg, cfg=cfg, device=device)

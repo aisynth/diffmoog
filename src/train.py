@@ -352,4 +352,4 @@ def run(exp_name: str, dataset_name: str):
 
 
 if __name__ == "__main__":
-    run('fm_full_w_cumsum_freq_w_mag', 'fm_dataset')
+    run('basic_no_adsr_no_filter_test', 'basic_no_filter_dataset')

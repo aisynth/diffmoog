@@ -99,6 +99,7 @@ class HighPassFilters(torch.nn.Module):
     def __repr__(self):
         return simple_repr(self)
 
+
 class HighPassFiltersNew(torch.nn.Module):
     """
     Bank of high pass filters. See `julius.lowpass.LowPassFilters` for more
@@ -361,11 +362,3 @@ def bandpass_filter(input: torch.Tensor,  cutoff_low: float, cutoff_high: float,
     """
     return BandPassFilter(cutoff_low, cutoff_high, stride, pad, zeros, fft).to(input)(input)
 
-def bandpass_filter(input: torch.Tensor,  cutoff_low: float, cutoff_high: float,
-                    stride: int = 1, pad: bool = True,
-                    zeros: float = 8, fft: Optional[bool] = None):
-    """
-    Functional version of `BandPassfilter`, refer to this class for more information.
-    Output will not have a dimension inserted in the front.
-    """
-    return BandPassFilter(cutoff_low, cutoff_high, stride, pad, zeros, fft).to(input)(input)

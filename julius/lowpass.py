@@ -5,7 +5,7 @@ FIR windowed sinc lowpass filters.
 """
 
 import math
-from typing import Sequence, Optional
+from typing import Sequence, Optional, Union
 
 import torch
 from torch.nn import functional as F
@@ -273,6 +273,7 @@ def lowpass_filters(input: torch.Tensor,  cutoffs: Sequence[float],
     Functional version of `LowPassFilters`, refer to this class for more information.
     """
     return LowPassFilters(cutoffs, stride, pad, zeros, fft).to(input)(input)
+
 
 def lowpass_filters_new(input: torch.Tensor,  cutoffs: torch.Tensor,
                     stride: int = 1, pad: bool = True,
