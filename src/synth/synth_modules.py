@@ -11,7 +11,6 @@ import torch
 import math
 
 from torchaudio.functional.filtering import lowpass_biquad, highpass_biquad
-
 import matplotlib.pyplot as plt
 import helper
 import julius
@@ -22,8 +21,6 @@ try:
     from functorch import vmap
     has_vmap = True
 except ModuleNotFoundError:
-    print("Could not find an installation of functorch. Filter module will use list comprehension instead.\n\t This "
-          "may results in a drop in performance")
     has_vmap = False
 
 
@@ -610,7 +607,7 @@ class SynthModules:
 
         return filtered_signal_tensor
 
-    def batch_filter(self, input_signal, filter_freq, filter_type, num_sounds):
+    def batch_filter(self, input_signal, filter_freq, filter_type):
         """Apply an ADSR envelope to the signal
 
             builds the ADSR shape and multiply by the signal
@@ -628,7 +625,7 @@ class SynthModules:
             """
 
         filter_freq = self._standardize_batch_input(filter_freq, requested_dtype=torch.float64, requested_dims=2)
-
+        num_sounds = len(filter_freq)
         assert torch.all(filter_freq <= (self.sample_rate / 2)), "Filter cutoff frequency higher then Nyquist." \
                                                                  " Please check config"
 

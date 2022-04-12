@@ -95,11 +95,12 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--gpu_index', help='index of gpu (if exist, torch indexing) -1 for cpu',
                         type=int, default=-1)
     parser.add_argument('-t', '--train', action='store_true', default=False)
+    parser.add_argument('-n', '--name', required=True, help='name of dataset')
     args = parser.parse_args()
 
-    cfg = Config('basic_test')
+    cfg = Config()
     synth_cfg = SynthConfig()
-    dataset_cfg = DatasetConfig('basic_dataset')
+    dataset_cfg = DatasetConfig(args.name)
 
     device = helper.get_device(args.gpu_index)
     create_dataset(train=args.train, dataset_cfg=dataset_cfg, synth_cfg=synth_cfg, cfg=cfg, device=device)

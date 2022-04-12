@@ -286,19 +286,13 @@ def train(model,
     print("Finished training")
 
 
-def run(exp_name: str, dataset_name: str):
-
+def run(args):
+    exp_name = args.experiment
+    dataset_name = args.dataset
     cfg, model_cfg, synth_cfg, dataset_cfg = configure_experiment(exp_name, dataset_name)
     summary_writer = SummaryWriter(cfg.tensorboard_logdir)
 
-    parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter,
-                            description='Train AI Synth')
-    parser.add_argument('-g', '--gpu_index', help='index of gpu (if exist, torch indexing) -1 for cpu',
-                        type=int, default=0)
-    parser.add_argument('-t', '--transform', choices=['mel', 'spec'],
-                        help='mel: Mel Spectrogram, spec: Spectrogram', default='mel')
 
-    args = parser.parse_args()
     device = helper.get_device(args.gpu_index)
 
     transforms = {'mel': helper.mel_spectrogram_transform(cfg.sample_rate).to(device),
@@ -352,4 +346,16 @@ def run(exp_name: str, dataset_name: str):
 
 
 if __name__ == "__main__":
-    run('basic_no_adsr_no_filter_test', 'basic_no_filter_dataset')
+    parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter,
+                            description='Train AI Synth')
+    parser.add_argument('-g', '--gpu_index', help='index of gpu (if exist, torch indexing) -1 for cpu',
+                        type=int, default=0)
+    parser.add_argument('-t', '--transform', choices=['mel', 'spec'],
+                        help='mel: Mel Spectrogram, spec: Spectrogram', default='mel')
+    parser.add_argument('-e', '--experiment', required=True,
+                        help='Experiment name', type=str)
+    parser.add_argument('-d', '--dataset', required=True, type=str,
+                        help='Dataset name')
+
+    args = parser.parse_args()
+    run(args)

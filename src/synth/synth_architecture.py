@@ -319,8 +319,7 @@ class SynthModular:
                         AttributeError("Illegal cell input")
                     cell.signal = synth_module.batch_filter(input_signal,
                                                             filter_freq=cell.parameters['filter_freq'],
-                                                            filter_type=cell.parameters['filter_type'],
-                                                            num_sounds=num_sounds)
+                                                            filter_type=cell.parameters['filter_type'])
 
                 elif operation == 'env_adsr':
                     if len(cell.input_list) == 1:

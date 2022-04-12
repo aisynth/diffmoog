@@ -89,15 +89,15 @@ class Config:
     # Debug
     debug_mode: bool = False
     plot_spec: bool = False
-    print_train_batch_stats: bool = True
-    print_timings: bool = True
+    print_train_batch_stats: bool = False
+    print_timings: bool = False
     print_synth_param_stats: bool = False
     print_accuracy_stats: bool = False
     print_per_accuracy_stats_multiple_epochs: bool = True
 
     log_spectrogram_mse_loss: bool = False
 
-    def __init__(self, project_root):
+    def __init__(self, project_root: str = ''):
         self.project_root = project_root
 
         self.tensorboard_logdir = os.path.join(project_root, 'tensorboard', '')
@@ -177,7 +177,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'BASIC_FLOW_NO_ADSR_NO_FILTER'
+    preset: str = 'FM_FILTER'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}
