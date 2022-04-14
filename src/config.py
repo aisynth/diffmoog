@@ -177,7 +177,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'FM_FILTER'
+    preset: str = 'BASIC_FLOW'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}

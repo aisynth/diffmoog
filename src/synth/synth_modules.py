@@ -406,7 +406,6 @@ class SynthModules:
         if num_sounds == 1:
             if attack_t + decay_t + sustain_t + release_t > self.sig_duration:
                 raise ValueError("Provided ADSR durations exceeds signal duration")
-
         else:
             for i in range(num_sounds):
                 if attack_t[i] + decay_t[i] + sustain_t[i] + release_t[i] > self.sig_duration:
@@ -514,13 +513,19 @@ class SynthModules:
             Raises:
                 ValueError: Provided ADSR timings are not the same as the signal length
             """
+        attack_t = self._standardize_batch_input(attack_t, requested_dtype=torch.float64, requested_dims=2)
+        decay_t = self._standardize_batch_input(decay_t, requested_dtype=torch.float64, requested_dims=2)
+        sustain_t = self._standardize_batch_input(sustain_t, requested_dtype=torch.float64, requested_dims=2)
+        release_t = self._standardize_batch_input(release_t, requested_dtype=torch.float64, requested_dims=2)
+        sustain_level = self._standardize_batch_input(sustain_level, requested_dtype=torch.float64, requested_dims=2)
+
         if torch.any(attack_t + decay_t + sustain_t + release_t > self.sig_duration):
             raise ValueError("Provided ADSR durations exceeds signal duration")
 
-        attack_num_samples = torch.floor(torch.tensor(self.sample_rate * attack_t))
-        decay_num_samples = torch.floor(torch.tensor(self.sample_rate * decay_t))
-        sustain_num_samples = torch.floor(torch.tensor(self.sample_rate * sustain_t))
-        release_num_samples = torch.floor(torch.tensor(self.sample_rate * release_t))
+        attack_num_samples = torch.floor(self.sample_rate * attack_t)
+        decay_num_samples = torch.floor(self.sample_rate * decay_t)
+        sustain_num_samples = torch.floor(self.sample_rate * sustain_t)
+        release_num_samples = torch.floor(self.sample_rate * release_t)
 
         attack = torch.cat([torch.linspace(0, 1, int(attack_steps.item()), device=helper.get_device()) for attack_steps
                             in attack_num_samples])

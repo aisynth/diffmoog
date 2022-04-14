@@ -51,39 +51,45 @@ def create_dataset(train: bool, dataset_cfg: DatasetConfig, synth_cfg: SynthConf
                              device=device,
                              preset=synth_cfg.preset)
 
-    synth_obj.generate_random_params(synth_cfg=synth_cfg,
-                                     num_sounds=dataset_cfg.dataset_size)
-    synth_obj.generate_signal()
+    num_batches = dataset_cfg.dataset_size // dataset_cfg.batch_size
+    for batch_idx in range(num_batches):
 
-    audio = synth_obj.signal
+        synth_obj.generate_random_params(synth_cfg=synth_cfg,
+                                         num_sounds=dataset_cfg.batch_size)
+        synth_obj.generate_signal()
 
-    for i in range(dataset_cfg.dataset_size):
-        file_name = f"sound_{i}"
+        audio = synth_obj.signal
 
-        c_audio = audio[i]
+        for j in range(dataset_cfg.batch_size):
 
-        params_dict = {}
-        for layer in range(synth_cfg.num_layers):
-            for channel in range(synth_cfg.num_channels):
-                cell = synth_obj.architecture[channel][layer]
-                if cell.operation is not None:
-                    operation = cell.operation
-                else:
-                    operation = 'None'
-                if cell.parameters is not None:
-                    parameters = {k: v[i] for k, v in cell.parameters.items()}
-                else:
-                    parameters = 'None'
-                params_dict[cell.index] = {'operation': operation, 'parameters': parameters}
-        dataset_parameters.append(params_dict)
+            sample_idx = (dataset_cfg.batch_size * batch_idx) + j
 
-        audio_path = os.path.join(wav_files_dir, f"{file_name}.wav")
+            file_name = f"sound_{sample_idx}"
 
-        c_audio = torch.squeeze(c_audio)
-        c_audio = c_audio.detach().cpu().numpy()
+            c_audio = audio[j]
 
-        scipy.io.wavfile.write(audio_path, cfg.sample_rate, c_audio)
-        print(f"Generated {file_name}")
+            params_dict = {}
+            for layer in range(synth_cfg.num_layers):
+                for channel in range(synth_cfg.num_channels):
+                    cell = synth_obj.architecture[channel][layer]
+                    if cell.operation is not None:
+                        operation = cell.operation
+                    else:
+                        operation = 'None'
+                    if cell.parameters is not None:
+                        parameters = {k: v[j] for k, v in cell.parameters.items()}
+                    else:
+                        parameters = 'None'
+                    params_dict[cell.index] = {'operation': operation, 'parameters': parameters}
+            dataset_parameters.append(params_dict)
+
+            audio_path = os.path.join(wav_files_dir, f"{file_name}.wav")
+
+            c_audio = torch.squeeze(c_audio)
+            c_audio = c_audio.detach().cpu().numpy()
+
+            scipy.io.wavfile.write(audio_path, cfg.sample_rate, c_audio)
+            print(f"Generated {file_name}")
 
     parameters_dataframe = pd.DataFrame(dataset_parameters)
     parameters_dataframe.to_pickle(str(parameters_pickle_path))
