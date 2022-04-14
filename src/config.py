@@ -136,7 +136,8 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 1000
+    dataset_size: int = 100
+    batch_size: int = 100
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
     train_audio_dir: str = None
@@ -177,7 +178,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'BASIC_FLOW'
+    preset: str = 'FM_FILTER_ADSR'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}

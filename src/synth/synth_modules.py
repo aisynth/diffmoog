@@ -529,7 +529,7 @@ class SynthModules:
 
         attack = torch.cat([torch.linspace(0, 1, int(attack_steps.item()), device=helper.get_device()) for attack_steps
                             in attack_num_samples])
-        decay = torch.cat([torch.linspace(1, sustain_val, int(decay_steps), device=helper.get_device())
+        decay = torch.cat([torch.linspace(1, sustain_val.int(), int(decay_steps), device=helper.get_device())
                            for sustain_val, decay_steps in zip(sustain_level, decay_num_samples)])
         sustain = torch.cat([torch.full(sustain_steps, sustain_val, device=helper.get_device())
                              for sustain_steps, sustain_val in zip(sustain_num_samples, sustain_level)])

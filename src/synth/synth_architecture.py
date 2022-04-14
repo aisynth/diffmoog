@@ -331,11 +331,11 @@ class SynthModular:
                         AttributeError("Illegal cell input")
 
                     cell.signal = synth_module.batch_adsr_envelope(input_signal,
-                                                             attack_t=cell.parameters['attack_t'],
-                                                             decay_t=cell.parameters['decay_t'],
-                                                             sustain_t=cell.parameters['sustain_t'],
-                                                             sustain_level=cell.parameters['sustain_level'],
-                                                             release_t=cell.parameters['release_t'])
+                                                                   attack_t=cell.parameters['attack_t'],
+                                                                   decay_t=cell.parameters['decay_t'],
+                                                                   sustain_t=cell.parameters['sustain_t'],
+                                                                   sustain_level=cell.parameters['sustain_level'],
+                                                                   release_t=cell.parameters['release_t'])
                 output_signals[f"({channel}, {layer})"] = cell.signal
 
         # Final signal summing from all channels in the last layer

@@ -52,7 +52,15 @@ FM_FILTER = [
     {'index': (0, 2), 'operation': 'filter', 'default_connection': True, 'synth_config': synth_cfg}
 ]
 
+FM_FILTER_ADSR = [
+    {'index': (0, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (0, 1), 'operation': 'fm', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (0, 2), 'operation': 'filter', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (0, 3), 'operation': 'env_adsr', 'default_connection': True, 'synth_config': synth_cfg}
+]
+
 synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW, 'LFO': LFO, 'OSC': OSC, 'FM': FM,
                       'BASIC_FLOW_NO_ADSR': BASIC_FLOW_NO_ADSR,
                       'BASIC_FLOW_NO_ADSR_NO_FILTER': BASIC_FLOW_NO_ADSR_NO_FILTER,
+                      'FM_FILTER_ADSR': FM_FILTER_ADSR,
                       'FM_FILTER': FM_FILTER}
