@@ -151,7 +151,7 @@ def clamp_regression_params(parameters_dict: dict, synth_cfg: SynthConfig, cfg: 
             release_t = torch.clamp(operation_params['release_t'], min=0, max=cfg.signal_duration_sec)
 
             clamped_attack, clamped_decay, clamped_sustain, clamped_release = \
-                clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t)
+                clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t, cfg)
 
             clamped_params_dict[key] = \
                 {'operation': operation,
@@ -160,12 +160,43 @@ def clamp_regression_params(parameters_dict: dict, synth_cfg: SynthConfig, cfg: 
                       'decay_t': clamped_decay,
                       'sustain_t': clamped_sustain,
                       'sustain_level': torch.clamp(operation_params['sustain_level'], min=0,
-                                                   max=synth_config.MAX_AMP),
+                                                   max=synth_cfg.max_amp),
                       'release_t': clamped_release
                       }
                  }
 
     return clamped_params_dict
+
+
+def clamp_adsr_params(parameters_dict: dict, synth_cfg: SynthConfig, cfg: Config):
+    """look for adsr operations to send to clamping function"""
+
+    for key, val in parameters_dict.items():
+        operation = val['operation']
+        operation_params = val['params']
+
+        if operation == 'env_adsr':
+            attack_t = operation_params['attack_t']
+            decay_t = operation_params['decay_t']
+            sustain_t = operation_params['release_t']
+            release_t = operation_params['release_t']
+
+            clamped_attack, clamped_decay, clamped_sustain, clamped_release = \
+                clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t, cfg)
+
+            parameters_dict[key] = \
+                {'operation': operation,
+                 'params':
+                     {'attack_t': clamped_attack,
+                      'decay_t': clamped_decay,
+                      'sustain_t': clamped_sustain,
+                      'sustain_level': torch.clamp(operation_params['sustain_level'], min=0,
+                                                   max=synth_cfg.max_amp),
+                      'release_t': clamped_release
+                      }
+                 }
+
+    return parameters_dict
 
 
 def clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t, cfg: Config):

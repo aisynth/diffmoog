@@ -74,7 +74,9 @@ def train_single_epoch(model,
                 for param_name, param_vals in op_dict['params'].items():
                     epoch_param_vals_raw[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
 
-            predicted_param_dict = normalizer.denormalize(output_dic)
+            denormalized_output_dict = normalizer.denormalize(output_dic)
+            predicted_param_dict = helper.clamp_adsr_params(denormalized_output_dict, synth_cfg, cfg)
+
             for op_idx, op_dict in predicted_param_dict.items():
                 for param_name, param_vals in op_dict['params'].items():
                     epoch_param_vals[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
@@ -291,7 +293,6 @@ def run(args):
     dataset_name = args.dataset
     cfg, model_cfg, synth_cfg, dataset_cfg = configure_experiment(exp_name, dataset_name)
     summary_writer = SummaryWriter(cfg.tensorboard_logdir)
-
 
     device = helper.get_device(args.gpu_index)
 

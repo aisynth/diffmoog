@@ -417,12 +417,10 @@ class SynthModules:
             sustain_num_samples = int(self.sample_rate * sustain_t)
             release_num_samples = int(self.sample_rate * release_t)
         else:
-            attack_num_samples = [torch.floor(torch.tensor(self.sample_rate * attack_t[k])) for k in range(num_sounds)]
-            decay_num_samples = [torch.floor(torch.tensor(self.sample_rate * decay_t[k])) for k in range(num_sounds)]
-            sustain_num_samples = [torch.floor(torch.tensor(self.sample_rate * sustain_t[k])) for k in
-                                   range(num_sounds)]
-            release_num_samples = [torch.floor(torch.tensor(self.sample_rate * release_t[k])) for k in
-                                   range(num_sounds)]
+            attack_num_samples = [torch.floor(self.sample_rate * attack_t[k]) for k in range(num_sounds)]
+            decay_num_samples = [torch.floor(self.sample_rate * decay_t[k]) for k in range(num_sounds)]
+            sustain_num_samples = [torch.floor(self.sample_rate * sustain_t[k]) for k in range(num_sounds)]
+            release_num_samples = [torch.floor(self.sample_rate * release_t[k]) for k in range(num_sounds)]
             attack_num_samples = torch.stack(attack_num_samples)
             decay_num_samples = torch.stack(decay_num_samples)
             sustain_num_samples = torch.stack(sustain_num_samples)
@@ -446,15 +444,18 @@ class SynthModules:
                 sustain = torch.full((sustain_num_samples,), sustain_level)
                 release = torch.linspace(sustain_level, 0, release_num_samples)
             else:
-                sustain_level_value = sustain_level[i]
-                if torch.is_tensor(sustain_level_value):
-                    sustain_level_value = sustain_level_value.item()
-                attack = torch.linspace(0, 1, int(attack_num_samples[i].item()), device=helper.get_device())
-                decay = torch.linspace(1, sustain_level_value, int(decay_num_samples[i]), device=helper.get_device())
-                sustain = torch.full((int(sustain_num_samples[i].item()),), sustain_level_value,
-                                     device=helper.get_device())
-                release = torch.linspace(sustain_level_value, 0, int(release_num_samples[i].item()),
-                                         device=helper.get_device())
+                # convert 1d vector to scalar tensor to be used in linspace
+                # todo: lost gradients here! Using int() loses gradients since only float tensors can hold gradients
+                attack_num_samples_sc = attack_num_samples[i].int().squeeze()
+                decay_num_samples_sc = decay_num_samples[i].int().squeeze()
+                sustain_num_samples_sc = sustain_num_samples[i].int().squeeze()
+                sustain_level_sc = sustain_level[i].int().squeeze()
+                release_num_samples_sc = release_num_samples[i].int().squeeze()
+
+                attack = torch.linspace(0, 1, attack_num_samples_sc)
+                decay = torch.linspace(1, sustain_level_sc, decay_num_samples_sc)
+                sustain = torch.full((sustain_num_samples_sc,), sustain_level_sc)
+                release = torch.linspace(sustain_level_sc, 0, release_num_samples_sc)
 
                 # todo: make sure ADSR behavior is differentiable. linspace has to know to get tensors
                 # attack_mod = helper.linspace(torch.tensor(0), torch.tensor(1), attack_num_samples[i])
