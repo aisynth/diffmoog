@@ -98,6 +98,10 @@ class Config:
     log_spectrogram_mse_loss: bool = False
 
     def __init__(self, project_root: str = ''):
+
+        if project_root == '':
+            return
+
         self.project_root = project_root
 
         self.tensorboard_logdir = os.path.join(project_root, 'tensorboard', '')
@@ -136,8 +140,8 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 100
-    batch_size: int = 100
+    dataset_size: int = 50000
+    batch_size: int = 1000
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
     train_audio_dir: str = None
@@ -166,8 +170,8 @@ class DatasetConfig:
 class ModelConfig:
     model_type: str = 'simple'
     backbone: str = 'resnet'
-    batch_size: int = 50
-    num_epochs: int = 50
+    batch_size: int = 256
+    num_epochs: int = 21
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
@@ -178,7 +182,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'FM_FILTER_ADSR'
+    preset: str = 'FM_FILTER'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}

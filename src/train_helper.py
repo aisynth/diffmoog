@@ -20,6 +20,8 @@ def parse_synth_params(original_params: dict, predicted_params: dict, sample_idx
 
     for k, d in predicted_params.items():
         op = d['operation']
+        if op in pred_res:
+            op = op + '_|'
         pred_res[op] = {}
         orig_res[op] = {}
         for param, vals in d['params'].items():

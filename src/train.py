@@ -147,19 +147,12 @@ def train_single_epoch(model,
                                              sample_rate=16000)
                     summary_writer.add_audio(f'input_{i}_pred', pred_final_signal[i], global_step=epoch,
                                              sample_rate=16000)
-                    for k, specs in ret_spectrograms.items():
 
-                        if '256' not in k:
-                            ret_spectrograms[k] = None
-                            continue
+                    signal_vis = visualize_signal_prediction(target_final_signal[i], pred_final_signal[i],
+                                                             sample_params_orig, sample_params_pred)
+                    signal_vis_t = torch.tensor(signal_vis, dtype=torch.uint8, requires_grad=False)
 
-                        signal_vis = visualize_signal_prediction(target_signal[i], pred_final_signal[i],
-                                                                 [specs['target'][i]],
-                                                                 [specs['pred'][i]], sample_params_orig,
-                                                                 sample_params_pred)
-                        signal_vis_t = torch.tensor(signal_vis, dtype=torch.uint8, requires_grad=False)
-
-                        summary_writer.add_image(f'{k}/input_{i}', signal_vis_t, global_step=epoch, dataformats='HWC')
+                    summary_writer.add_image(f'{256}_spec/input_{i}', signal_vis_t, global_step=epoch, dataformats='HWC')
 
             backward_start_time = time.time()
 

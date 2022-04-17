@@ -1,4 +1,6 @@
 import matplotlib
+from torchaudio.transforms import Spectrogram
+
 matplotlib.use('Agg')
 
 import matplotlib.pyplot as plt
@@ -21,6 +23,7 @@ import numpy as np
 from tqdm import tqdm
 
 summary_writer = SummaryWriter()
+spectrogram = Spectrogram(n_fft=256)
 
 
 def predict(model,
@@ -167,11 +170,14 @@ def predict(model,
         predicted_params_dataframe.to_csv(parameters_csv_path)
 
 
-def visualize_signal_prediction(orig_audio, pred_audio, orig_spectograms, pred_spectograms, orig_params, pred_params,
+def visualize_signal_prediction(orig_audio, pred_audio, orig_params, pred_params,
                                 db=False):
 
     orig_audio_np = orig_audio.detach().cpu().numpy()
     pred_audio_np = pred_audio.detach().cpu().numpy()
+
+    orig_spectograms = [spectrogram(orig_audio.cpu())]
+    pred_spectograms = [spectrogram(pred_audio.cpu())]
 
     orig_spectograms_np = [orig_spectogram.detach().cpu().numpy() for orig_spectogram in orig_spectograms]
     pred_spectograms_np = [pred_spectogram.detach().cpu().numpy() for pred_spectogram in pred_spectograms]
