@@ -61,9 +61,9 @@ FM_FILTER_ADSR = [
 
 DOUBLE_LFO = [
     {'index': (0, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
-    {'index': (1, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
-    {'index': (1, 1), 'operation': None, 'input_list': None, 'synth_config': synth_cfg},
-    {'index': (0, 1), 'operation': 'mix', 'input_list': [[0, 0], [1, 0]], 'synth_config': synth_cfg},
+    {'index': (1, 0), 'operation': 'lfo', 'output': [0, 1], 'synth_config': synth_cfg},
+    {'index': (0, 1), 'operation': 'mix', 'input_list': [[0, 0], [1, 0]], 'output': [0, 2], 'synth_config': synth_cfg},
+    {'index': (1, 1), 'operation': None, 'input_list': None, 'synth_config': synth_cfg}
 ]
 
 synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW, 'LFO': LFO, 'OSC': OSC, 'FM': FM,

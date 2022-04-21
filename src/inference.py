@@ -1,8 +1,5 @@
 import matplotlib
 from torchaudio.transforms import Spectrogram
-
-matplotlib.use('Agg')
-
 import matplotlib.pyplot as plt
 import torch
 from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -21,6 +18,8 @@ import librosa
 import librosa.display
 import numpy as np
 from tqdm import tqdm
+
+matplotlib.use('Agg')
 
 summary_writer = SummaryWriter()
 spectrogram = Spectrogram(n_fft=256)
@@ -172,22 +171,23 @@ def predict(model,
 
 def visualize_signal_prediction(orig_audio, pred_audio, orig_params, pred_params,
                                 db=False):
-
     orig_audio_np = orig_audio.detach().cpu().numpy()
     pred_audio_np = pred_audio.detach().cpu().numpy()
 
-    orig_spectograms = [spectrogram(orig_audio.cpu())]
-    pred_spectograms = [spectrogram(pred_audio.cpu())]
+    orig_spectrograms = [spectrogram(orig_audio.cpu())]
+    pred_spectrograms = [spectrogram(pred_audio.cpu())]
 
-    orig_spectograms_np = [orig_spectogram.detach().cpu().numpy() for orig_spectogram in orig_spectograms]
-    pred_spectograms_np = [pred_spectogram.detach().cpu().numpy() for pred_spectogram in pred_spectograms]
+    orig_spectrograms_np = [orig_spectrogram.detach().cpu().numpy() for orig_spectrogram in orig_spectrograms]
+    pred_spectrograms_np = [pred_spectrogram.detach().cpu().numpy() for pred_spectrogram in pred_spectrograms]
 
     if db:
-        orig_spectograms_np = [librosa.power_to_db(orig_spectogram_np) for orig_spectogram_np in orig_spectograms_np]
-        pred_spectograms_np = [librosa.power_to_db(pred_spectogram_np) for pred_spectogram_np in pred_spectograms_np]
+        orig_spectrograms_np = [librosa.power_to_db(orig_spectrogram_np) for orig_spectrogram_np in
+                                orig_spectrograms_np]
+        pred_spectrograms_np = [librosa.power_to_db(pred_spectrogram_np) for pred_spectrogram_np in
+                                pred_spectrograms_np]
 
     # plot original vs predicted signal
-    n_rows = len(orig_spectograms_np) + 1
+    n_rows = len(orig_spectrograms_np) + 1
     fig, ax = plt.subplots(n_rows, 2, figsize=(15, 10))
 
     canvas = FigureCanvasAgg(fig)
@@ -203,8 +203,8 @@ def visualize_signal_prediction(orig_audio, pred_audio, orig_params, pred_params
     ax[0][1].plot(pred_audio_np)
 
     for i in range(1, n_rows):
-        ax[i][0].imshow(orig_spectograms_np[i-1], origin='lower', aspect='auto')
-        ax[i][1].imshow(pred_spectograms_np[i-1], origin='lower', aspect='auto')
+        ax[i][0].imshow(orig_spectrograms_np[i - 1], origin='lower', aspect='auto')
+        ax[i][1].imshow(pred_spectrograms_np[i - 1], origin='lower', aspect='auto')
 
     canvas.draw()
     s, (width, height) = canvas.print_to_buffer()
@@ -254,7 +254,7 @@ def run():
             device_arg=device,
             cfg=cfg,
             synth_cfg=synth_cfg,
-            dataset_cfg=dataset_cfg,)
+            dataset_cfg=dataset_cfg, )
 
 
 if __name__ == "__main__":

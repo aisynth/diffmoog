@@ -19,7 +19,7 @@ BIG_LINEAR_IN_CHANNELS = 23040
 # BIG_LINEAR_IN_CHANNELS = 55296
 # BIG_LINEAR_IN_CHANNELS = 60928
 # LINEAR_IN_CHANNELS = 8064
-HIDDEN_IN_CHANNELS = 128
+LATENT_SPACE_SIZE = 128
 
 
 class BigSynthNetwork(nn.Module):
@@ -66,42 +66,42 @@ class BigSynthNetwork(nn.Module):
             index = cell.get('index')
             operation = cell.get('operation')
             if operation == 'osc':
-                amplitude_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
-                frequency_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
-                waveform_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, len(synth_cfg.wave_type_dict)])
+                amplitude_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, 1])
+                frequency_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, 1])
+                waveform_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, len(synth_cfg.wave_type_dict)])
                 self.heads_module_dict[self.get_key(index, operation, 'amp')] = amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = waveform_head
 
             if operation == 'lfo':
-                amplitude_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
-                frequency_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
+                amplitude_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, 1])
+                frequency_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'amp')] = amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
 
             elif operation == 'fm':
-                carrier_amplitude_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
-                carrier_frequency_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
-                carrier_waveform_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS,
+                carrier_amplitude_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, 1])
+                carrier_frequency_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, 1])
+                carrier_waveform_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE,
                                                   len(synth_cfg.wave_type_dict)])
-                modulation_index_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
+                modulation_index_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'amp_c')] = carrier_amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq_c')] = carrier_frequency_head
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = carrier_waveform_head
                 self.heads_module_dict[self.get_key(index, operation, 'mod_index')] = modulation_index_head
 
             elif operation == 'filter':
-                filter_type_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, len(synth_cfg.wave_type_dict)])
-                filter_freq_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
+                filter_type_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, len(synth_cfg.wave_type_dict)])
+                filter_freq_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'filter_type')] = filter_type_head
                 self.heads_module_dict[self.get_key(index, operation, 'filter_freq')] = filter_freq_head
 
             elif operation == 'env_adsr':
-                attack_t_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
-                decay_t_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
-                sustain_t_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
-                sustain_level_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
-                release_t_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, HIDDEN_IN_CHANNELS, 1])
+                attack_t_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, 1])
+                decay_t_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, 1])
+                sustain_t_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, 1])
+                sustain_level_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, 1])
+                release_t_head = MLPBlock([BIG_LINEAR_IN_CHANNELS, LATENT_SPACE_SIZE, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'attack_t')] = attack_t_head
                 self.heads_module_dict[self.get_key(index, operation, 'decay_t')] = decay_t_head
                 self.heads_module_dict[self.get_key(index, operation, 'sustain_t')] = sustain_t_head
@@ -256,48 +256,48 @@ class SimpleSynthNetwork(nn.Module):
             self.backbone = resnet18(pretrained=False)
             self.backbone.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
             num_ftrs = self.backbone.fc.in_features
-            self.backbone.fc = nn.Linear(num_ftrs, HIDDEN_IN_CHANNELS)
+            self.backbone.fc = nn.Linear(num_ftrs, LATENT_SPACE_SIZE)
 
         self.heads_module_dict = nn.ModuleDict({})
         for cell in self.preset:
             index = cell.get('index')
             operation = cell.get('operation')
             if operation == 'osc':
-                amplitude_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
-                frequency_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
-                waveform_head = MLPBlock([HIDDEN_IN_CHANNELS, len(synth_cfg.wave_type_dict)])
+                amplitude_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                frequency_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                waveform_head = MLPBlock([LATENT_SPACE_SIZE, len(synth_cfg.wave_type_dict)])
                 self.heads_module_dict[self.get_key(index, operation, 'amp')] = amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = waveform_head
 
             if operation == 'lfo':
-                amplitude_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
-                frequency_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                amplitude_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                frequency_head = MLPBlock([LATENT_SPACE_SIZE, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'amp')] = amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
 
             elif operation == 'fm':
-                carrier_amplitude_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
-                carrier_frequency_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
-                carrier_waveform_head = MLPBlock([HIDDEN_IN_CHANNELS, len(synth_cfg.wave_type_dict)])
-                modulation_index_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                carrier_amplitude_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                carrier_frequency_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                carrier_waveform_head = MLPBlock([LATENT_SPACE_SIZE, len(synth_cfg.wave_type_dict)])
+                modulation_index_head = MLPBlock([LATENT_SPACE_SIZE, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'amp_c')] = carrier_amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq_c')] = carrier_frequency_head
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = carrier_waveform_head
                 self.heads_module_dict[self.get_key(index, operation, 'mod_index')] = modulation_index_head
 
             elif operation == 'filter':
-                filter_type_head = MLPBlock([HIDDEN_IN_CHANNELS, len(synth_cfg.filter_type_dict)])
-                filter_freq_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                filter_type_head = MLPBlock([LATENT_SPACE_SIZE, len(synth_cfg.filter_type_dict)])
+                filter_freq_head = MLPBlock([LATENT_SPACE_SIZE, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'filter_type')] = filter_type_head
                 self.heads_module_dict[self.get_key(index, operation, 'filter_freq')] = filter_freq_head
 
             elif operation == 'env_adsr':
-                attack_t_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
-                decay_t_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
-                sustain_t_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
-                sustain_level_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
-                release_t_head = MLPBlock([HIDDEN_IN_CHANNELS, 1])
+                attack_t_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                decay_t_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                sustain_t_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                sustain_level_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                release_t_head = MLPBlock([LATENT_SPACE_SIZE, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'attack_t')] = attack_t_head
                 self.heads_module_dict[self.get_key(index, operation, 'decay_t')] = decay_t_head
                 self.heads_module_dict[self.get_key(index, operation, 'sustain_t')] = sustain_t_head
