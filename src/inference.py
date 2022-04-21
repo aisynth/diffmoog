@@ -1,5 +1,5 @@
 import matplotlib
-from torchaudio.transforms import Spectrogram
+from torchaudio.transforms import Spectrogram, MelSpectrogram
 import matplotlib.pyplot as plt
 import torch
 from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -22,7 +22,37 @@ from tqdm import tqdm
 matplotlib.use('Agg')
 
 summary_writer = SummaryWriter()
-spectrogram = Spectrogram(n_fft=256)
+
+spectrogram = Spectrogram(n_fft=1024)
+mel_spectrogram = MelSpectrogram(
+    sample_rate=16000,
+    n_fft=1024,
+    win_length=None,
+    hop_length=512,
+    center=True,
+    pad_mode="reflect",
+    power=2.0,
+    norm="slaney",
+    onesided=True,
+    n_mels=128,
+    mel_scale="htk",
+)
+
+mel_spectrogram_low_frequencies = MelSpectrogram(
+    sample_rate=16000,
+    n_fft=1024,
+    win_length=None,
+    hop_length=512,
+    center=True,
+    pad_mode="reflect",
+    power=2.0,
+    norm="slaney",
+    onesided=True,
+    n_mels=128,
+    mel_scale="htk",
+    f_min=0,
+    f_max=30,
+)
 
 
 def predict(model,
@@ -177,18 +207,46 @@ def visualize_signal_prediction(orig_audio, pred_audio, orig_params, pred_params
     orig_spectrograms = [spectrogram(orig_audio.cpu())]
     pred_spectrograms = [spectrogram(pred_audio.cpu())]
 
+    orig_mel_spectrograms = [mel_spectrogram(orig_audio.cpu())]
+    pred_mel_spectrograms = [mel_spectrogram(pred_audio.cpu())]
+
+    orig_mel_spectrograms_low_frequencies = [mel_spectrogram_low_frequencies(orig_audio.cpu())]
+    pred_mel_spectrograms_low_frequencies = [mel_spectrogram_low_frequencies(pred_audio.cpu())]
+
     orig_spectrograms_np = [orig_spectrogram.detach().cpu().numpy() for orig_spectrogram in orig_spectrograms]
     pred_spectrograms_np = [pred_spectrogram.detach().cpu().numpy() for pred_spectrogram in pred_spectrograms]
+
+    orig_mel_spectrograms_np = \
+        [orig_mel_spectrogram.detach().cpu().numpy() for orig_mel_spectrogram in orig_mel_spectrograms]
+    pred_mel_spectrograms_np = \
+        [pred_mel_spectrogram.detach().cpu().numpy() for pred_mel_spectrogram in pred_mel_spectrograms]
+
+    orig_mel_spectrograms_low_frequencies_np = \
+        [orig_mel_spectrogram_low_frequencies.detach().cpu().numpy()
+         for orig_mel_spectrogram_low_frequencies in orig_mel_spectrograms_low_frequencies]
+    pred_mel_spectrograms_low_frequencies_np = \
+        [pred_mel_spectrogram_low_frequencies.detach().cpu().numpy()
+         for pred_mel_spectrogram_low_frequencies in pred_mel_spectrograms_low_frequencies]
 
     if db:
         orig_spectrograms_np = [librosa.power_to_db(orig_spectrogram_np) for orig_spectrogram_np in
                                 orig_spectrograms_np]
         pred_spectrograms_np = [librosa.power_to_db(pred_spectrogram_np) for pred_spectrogram_np in
                                 pred_spectrograms_np]
+        orig_mel_spectrograms_np = [librosa.power_to_db(orig_mel_spectrogram_np)
+                                    for orig_mel_spectrogram_np in orig_mel_spectrograms_np]
+        pred_mel_spectrograms_np = [librosa.power_to_db(pred_mel_spectrogram_np)
+                                    for pred_mel_spectrogram_np in pred_mel_spectrograms_np]
+        orig_mel_spectrograms_low_frequencies_np = \
+            [librosa.power_to_db(orig_mel_spectrogram_low_frequencies_np)
+             for orig_mel_spectrogram_low_frequencies_np in orig_mel_spectrograms_low_frequencies_np]
+        pred_mel_spectrograms_low_frequencies_np = \
+            [librosa.power_to_db(pred_mel_spectrogram_low_frequencies_np)
+             for pred_mel_spectrogram_low_frequencies_np in pred_mel_spectrograms_low_frequencies_np]
 
     # plot original vs predicted signal
     n_rows = len(orig_spectrograms_np) + 1
-    fig, ax = plt.subplots(n_rows, 2, figsize=(15, 10))
+    fig, ax = plt.subplots(n_rows, 6, figsize=(15, 10))
 
     canvas = FigureCanvasAgg(fig)
 
@@ -205,6 +263,10 @@ def visualize_signal_prediction(orig_audio, pred_audio, orig_params, pred_params
     for i in range(1, n_rows):
         ax[i][0].imshow(orig_spectrograms_np[i - 1], origin='lower', aspect='auto')
         ax[i][1].imshow(pred_spectrograms_np[i - 1], origin='lower', aspect='auto')
+        ax[i][2].imshow(orig_mel_spectrograms_np[i - 1], origin='lower', aspect='auto')
+        ax[i][3].imshow(pred_mel_spectrograms_np[i - 1], origin='lower', aspect='auto')
+        ax[i][4].imshow(orig_mel_spectrograms_low_frequencies_np[i - 1], origin='lower', aspect='auto')
+        ax[i][5].imshow(pred_mel_spectrograms_low_frequencies_np[i - 1], origin='lower', aspect='auto')
 
     canvas.draw()
     s, (width, height) = canvas.print_to_buffer()
