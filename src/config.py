@@ -140,8 +140,8 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 50000
-    batch_size: int = 1000
+    dataset_size: int = 1000
+    batch_size: int = 100
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
     train_audio_dir: str = None
@@ -210,7 +210,7 @@ class SynthConfig:
     # Modular synth possible modules from synth_modules.py
     modular_synth_operations = ['osc', 'fm', 'lfo', 'mix', 'filter', 'env_adsr']
     modular_synth_params = {'osc': ['amp', 'freq', 'waveform'],
-                            'lfo': ['amp', 'freq', 'waveform'],
+                            'lfo': ['freq'],
                             'fm': ['amp_c', 'freq_c', 'waveform', 'mod_index'],
                             'mix': None,
                             'filter': ['filter_freq', 'filter_type'],

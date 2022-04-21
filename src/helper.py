@@ -309,7 +309,7 @@ class Normalizer:
                 denormalized_params_dict[key] = \
                     {'operation': operation,
                      'params':
-                         {'amp': params['amp'],
+                         {
                           'freq': self.lfo_freq_normalizer.denormalise(params['freq'])
                           }
                      }

@@ -271,9 +271,7 @@ class SimpleSynthNetwork(nn.Module):
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = waveform_head
 
             if operation == 'lfo':
-                amplitude_head = MLPBlock([LATENT_SPACE_SIZE, 1])
                 frequency_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                self.heads_module_dict[self.get_key(index, operation, 'amp')] = amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
 
             elif operation == 'fm':
@@ -338,17 +336,13 @@ class SimpleSynthNetwork(nn.Module):
                                                 'waveform': waveform_probabilities
                                                 }}
             if operation == 'lfo':
-                amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp')]
                 frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq')]
 
-                predicted_amplitude = amplitude_head(latent)
-                predicted_amplitude = self.sigmoid(predicted_amplitude)
                 predicted_frequency = frequency_head(latent)
                 predicted_frequency = self.sigmoid(predicted_frequency) #self.sigmoid(predicted_frequency)
 
                 output_dic[index] = {'operation': operation,
-                                     'params': {'amp': predicted_amplitude,
-                                                'freq': predicted_frequency
+                                     'params': {'freq': predicted_frequency
                                                 }}
             elif operation == 'fm':
                 carrier_amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp_c')]

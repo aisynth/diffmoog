@@ -192,8 +192,7 @@ class SynthModular:
                               'freq': random.choices(synth_cfg.osc_freq_list, k=num_sounds),
                               'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds)}
                 elif operation == 'lfo':
-                    params = {'amp': np.random.random_sample(size=num_sounds),
-                              'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds)}
+                    params = {'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds)}
                 elif operation == 'fm':
                     params = {'amp_c': np.random.random_sample(size=num_sounds),
                               'freq_c': self._sample_c_freq(synth_cfg, num_sounds),
@@ -277,7 +276,7 @@ class SynthModular:
                                                           waveform=cell.parameters['waveform'],
                                                           num_sounds=num_sounds)
                 elif operation == 'lfo':
-                    cell.signal = synth_module.batch_oscillator(amp=cell.parameters['amp'],
+                    cell.signal = synth_module.batch_oscillator(amp=1.0,
                                                                 freq=cell.parameters['freq'],
                                                                 phase=0,
                                                                 waveform='sine')
