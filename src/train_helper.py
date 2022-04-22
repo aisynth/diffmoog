@@ -25,13 +25,20 @@ def parse_synth_params(original_params: dict, predicted_params: dict, sample_idx
         pred_res[op] = {}
         orig_res[op] = {}
         for param, vals in d['params'].items():
-            pred_res[op][param] = _np_to_str(vals[sample_idx].detach().cpu().numpy().squeeze(), precision=2)
+            if len(vals.shape) == 0:
+                pred_res[op][param] = _np_to_str(vals.detach().cpu().numpy().squeeze(), precision=2)
+            else:
+                pred_res[op][param] = _np_to_str(vals[sample_idx].detach().cpu().numpy().squeeze(), precision=2)
 
             if param in ['waveform', 'filter_type']:
                 orig_res[op][param] = original_params[k]['parameters'][param][sample_idx]
             else:
-                orig_res[op][param] = \
-                    _np_to_str(original_params[k]['parameters'][param][sample_idx].detach().cpu().numpy(), precision=2)
+                if len(original_params[k]['parameters'][param].shape) == 0:
+                    orig_res[op][param] = \
+                        _np_to_str(original_params[k]['parameters'][param].detach().cpu().numpy(), precision=2)
+                else:
+                    orig_res[op][param] = \
+                        _np_to_str(original_params[k]['parameters'][param][sample_idx].detach().cpu().numpy(), precision=2)
 
     return orig_res, pred_res
 
@@ -50,13 +57,15 @@ def _np_to_str(val: np.ndarray, precision=2) -> str:
 def log_dict_recursive(tag: str, data_to_log, writer: SummaryWriter, step: int):
 
     if type(data_to_log) == list:
-        data_to_log = np.asarray(data_to_log)
+        data_to_log = np.asarray(data_to_log).squeeze()
 
     if type(data_to_log) in [torch.Tensor, np.ndarray, int, float]:
-        if len(data_to_log) > 1:
+        if data_to_log.size == 1 or len(data_to_log) <= 1:
+            writer.add_scalar(tag, data_to_log, step)
+        elif len(data_to_log) > 1:
             writer.add_histogram(tag, data_to_log, step)
         else:
-            writer.add_scalar(tag, data_to_log, step)
+            raise ValueError(f"Unexpected value to log {data_to_log}")
         return
 
     if not isinstance(data_to_log, dict):
@@ -80,10 +89,13 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
         for param_name, pred_vals in pred_op_dict['params'].items():
             target_vals = target_op_dict['parameters'][param_name]
 
+            if isinstance(target_vals, (str, int, float)):
+                target_vals = [target_vals]
+
             if param_name == 'waveform':
                 waveform_idx = [SynthConfig.wave_type_dict[wt] for wt in target_vals]
                 diff = [1 - v[idx].cpu().detach().numpy() for idx, v in zip(waveform_idx, pred_vals)]
-                diff = np.asarray(diff)
+                diff = np.asarray(diff).squeeze()
             elif param_name == 'filter_type':
                 filter_type_idx = [SynthConfig.filter_type_dict[ft] for ft in target_vals]
                 diff = [1 - v[idx].cpu().detach().numpy() for idx, v in zip(filter_type_idx, pred_vals)]

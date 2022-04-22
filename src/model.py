@@ -237,6 +237,172 @@ class BigSynthNetwork(nn.Module):
                                                 }}
 
         return output_dic
+    
+    
+class DecoderOnlyNetwork(nn.Module):
+    def __init__(self, synth_cfg: SynthConfig, device):
+        self.preset = synth_presets_dict.get(synth_cfg.preset, None)
+        if self.preset is None:
+            ValueError("Unknown self.cfg.PRESET")
+
+        super().__init__()
+
+        self.softmax = nn.Softmax(dim=1)
+        self.sigmoid = nn.Sigmoid()
+
+        self.synth_cfg = synth_cfg
+        self.device = device
+        self.parameters_dict = nn.ModuleDict()
+
+    def apply_params(self, init_params):
+
+        for cell in self.preset:
+            index = cell.get('index')
+            operation = cell.get('operation')
+            init_values = init_params[index]['params']
+            if operation == 'osc':
+                amplitude_head = SimpleWeightLayer(torch.tensor(init_values['amp'], dtype=torch.float, device=self.device, requires_grad=True))
+                frequency_head = SimpleWeightLayer(torch.tensor(init_values['freq'], dtype=torch.float, device=self.device, requires_grad=True))
+                waveform_head = SimpleWeightLayer(torch.rand(len(self.synth_cfg.wave_type_dict), device=self.device, requires_grad=True))
+                self.parameters_dict[self.get_key(index, operation, 'amp')] = amplitude_head
+                self.parameters_dict[self.get_key(index, operation, 'freq')] = frequency_head
+                self.parameters_dict[self.get_key(index, operation, 'waveform')] = waveform_head
+
+            if operation == 'lfo':
+                frequency_head = SimpleWeightLayer(torch.tensor(init_values['freq'], dtype=torch.float, device=self.device, requires_grad=True))
+                self.parameters_dict[self.get_key(index, operation, 'freq')] = frequency_head
+
+            elif operation == 'fm':
+                carrier_amplitude_head = SimpleWeightLayer(torch.tensor(init_values['amp_c'], dtype=torch.float, device=self.device, requires_grad=True))
+                carrier_frequency_head = SimpleWeightLayer(torch.tensor(init_values['freq_c'], dtype=torch.float, device=self.device, requires_grad=True))
+                carrier_waveform_head = SimpleWeightLayer(torch.tensor([1.0, 0.0, 0.0], device=self.device), requires_grad=False)
+                modulation_index_head = SimpleWeightLayer(torch.tensor(init_values['mod_index'], dtype=torch.float, device=self.device, requires_grad=True))
+                self.parameters_dict[self.get_key(index, operation, 'amp_c')] = carrier_amplitude_head
+                self.parameters_dict[self.get_key(index, operation, 'freq_c')] = carrier_frequency_head
+                self.parameters_dict[self.get_key(index, operation, 'waveform')] = carrier_waveform_head
+                self.parameters_dict[self.get_key(index, operation, 'mod_index')] = modulation_index_head
+
+            elif operation == 'filter':
+                filter_type_head = SimpleWeightLayer(torch.rand(len(self.synth_cfg.filter_type_dict), device=self.device, requires_grad=True))
+                filter_freq_head = SimpleWeightLayer(torch.tensor(init_values['filter_freq'], dtype=torch.float, device=self.device, requires_grad=True))
+                self.parameters_dict[self.get_key(index, operation, 'filter_type')] = filter_type_head
+                self.parameters_dict[self.get_key(index, operation, 'filter_freq')] = filter_freq_head
+
+            elif operation == 'env_adsr':
+                attack_t_head = SimpleWeightLayer(torch.tensor(init_values['attack_t'], dtype=torch.float, device=self.device, requires_grad=True))
+                decay_t_head = SimpleWeightLayer(torch.tensor(init_values['decay_t'], dtype=torch.float, device=self.device, requires_grad=True))
+                sustain_t_head = SimpleWeightLayer(torch.tensor(init_values['sustain_t'], dtype=torch.float, device=self.device, requires_grad=True))
+                sustain_level_head = SimpleWeightLayer(torch.tensor(init_values['sustain_level'], dtype=torch.float, device=self.device, requires_grad=True))
+                release_t_head = SimpleWeightLayer(torch.tensor(init_values['release_t'], dtype=torch.float, device=self.device, requires_grad=True))
+                self.parameters_dict[self.get_key(index, operation, 'attack_t')] = attack_t_head
+                self.parameters_dict[self.get_key(index, operation, 'decay_t')] = decay_t_head
+                self.parameters_dict[self.get_key(index, operation, 'sustain_t')] = sustain_t_head
+                self.parameters_dict[self.get_key(index, operation, 'sustain_level')] = sustain_level_head
+                self.parameters_dict[self.get_key(index, operation, 'release_t')] = release_t_head
+
+    def forward(self):
+        output_dic = {}
+        for cell in self.preset:
+            index = cell.get('index')
+            operation = cell.get('operation')
+
+            if operation == 'osc':
+                amplitude_head = self.parameters_dict[self.get_key(index, operation, 'amp')]
+                frequency_head = self.parameters_dict[self.get_key(index, operation, 'freq')]
+                waveform_head = self.parameters_dict[self.get_key(index, operation, 'waveform')]
+
+                predicted_amplitude = amplitude_head()
+                predicted_amplitude = self.sigmoid(predicted_amplitude)
+                predicted_frequency = frequency_head()
+                predicted_frequency = self.sigmoid(predicted_frequency)
+                waveform_logits = waveform_head
+                waveform_probabilities = self.softmax(waveform_logits)
+
+                output_dic[index] = {'operation': operation,
+                                     'params': {'amp': predicted_amplitude,
+                                                'freq': predicted_frequency,
+                                                'waveform': waveform_probabilities
+                                                }}
+            if operation == 'lfo':
+                frequency_head = self.parameters_dict[self.get_key(index, operation, 'freq')]
+
+                predicted_frequency = frequency_head()
+                predicted_frequency = self.sigmoid(predicted_frequency) #self.sigmoid(predicted_frequency)
+
+                output_dic[index] = {'operation': operation,
+                                     'params': {'freq': predicted_frequency
+                                                }}
+            elif operation == 'fm':
+                carrier_amplitude_head = self.parameters_dict[self.get_key(index, operation, 'amp_c')]
+                carrier_frequency_head = self.parameters_dict[self.get_key(index, operation, 'freq_c')]
+                waveform_head = self.parameters_dict[self.get_key(index, operation, 'waveform')]
+                mod_index_head = self.parameters_dict[self.get_key(index, operation, 'mod_index')]
+
+                predicted_carrier_amplitude = carrier_amplitude_head()
+                predicted_carrier_amplitude = self.sigmoid(predicted_carrier_amplitude)
+                predicted_carrier_frequency = carrier_frequency_head()
+                predicted_carrier_frequency = self.sigmoid(predicted_carrier_frequency)
+                waveform_logits = waveform_head()
+                waveform_probabilities = waveform_logits #self.softmax(waveform_logits)
+                predicted_mod_index = mod_index_head()
+                predicted_mod_index = self.sigmoid(predicted_mod_index)
+
+                output_dic[index] = {'operation': operation,
+                                     'params': {'amp_c': predicted_carrier_amplitude,
+                                                'freq_c': predicted_carrier_frequency,
+                                                'waveform': waveform_probabilities,
+                                                'mod_index': predicted_mod_index
+                                                }}
+
+            elif operation == 'filter':
+                filter_type_head = self.parameters_dict[self.get_key(index, operation, 'filter_type')]
+                filter_freq_head = self.parameters_dict[self.get_key(index, operation, 'filter_freq')]
+
+                filter_type_logits = filter_type_head()
+                filter_type_probabilities = self.softmax(filter_type_logits)
+                predicted_filter_freq = filter_freq_head()
+                predicted_filter_freq = self.sigmoid(predicted_filter_freq)
+
+                output_dic[index] = {'operation': operation,
+                                     'params': {'filter_type': filter_type_probabilities,
+                                                'filter_freq': predicted_filter_freq
+                                                }}
+
+            elif operation == 'env_adsr':
+                attack_t_head = self.parameters_dict[self.get_key(index, operation, 'attack_t')]
+                decay_t_head = self.parameters_dict[self.get_key(index, operation, 'decay_t')]
+                sustain_t_head = self.parameters_dict[self.get_key(index, operation, 'sustain_t')]
+                sustain_level_head = self.parameters_dict[self.get_key(index, operation, 'sustain_level')]
+                release_t_head = self.parameters_dict[self.get_key(index, operation, 'release_t')]
+
+                predicted_attack_t = attack_t_head()
+                predicted_attack_t = self.sigmoid(predicted_attack_t)
+
+                predicted_decay_t = decay_t_head()
+                predicted_decay_t = self.sigmoid(predicted_decay_t)
+
+                predicted_sustain_t = sustain_t_head()
+                predicted_sustain_t = self.sigmoid(predicted_sustain_t)
+
+                predicted_sustain_level = sustain_level_head()
+                predicted_sustain_level = self.sigmoid(predicted_sustain_level)
+
+                predicted_release_t = release_t_head()
+                predicted_release_t = self.sigmoid(predicted_release_t)
+
+                output_dic[index] = {'operation': operation,
+                                     'params': {'attack_t': predicted_attack_t,
+                                                'decay_t': predicted_decay_t,
+                                                'sustain_t': predicted_sustain_t,
+                                                'sustain_level': predicted_sustain_level,
+                                                'release_t': predicted_release_t
+                                                }}
+    
+        return output_dic
+
+    @staticmethod
+    def get_key(index: tuple, operation: str, parameter: str) -> str:
+        return f'{index}' + '_' + operation + '_' + parameter
 
 
 class SimpleSynthNetwork(nn.Module):
@@ -477,6 +643,18 @@ class RNNBackbone(nn.Module):
 
         return fc_output
 
+
+class SimpleWeightLayer(nn.Module):
+    
+    def __init__(self, w: torch.Tensor, requires_grad=True):
+        super().__init__()
+
+        if w.ndim == 1:
+            w = w.unsqueeze(0)
+        self.weight = nn.Parameter(w, requires_grad=requires_grad)
+
+    def forward(self):
+        return self.weight
 
 if __name__ == "__main__":
     synth_net = BigSynthNetwork()

@@ -11,7 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 from config import Config, SynthConfig, DatasetConfig, ModelConfig, configure_experiment
 from ai_synth_dataset import AiSynthDataset, create_data_loader
 from inference import visualize_signal_prediction
-from model import BigSynthNetwork, SimpleSynthNetwork
+from model import BigSynthNetwork, SimpleSynthNetwork, DecoderOnlyNetwork
 from synth.synth_architecture import SynthModular, SynthModularCell
 import helper
 import time
@@ -25,6 +25,7 @@ from train_helper import *
 def train_single_epoch(model,
                        epoch,
                        data_loader,
+                       dataset,
                        transform,
                        optimizer,
                        scheduler,
@@ -41,157 +42,172 @@ def train_single_epoch(model,
     data_loading_time_start = time.time()
     epoch_param_diffs = defaultdict(list)
     epoch_param_vals_raw, epoch_param_vals = defaultdict(list), defaultdict(list)
-    with tqdm(data_loader, unit="batch") as tepoch:
-        for target_signal, target_param_dict, signal_index in tepoch:
 
-            data_loading_time_end = time.time()
-            step = epoch * len(data_loader) + num_of_mini_batches
+    # with tqdm(data_loader, unit="batch") as tepoch:
+    #     for target_signal, target_param_dict, signal_index in tepoch:
 
-            tepoch.set_description(f"Epoch {epoch}")
-            batch_start_time = time.time()
+    target_signal, target_param_dict, signal_index = dataset[0]
+    if epoch == 0:
+        print(target_param_dict)
 
-            # set_to_none as advised in page 6:
-            # https://tigress-web.princeton.edu/~jdh4/PyTorchPerformanceTuningGuide_GTC2021.pdf
-            model.zero_grad(set_to_none=True)
+    for cell_idx, cell_params in target_param_dict.items():
+        if cell_params['operation'] == 'None':
+            continue
+        for param_name, param_val in cell_params['parameters'].items():
+            if isinstance(param_val, str):
+                continue
+            target_param_dict[cell_idx]['parameters'][param_name] = torch.tensor(param_val)
 
-            input_transform_start = time.time()
-            target_signal = target_signal.to(device)
-            transformed_signal = transform(target_signal)
-            input_transform_end = time.time()
+    data_loading_time_end = time.time()
+    step = epoch * len(data_loader) + num_of_mini_batches
 
-            # Log model to tensorboard
-            # if epoch == 0 and num_of_mini_batches == 0:
-            #     summary_writer.add_graph(model, transformed_signal)
+    # tepoch.set_description(f"Epoch {epoch}")
+    batch_start_time = time.time()
 
-            # -------------------------------------
-            # -----------Run Model-----------------
-            # -------------------------------------
-            model_start_time = time.time()
+    # set_to_none as advised in page 6:
+    # https://tigress-web.princeton.edu/~jdh4/PyTorchPerformanceTuningGuide_GTC2021.pdf
+    model.zero_grad(set_to_none=True)
 
-            output_dic = model(transformed_signal)
+    input_transform_start = time.time()
+    target_signal = target_signal.to(device)
+    transformed_signal = transform(target_signal)
+    input_transform_end = time.time()
 
-            for op_idx, op_dict in output_dic.items():
-                for param_name, param_vals in op_dict['params'].items():
-                    epoch_param_vals_raw[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
+    # Log model to tensorboard
+    # if epoch == 0 and num_of_mini_batches == 0:
+    #     summary_writer.add_graph(model, transformed_signal)
 
-            denormalized_output_dict = normalizer.denormalize(output_dic)
-            predicted_param_dict = helper.clamp_adsr_params(denormalized_output_dict, synth_cfg, cfg)
+    # -------------------------------------
+    # -----------Run Model-----------------
+    # -------------------------------------
+    model_start_time = time.time()
 
-            for op_idx, op_dict in predicted_param_dict.items():
-                for param_name, param_vals in op_dict['params'].items():
-                    epoch_param_vals[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
+    output_dic = model()
 
-            batch_param_diffs = get_param_diffs(predicted_param_dict, target_param_dict)
-            for op_idx, diff_vals in batch_param_diffs.items():
-                epoch_param_diffs[op_idx].extend(diff_vals)
+    for op_idx, op_dict in output_dic.items():
+        for param_name, param_vals in op_dict['params'].items():
+            epoch_param_vals_raw[f'{op_idx}_{param_name}'].append(param_vals.cpu().detach().numpy().squeeze())
 
-            model_end_time = time.time()
-            synth_start_time = time.time()
+    denormalized_output_dict = normalizer.denormalize(output_dic)
+    predicted_param_dict = helper.clamp_adsr_params(denormalized_output_dict, synth_cfg, cfg)
 
-            # ------------------------------------------------------------
-            # -------------Generate Signal-------------------------------
-            # ------------------------------------------------------------
-            # --------------Predicted-------------------------------------
-            update_params = []
-            for index, operation_dict in predicted_param_dict.items():
-                synth_modular_cell = SynthModularCell(index=index, parameters=operation_dict['params'])
-                update_params.append(synth_modular_cell)
+    # predicted_param_dict = output_dic
 
-            modular_synth.update_cells(update_params)
+    for op_idx, op_dict in predicted_param_dict.items():
+        for param_name, param_vals in op_dict['params'].items():
+            epoch_param_vals[f'{op_idx}_{param_name}'].append(param_vals.cpu().detach().numpy().squeeze())
 
-            pred_final_signal, pred_signals_through_chain = \
-                modular_synth.generate_signal(num_sounds=len(transformed_signal))
+    batch_param_diffs = get_param_diffs(predicted_param_dict, target_param_dict)
+    for op_idx, diff_vals in batch_param_diffs.items():
+        epoch_param_diffs[op_idx].append(diff_vals)
 
-            # --------------Target-------------------------------------
-            update_params = []
-            for op_index in output_dic.keys():
-                operation_dict = target_param_dict[op_index]
-                synth_modular_cell = SynthModularCell(index=op_index, parameters=operation_dict['parameters'])
-                update_params.append(synth_modular_cell)
+    model_end_time = time.time()
+    synth_start_time = time.time()
 
-            modular_synth.update_cells(update_params)
-            target_final_signal, target_signals_through_chain = \
-                modular_synth.generate_signal(num_sounds=len(transformed_signal))
+    # ------------------------------------------------------------
+    # -------------Generate Signal-------------------------------
+    # ------------------------------------------------------------
+    # --------------Predicted-------------------------------------
+    update_params = []
+    for index, operation_dict in predicted_param_dict.items():
+        synth_modular_cell = SynthModularCell(index=index, parameters=operation_dict['params'])
+        update_params.append(synth_modular_cell)
 
-            modular_synth.signal = helper.move_to(modular_synth.signal, device)
+    modular_synth.update_cells(update_params)
 
-            synth_end_time = time.time()
-            loss_start_time = time.time()
+    pred_final_signal, pred_signals_through_chain = \
+        modular_synth.generate_signal(num_sounds=len(transformed_signal))
 
-            target_signal = target_signal.squeeze()
+    # --------------Target-------------------------------------
+    update_params = []
+    for op_index in output_dic.keys():
+        operation_dict = target_param_dict[op_index]
+        synth_modular_cell = SynthModularCell(index=op_index, parameters=operation_dict['parameters'])
+        update_params.append(synth_modular_cell)
 
-            loss_total = 0
-            for op_index in output_dic.keys():
-                op_index = str(op_index)
+    modular_synth.update_cells(update_params)
+    target_final_signal, target_signals_through_chain = \
+        modular_synth.generate_signal(num_sounds=len(transformed_signal))
 
-                pred_signal = pred_signals_through_chain[op_index]
-                if pred_signal is None:
-                    continue
+    modular_synth.signal = helper.move_to(modular_synth.signal, device)
 
-                target_signal = target_signals_through_chain[op_index]
-                loss, ret_spectrograms = loss_handler.call(target_signal,
-                                                           pred_signal,
-                                                           summary_writer,
-                                                           op_index,
-                                                           step,
-                                                           return_spectrogram=True)
-                loss_total += loss
-            summary_writer.add_scalar('loss/train_multi_spectral', loss_total, step)
+    synth_end_time = time.time()
+    loss_start_time = time.time()
 
-            loss_end_time = time.time()
+    target_signal = target_signal.squeeze()
 
-            if num_of_mini_batches == 1:
-                for i in range(5):
-                    sample_params_orig, sample_params_pred = parse_synth_params(target_param_dict, predicted_param_dict, i)
-                    summary_writer.add_audio(f'input_{i}_target', target_final_signal[i], global_step=epoch,
-                                             sample_rate=cfg.sample_rate)
-                    summary_writer.add_audio(f'input_{i}_pred', pred_final_signal[i], global_step=epoch,
-                                             sample_rate=cfg.sample_rate)
+    loss_total = 0
+    for op_index in output_dic.keys():
+        op_index = str(op_index)
 
-                    signal_vis = visualize_signal_prediction(target_final_signal[i], pred_final_signal[i],
-                                                             sample_params_orig, sample_params_pred, db=True)
-                    signal_vis_t = torch.tensor(signal_vis, dtype=torch.uint8, requires_grad=False)
+        pred_signal = pred_signals_through_chain[op_index]
+        if pred_signal is None:
+            continue
 
-                    summary_writer.add_image(f'{256}_spec/input_{i}',
-                                             signal_vis_t,
-                                             global_step=epoch,
-                                             dataformats='HWC')
+        target_signal = target_signals_through_chain[op_index]
+        loss, ret_spectrograms = loss_handler.call(target_signal,
+                                                   pred_signal,
+                                                   summary_writer,
+                                                   op_index,
+                                                   step,
+                                                   return_spectrogram=True)
+        loss_total += loss
+    summary_writer.add_scalar('loss/train_multi_spectral', loss_total, step)
 
-            backward_start_time = time.time()
+    loss_end_time = time.time()
 
-            num_of_mini_batches += 1
-            sum_epoch_loss += loss_total.item()
-            loss_total.backward()
-            optimizer.step()
-            scheduler.step()
+    if epoch % 100 == 1:
+        for i in range(1):
+            sample_params_orig, sample_params_pred = parse_synth_params(target_param_dict, predicted_param_dict, i)
+            summary_writer.add_audio(f'input_{i}_target', target_final_signal[i], global_step=epoch,
+                                     sample_rate=cfg.sample_rate)
+            summary_writer.add_audio(f'input_{i}_pred', pred_final_signal[i], global_step=epoch,
+                                     sample_rate=cfg.sample_rate)
 
-            backward_end_time = time.time()
+            signal_vis = visualize_signal_prediction(target_final_signal[i], pred_final_signal[i],
+                                                     sample_params_orig, sample_params_pred, db=True)
+            signal_vis_t = torch.tensor(signal_vis, dtype=torch.uint8, requires_grad=False)
 
-            summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
+            summary_writer.add_image(f'{256}_spec/input_{i}',
+                                     signal_vis_t,
+                                     global_step=epoch,
+                                     dataformats='HWC')
 
-            if num_of_mini_batches % 100 == 0:
-                log_gradients_in_model(model, summary_writer, step)
+    backward_start_time = time.time()
 
-            batch_end_time = time.time()
+    num_of_mini_batches += 1
+    sum_epoch_loss += loss_total.item()
+    loss_total.backward()
+    optimizer.step()
+    scheduler.step()
 
-            if cfg.print_train_batch_stats:
-                print(f"MSE batch loss: {round(loss_total.item(), 7)},\n")
-                if cfg.print_timings:
-                    print(
-                        f"total batch processing time: {round(batch_end_time - batch_start_time, 2)}s, \n"
-                        f"model processing time: {round(model_end_time - model_start_time, 2)}s, \n"
-                        f"synth processing time: {round(synth_end_time - synth_start_time, 2)}s, \n"
-                        f"backward processing time: {round(backward_end_time - backward_start_time, 2)}s, \n"
-                        f"loss processing time: {round(loss_end_time - loss_start_time, 2)}s\n"
-                        f"input transform time: {round(input_transform_end - input_transform_start, 2)}s\n"
-                        f"data loading time: {round(data_loading_time_end - data_loading_time_start, 2)}s\n"
-                        f"gradient logging time: {round(batch_end_time - backward_end_time, 2)}s\n")
+    backward_end_time = time.time()
 
-                    if cfg.print_synth_param_stats:
-                        helper.print_synth_param_stats(predicted_param_dict, target_param_dict, synth_cfg, device)
+    summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
 
-            tepoch.set_postfix(loss=loss_total.item())
-            data_loading_time_start = time.time()
+    if num_of_mini_batches % 100 == 0:
+        log_gradients_in_model(model, summary_writer, step)
+
+    batch_end_time = time.time()
+
+    if cfg.print_train_batch_stats:
+        print(f"MSE batch loss: {round(loss_total.item(), 7)},\n")
+        if cfg.print_timings:
+            print(
+                f"total batch processing time: {round(batch_end_time - batch_start_time, 2)}s, \n"
+                f"model processing time: {round(model_end_time - model_start_time, 2)}s, \n"
+                f"synth processing time: {round(synth_end_time - synth_start_time, 2)}s, \n"
+                f"backward processing time: {round(backward_end_time - backward_start_time, 2)}s, \n"
+                f"loss processing time: {round(loss_end_time - loss_start_time, 2)}s\n"
+                f"input transform time: {round(input_transform_end - input_transform_start, 2)}s\n"
+                f"data loading time: {round(data_loading_time_end - data_loading_time_start, 2)}s\n"
+                f"gradient logging time: {round(batch_end_time - backward_end_time, 2)}s\n")
+
+            if cfg.print_synth_param_stats:
+                helper.print_synth_param_stats(predicted_param_dict, target_param_dict, synth_cfg, device)
+
+    # tepoch.set_postfix(loss=loss_total.item())
+    data_loading_time_start = time.time()
 
     avg_epoch_loss = sum_epoch_loss / num_of_mini_batches
     summary_writer.add_scalar('loss/train_multi_spectral_epoch', avg_epoch_loss, epoch)
@@ -203,7 +219,9 @@ def train_single_epoch(model,
 
 
 def train(model,
+          modular_synth,
           data_loader,
+          dataset,
           transform,
           optimizer,
           device,
@@ -241,20 +259,13 @@ def train(model,
     else:
         raise ValueError("SYNTH_TYPE 'MODULAR' supports only SPECTROGRAM_LOSS_TYPE of type 'MULTI-SPECTRAL'")
 
-    # init modular synth
-    modular_synth = SynthModular(synth_cfg=synth_cfg,
-                                 sample_rate=cfg.sample_rate,
-                                 signal_duration_sec=cfg.signal_duration_sec,
-                                 num_sounds=1,
-                                 device=device,
-                                 preset=synth_cfg.preset)
-
     for epoch in range(num_epochs):
         cur_epoch = start_epoch + epoch
         avg_epoch_loss = \
             train_single_epoch(model=model,
                                epoch=cur_epoch,
                                data_loader=data_loader,
+                               dataset=dataset,
                                transform=transform,
                                optimizer=optimizer,
                                scheduler=scheduler,
@@ -299,17 +310,34 @@ def run(args):
     ai_synth_dataset = AiSynthDataset(dataset_cfg.train_parameters_file, dataset_cfg.train_audio_dir, device)
     train_dataloader = create_data_loader(ai_synth_dataset, model_cfg.batch_size, ModelConfig.num_workers)
 
+    # init modular synth
+    modular_synth = SynthModular(synth_cfg=synth_cfg,
+                                 sample_rate=cfg.sample_rate,
+                                 signal_duration_sec=cfg.signal_duration_sec,
+                                 num_sounds=1,
+                                 device=device,
+                                 preset=synth_cfg.preset)
+
+    modular_synth.generate_random_params(synth_cfg)
+    init_params = modular_synth.collect_params()
+
+    # Denormalize init params
+    normalizer = helper.Normalizer(signal_duration_sec=cfg.signal_duration_sec, synth_cfg=synth_cfg)
+    denormalized_init_params = normalizer.normalize(init_params)
+
     # construct model and assign it to device
     if model_cfg.model_type == 'simple':
         synth_net = SimpleSynthNetwork(synth_cfg, device, backbone=model_cfg.backbone).to(device)
+    elif model_cfg.model_type == 'decoder_only':
+        synth_net = DecoderOnlyNetwork(synth_cfg, device)
+        synth_net.apply_params(denormalized_init_params)
     else:
         synth_net = BigSynthNetwork(synth_cfg, device).to(device)
 
     # for name, layer in synth_net.named_modules():
     #     layer.register_forward_hook(get_activation(name, activations_dict))
 
-    optimizer = torch.optim.Adam(synth_net.parameters(),
-                                 lr=model_cfg.learning_rate,
+    optimizer = torch.optim.SGD(synth_net.parameters(), lr=model_cfg.learning_rate,
                                  weight_decay=model_cfg.optimizer_weight_decay)
 
     print(f"Training model start")
@@ -326,7 +354,9 @@ def run(args):
 
     # train model
     train(model=synth_net,
+          modular_synth=modular_synth,
           data_loader=train_dataloader,
+          dataset=ai_synth_dataset,
           transform=transform,
           optimizer=optimizer,
           device=device,

@@ -380,6 +380,22 @@ class SynthModular:
 
         return preset_as_synth_input
 
+    def collect_params(self):
+        params_dict = {}
+        for layer in range(self.num_layers):
+            for channel in range(self.num_channels):
+                cell = self.architecture[channel][layer]
+                if cell.operation is not None:
+                    operation = cell.operation
+                else:
+                    operation = 'None'
+                if cell.parameters is not None:
+                    parameters = cell.parameters
+                else:
+                    parameters = 'None'
+                params_dict[cell.index] = {'operation': operation, 'params': parameters}
+        return params_dict
+
     @staticmethod
     def _sample_c_freq(synth_cfg: SynthConfig, num_sounds: int):
 

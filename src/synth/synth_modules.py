@@ -689,6 +689,8 @@ class SynthModules:
             raise TypeError(f"Unsupported input of type {type(input_val)} to synth module")
 
         # Add batch dim if doesn't exist
+        if output_tensor.ndim == 0:
+            output_tensor = torch.unsqueeze(output_tensor, dim=0)
         if output_tensor.ndim == 1:
             output_tensor = torch.unsqueeze(output_tensor, dim=1)
 

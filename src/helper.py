@@ -274,19 +274,63 @@ class Normalizer:
                                                            original_max_val=synth_cfg.oscillator_freq)
 
     def normalize(self, parameters_dict: dict):
-        normalized_params_dict = {
-            'osc1_mod_index': self.mod_index_normalizer.normalise(parameters_dict['osc1_mod_index']),
-            'lfo1_freq': self.lfo_freq_normalizer.normalise(parameters_dict['lfo1_freq']),
-            'lfo1_phase': self.lfo_phase_normalizer.normalise(parameters_dict['lfo1_phase']),
-            'osc2_mod_index': self.mod_index_normalizer.normalise(parameters_dict['osc2_mod_index']),
-            'lfo2_freq': self.lfo_freq_normalizer.normalise(parameters_dict['lfo2_freq']),
-            'filter_freq': self.filter_freq_normalizer.normalise(parameters_dict['filter_freq']),
-            'attack_t': self.adsr_normalizer.normalise(parameters_dict['attack_t']),
-            'decay_t': self.adsr_normalizer.normalise(parameters_dict['decay_t']),
-            'sustain_t': self.adsr_normalizer.normalise(parameters_dict['sustain_t']),
-            'release_t': self.adsr_normalizer.normalise(parameters_dict['release_t'])}
+        denormalized_params_dict = {}
+        for key, val in parameters_dict.items():
+            operation = val['operation']
+            params = val['params']
 
-        return normalized_params_dict
+            if operation == 'osc':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'params':
+                         {'amp': params['amp'],
+                          'freq': self.oscillator_freq_normalizer.normalise(params['freq']),
+                          'waveform': params['waveform']
+                          }
+                     }
+
+            elif operation == 'lfo':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'params':
+                         {
+                             'freq': self.lfo_freq_normalizer.normalise(params['freq'])
+                         }
+                     }
+
+            elif operation == 'fm':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'params':
+                         {'amp_c': params['amp_c'],
+                          'freq_c': self.oscillator_freq_normalizer.normalise(params['freq_c']),
+                          'waveform': params['waveform'],
+                          'mod_index': self.mod_index_normalizer.normalise(params['mod_index'])
+                          }
+                     }
+
+            elif operation == 'filter':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'params':
+                         {'filter_type': params['filter_type'],
+                          'filter_freq': self.filter_freq_normalizer.normalise(params['filter_freq'])
+                          }
+                     }
+
+            elif operation == 'env_adsr':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'params':
+                         {'attack_t': self.adsr_normalizer.normalise(params['attack_t']),
+                          'decay_t': self.adsr_normalizer.normalise(params['decay_t']),
+                          'sustain_t': self.adsr_normalizer.normalise(params['sustain_t']),
+                          'sustain_level': params['sustain_level'],
+                          'release_t': self.filter_freq_normalizer.normalise(params['release_t'])
+                          }
+                     }
+
+        return denormalized_params_dict
 
     def denormalize(self, parameters_dict: dict):
 
