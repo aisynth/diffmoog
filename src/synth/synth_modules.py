@@ -677,7 +677,7 @@ class SynthModules:
     def _standardize_batch_input(self, input_val, requested_dtype, requested_dims):
 
         # Single scalar input value
-        if isinstance(input_val, (float, np.floating)):
+        if isinstance(input_val, (float, np.floating, int, np.int)):
             return input_val
 
         # List, ndarray or tensor input
