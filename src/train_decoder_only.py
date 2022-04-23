@@ -194,6 +194,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    args.params_to_freeze = {(0, 0): ['freq']}
+    args.params_to_freeze = {(0, 0): ['freq'], (0, 1): ['waveform']}
 
     run(args)

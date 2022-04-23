@@ -610,9 +610,18 @@ class SimpleWeightLayer(nn.Module):
         return x
 
     def freeze(self, val):
-        self.weight = nn.Parameter(torch.tensor(val), requires_grad=False)
+
+        device = self.weight.device
+
+        val = torch.tensor(val, device=device)
+
+        if val.ndim == 1:
+            val = val.unsqueeze(0)
+
+        self.weight = nn.Parameter(val, requires_grad=False)
         self.do_softmax = False
         self.do_sigmoid = False
+
 
 if __name__ == "__main__":
     synth_net = BigSynthNetwork()

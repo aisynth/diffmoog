@@ -80,7 +80,7 @@ class Config:
     multi_spectral_mag_weight: float = 1/500
     multi_spectral_delta_time_weight: float = 0#1/10000000
     multi_spectral_delta_freq_weight: float = 0#1/10000
-    multi_spectral_cumsum_freq_weight: float = 0#1/10000
+    multi_spectral_cumsum_freq_weight: float = 1/10000
     multi_spectral_cumsum_time_weight: float = 0#1/6000
     multi_spectral_logmag_weight: float = 0#1/1500000
     fft_sizes: tuple = (1024, 512, 256)

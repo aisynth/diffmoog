@@ -92,7 +92,10 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
     for op_index, pred_op_dict in predicted_params.items():
         target_op_dict = target_params[op_index]
         for param_name, pred_vals in pred_op_dict['parameters'].items():
+
             target_vals = target_op_dict['parameters'][param_name]
+            if pred_vals.ndim == 0 or (pred_vals.ndim == 1 and len(pred_vals) > 1):
+                pred_vals = np.expand_dims(pred_vals, 0)
 
             if param_name == 'waveform':
                 waveform_idx = [SynthConfig.wave_type_dict[wt] for wt in target_vals]
