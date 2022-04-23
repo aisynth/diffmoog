@@ -764,30 +764,31 @@ class SpectralLoss:
             value_mag = loss_op(audio.float())
 
             n_fft = loss_op.n_fft
+            n_fft_normalization_factor = (300.0 / n_fft)**2 if self.normalize_by_size else 1
             c_loss = 0.0
 
             # Add magnitude loss.
             if self.mag_weight > 0:
                 magnitude_loss = criterion(target_mag, value_mag)
                 loss_dict[f"{loss_name}_magnitude"] = magnitude_loss
-                weighted_loss_dict[f"{loss_name}_magnitude"] = self.mag_weight * magnitude_loss
-                c_loss += self.mag_weight * magnitude_loss
+                weighted_loss_dict[f"{loss_name}_magnitude"] = self.mag_weight * magnitude_loss * n_fft_normalization_factor
+                c_loss += self.mag_weight * magnitude_loss * n_fft_normalization_factor
 
             if self.delta_time_weight > 0:
                 target = torch.diff(target_mag, n=1, dim=1)
                 value = torch.diff(value_mag, n=1, dim=1)
                 delta_time_loss = criterion(target, value)
                 loss_dict[f"{loss_name}_delta_time"] = delta_time_loss
-                weighted_loss_dict[f"{loss_name}_delta_time"] = self.delta_time_weight * delta_time_loss
-                c_loss += self.delta_time_weight * delta_time_loss
+                weighted_loss_dict[f"{loss_name}_delta_time"] = self.delta_time_weight * delta_time_loss * n_fft_normalization_factor
+                c_loss += self.delta_time_weight * delta_time_loss * n_fft_normalization_factor
 
             if self.delta_freq_weight > 0:
                 target = torch.diff(target_mag, n=1, dim=2)
                 value = torch.diff(value_mag, n=1, dim=2)
                 delta_freq_loss = criterion(target, value)
                 loss_dict[f"{loss_name}_delta_freq"] = delta_freq_loss
-                weighted_loss_dict[f"{loss_name}_delta_freq"] = self.delta_freq_weight * delta_freq_loss
-                c_loss += self.delta_freq_weight * delta_freq_loss
+                weighted_loss_dict[f"{loss_name}_delta_freq"] = self.delta_freq_weight * delta_freq_loss * n_fft_normalization_factor
+                c_loss += self.delta_freq_weight * delta_freq_loss * n_fft_normalization_factor
 
             # TODO(kyriacos) normalize cumulative spectrogram
             if self.cumsum_time_weight > 0:
@@ -795,16 +796,16 @@ class SpectralLoss:
                 value = torch.cumsum(value_mag, dim=2)
                 emd_loss = criterion(target, value)
                 loss_dict[f"{loss_name}_emd_time"] = emd_loss
-                weighted_loss_dict[f"{loss_name}_emd_time"] = self.cumsum_time_weight * emd_loss
-                c_loss += self.cumsum_time_weight * emd_loss
+                weighted_loss_dict[f"{loss_name}_emd_time"] = self.cumsum_time_weight * emd_loss * np.sqrt(n_fft_normalization_factor)
+                c_loss += self.cumsum_time_weight * emd_loss * np.sqrt(n_fft_normalization_factor)
 
             if self.cumsum_freq_weight > 0:
                 target = torch.cumsum(target_mag, dim=1)
                 value = torch.cumsum(value_mag, dim=1)
                 emd_loss = criterion(target, value)
                 loss_dict[f"{loss_name}_emd_freq"] = emd_loss
-                weighted_loss_dict[f"{loss_name}_emd_freq"] = self.cumsum_freq_weight * emd_loss * (256 / n_fft)
-                c_loss += self.cumsum_freq_weight * emd_loss * (256 / n_fft)
+                weighted_loss_dict[f"{loss_name}_emd_freq"] = self.cumsum_freq_weight * emd_loss * n_fft_normalization_factor
+                c_loss += self.cumsum_freq_weight * emd_loss * n_fft_normalization_factor
 
             # Add logmagnitude loss, reusing spectrogram.
             if self.logmag_weight > 0:
@@ -812,11 +813,8 @@ class SpectralLoss:
                 value = torch.log(value_mag + 1)
                 logmag_loss = criterion(target, value)
                 loss_dict[f"{loss_name}_logmag"] = logmag_loss
-                weighted_loss_dict[f"{loss_name}_logmag"] = self.logmag_weight * logmag_loss
-                c_loss += self.logmag_weight * logmag_loss
-
-            if self.normalize_by_size:
-                c_loss /= (n_fft / 100.0)
+                weighted_loss_dict[f"{loss_name}_logmag"] = self.logmag_weight * logmag_loss * np.sqrt(n_fft_normalization_factor)
+                c_loss += self.logmag_weight * logmag_loss * np.sqrt(n_fft_normalization_factor)
 
             loss += c_loss
 

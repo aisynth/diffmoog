@@ -60,7 +60,7 @@ def train_single_step(model, step, sample, optimizer, scheduler, loss_handler, d
 
         summary_writer.add_image(f'{256}_spec/input_{0}', signal_vis_t, global_step=step, dataformats='HWC')
 
-        log_gradients_in_model(model, summary_writer, step)
+    log_gradients_in_model(model, summary_writer, step)
 
     log_dict_recursive('param_diff', param_diffs, summary_writer, step)
     log_dict_recursive('param_values_raw', output_dic, summary_writer, step)
@@ -111,7 +111,7 @@ def run(args):
     dataset_name = args.dataset
     cfg, model_cfg, synth_cfg, dataset_cfg = configure_experiment(exp_name, dataset_name)
 
-    sample_idx = 10
+    sample_idx = 0
 
     summary_writer = SummaryWriter(cfg.tensorboard_logdir)
 
@@ -141,7 +141,7 @@ def run(args):
         freeze_params = parse_args_to_freeze(args.params_to_freeze, normalized_target_params)
         synth_net.freeze_params(freeze_params)
 
-    optimizer = torch.optim.SGD(synth_net.parameters(), lr=model_cfg.learning_rate,
+    optimizer = torch.optim.Adam(synth_net.parameters(), lr=model_cfg.learning_rate,
                                 weight_decay=model_cfg.optimizer_weight_decay)
 
     print(f"Training model start")
