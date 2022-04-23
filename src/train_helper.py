@@ -18,27 +18,29 @@ def parse_synth_params(original_params: dict, predicted_params: dict, sample_idx
 
     pred_res, orig_res = {}, {}
 
+    original_params = to_numpy_recursive(original_params)
+    predicted_params = to_numpy_recursive(predicted_params)
+
     for k, d in predicted_params.items():
-        op = d['operation']
+        op = d['operation'] if isinstance(d['operation'], str) else d['operation'][0]
         if op in pred_res:
             op = op + '_|'
         pred_res[op] = {}
         orig_res[op] = {}
-        for param, vals in d['params'].items():
+        for param, vals in d['parameters'].items():
+
             if len(vals.shape) == 0:
-                pred_res[op][param] = _np_to_str(vals.detach().cpu().numpy().squeeze(), precision=2)
+                pred_res[op][param] = _np_to_str(vals.squeeze(), precision=2)
             else:
-                pred_res[op][param] = _np_to_str(vals[sample_idx].detach().cpu().numpy().squeeze(), precision=2)
+                pred_res[op][param] = _np_to_str(vals[sample_idx].squeeze(), precision=2)
 
             if param in ['waveform', 'filter_type']:
                 orig_res[op][param] = original_params[k]['parameters'][param][sample_idx]
             else:
                 if len(original_params[k]['parameters'][param].shape) == 0:
-                    orig_res[op][param] = \
-                        _np_to_str(original_params[k]['parameters'][param].detach().cpu().numpy(), precision=2)
+                    orig_res[op][param] = _np_to_str(original_params[k]['parameters'][param], precision=2)
                 else:
-                    orig_res[op][param] = \
-                        _np_to_str(original_params[k]['parameters'][param][sample_idx].detach().cpu().numpy(), precision=2)
+                    orig_res[op][param] = _np_to_str(original_params[k]['parameters'][param][sample_idx], precision=2)
 
     return orig_res, pred_res
 
@@ -57,10 +59,11 @@ def _np_to_str(val: np.ndarray, precision=2) -> str:
 def log_dict_recursive(tag: str, data_to_log, writer: SummaryWriter, step: int):
 
     if type(data_to_log) == list:
-        data_to_log = np.asarray(data_to_log).squeeze()
+        data_to_log = np.asarray(data_to_log)
 
     if type(data_to_log) in [torch.Tensor, np.ndarray, int, float]:
-        if data_to_log.size == 1 or len(data_to_log) <= 1:
+        data_to_log = data_to_log.squeeze()
+        if len(data_to_log.shape) == 0 or len(data_to_log) <= 1:
             writer.add_scalar(tag, data_to_log, step)
         elif len(data_to_log) > 1:
             writer.add_histogram(tag, data_to_log, step)
@@ -83,25 +86,24 @@ def log_dict_recursive(tag: str, data_to_log, writer: SummaryWriter, step: int):
 def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
 
     all_diffs = {}
+    predicted_params = to_numpy_recursive(predicted_params)
+    target_params = to_numpy_recursive(target_params)
 
     for op_index, pred_op_dict in predicted_params.items():
         target_op_dict = target_params[op_index]
-        for param_name, pred_vals in pred_op_dict['params'].items():
+        for param_name, pred_vals in pred_op_dict['parameters'].items():
             target_vals = target_op_dict['parameters'][param_name]
-
-            if isinstance(target_vals, (str, int, float)):
-                target_vals = [target_vals]
 
             if param_name == 'waveform':
                 waveform_idx = [SynthConfig.wave_type_dict[wt] for wt in target_vals]
-                diff = [1 - v[idx].cpu().detach().numpy() for idx, v in zip(waveform_idx, pred_vals)]
+                diff = [1 - v[idx] for idx, v in zip(waveform_idx, pred_vals)]
                 diff = np.asarray(diff).squeeze()
             elif param_name == 'filter_type':
                 filter_type_idx = [SynthConfig.filter_type_dict[ft] for ft in target_vals]
-                diff = [1 - v[idx].cpu().detach().numpy() for idx, v in zip(filter_type_idx, pred_vals)]
-                diff = np.asarray(diff)
+                diff = [1 - v[idx] for idx, v in zip(filter_type_idx, pred_vals)]
+                diff = np.asarray(diff).squeeze()
             else:
-                diff = torch.abs(target_vals.squeeze().cpu() - pred_vals.squeeze().cpu()).detach().numpy()
+                diff = np.abs(target_vals - pred_vals)
 
             all_diffs[f'{op_index}/{param_name}'] = diff
 
@@ -114,3 +116,21 @@ def get_activation(name, activations_dict: dict):
         activations_dict[name] = layer_output.detach()
 
     return hook
+
+
+def to_numpy_recursive(input_to_convert):
+
+    if isinstance(input_to_convert, (int, float, np.integer, np.floating, str)):
+        return np.asarray([input_to_convert])
+
+    if isinstance(input_to_convert, np.ndarray):
+        return input_to_convert
+
+    if isinstance(input_to_convert, torch.Tensor):
+        return input_to_convert.cpu().detach().numpy()
+
+    if isinstance(input_to_convert, list):
+        return np.asarray([to_numpy_recursive(item) for item in input_to_convert])
+
+    if isinstance(input_to_convert, dict):
+        return {k: to_numpy_recursive(v) for k, v in input_to_convert.items()}

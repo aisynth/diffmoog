@@ -338,7 +338,7 @@ def run(args):
     #     layer.register_forward_hook(get_activation(name, activations_dict))
 
     optimizer = torch.optim.SGD(synth_net.parameters(), lr=model_cfg.learning_rate,
-                                 weight_decay=model_cfg.optimizer_weight_decay)
+                                weight_decay=model_cfg.optimizer_weight_decay)
 
     print(f"Training model start")
 

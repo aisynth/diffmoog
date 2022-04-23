@@ -135,6 +135,10 @@ class SynthModular:
             self.update_cell(cell.index, cell.input_list, cell.operation, cell.parameters, cell.signal, cell.output,
                              self.synth_cfg)
 
+    def update_cells_from_dict(self, params_dict):
+        for cell_index, cell_params in params_dict.items():
+            self.update_cell(index=cell_index, parameters=cell_params['parameters'], synth_config=self.synth_cfg)
+
     def update_cell(self,
                     index: tuple,
                     input_list=None,

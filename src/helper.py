@@ -173,7 +173,7 @@ def clamp_adsr_params(parameters_dict: dict, synth_cfg: SynthConfig, cfg: Config
 
     for key, val in parameters_dict.items():
         operation = val['operation']
-        operation_params = val['params']
+        operation_params = val['parameters']
 
         if operation == 'env_adsr':
             attack_t = operation_params['attack_t']
@@ -277,12 +277,12 @@ class Normalizer:
         denormalized_params_dict = {}
         for key, val in parameters_dict.items():
             operation = val['operation']
-            params = val['params']
+            params = val['params'] if 'params' in val else val['parameters']
 
             if operation == 'osc':
                 denormalized_params_dict[key] = \
                     {'operation': operation,
-                     'params':
+                     'parameters':
                          {'amp': params['amp'],
                           'freq': self.oscillator_freq_normalizer.normalise(params['freq']),
                           'waveform': params['waveform']
@@ -292,7 +292,7 @@ class Normalizer:
             elif operation == 'lfo':
                 denormalized_params_dict[key] = \
                     {'operation': operation,
-                     'params':
+                     'parameters':
                          {
                              'freq': self.lfo_freq_normalizer.normalise(params['freq'])
                          }
@@ -301,7 +301,7 @@ class Normalizer:
             elif operation == 'fm':
                 denormalized_params_dict[key] = \
                     {'operation': operation,
-                     'params':
+                     'parameters':
                          {'amp_c': params['amp_c'],
                           'freq_c': self.oscillator_freq_normalizer.normalise(params['freq_c']),
                           'waveform': params['waveform'],
@@ -312,7 +312,7 @@ class Normalizer:
             elif operation == 'filter':
                 denormalized_params_dict[key] = \
                     {'operation': operation,
-                     'params':
+                     'parameters':
                          {'filter_type': params['filter_type'],
                           'filter_freq': self.filter_freq_normalizer.normalise(params['filter_freq'])
                           }
@@ -321,7 +321,7 @@ class Normalizer:
             elif operation == 'env_adsr':
                 denormalized_params_dict[key] = \
                     {'operation': operation,
-                     'params':
+                     'parameters':
                          {'attack_t': self.adsr_normalizer.normalise(params['attack_t']),
                           'decay_t': self.adsr_normalizer.normalise(params['decay_t']),
                           'sustain_t': self.adsr_normalizer.normalise(params['sustain_t']),
@@ -337,12 +337,12 @@ class Normalizer:
         denormalized_params_dict = {}
         for key, val in parameters_dict.items():
             operation = val['operation']
-            params = val['params']
+            params = val['params'] if 'params' in val else val['parameters']
 
             if operation == 'osc':
                 denormalized_params_dict[key] = \
                     {'operation': operation,
-                     'params':
+                     'parameters':
                          {'amp': params['amp'],
                           'freq': self.oscillator_freq_normalizer.denormalise(params['freq']),
                           'waveform': params['waveform']
@@ -352,7 +352,7 @@ class Normalizer:
             elif operation == 'lfo':
                 denormalized_params_dict[key] = \
                     {'operation': operation,
-                     'params':
+                     'parameters':
                          {
                           'freq': self.lfo_freq_normalizer.denormalise(params['freq'])
                           }
@@ -361,7 +361,7 @@ class Normalizer:
             elif operation == 'fm':
                 denormalized_params_dict[key] = \
                     {'operation': operation,
-                     'params':
+                     'parameters':
                          {'amp_c': params['amp_c'],
                           'freq_c': self.oscillator_freq_normalizer.denormalise(params['freq_c']),
                           'waveform': params['waveform'],
@@ -372,7 +372,7 @@ class Normalizer:
             elif operation == 'filter':
                 denormalized_params_dict[key] = \
                     {'operation': operation,
-                     'params':
+                     'parameters':
                          {'filter_type': params['filter_type'],
                           'filter_freq': self.filter_freq_normalizer.denormalise(params['filter_freq'])
                           }
@@ -381,7 +381,7 @@ class Normalizer:
             elif operation == 'env_adsr':
                 denormalized_params_dict[key] = \
                     {'operation': operation,
-                     'params':
+                     'parameters':
                          {'attack_t': self.adsr_normalizer.denormalise(params['attack_t']),
                           'decay_t': self.adsr_normalizer.denormalise(params['decay_t']),
                           'sustain_t': self.adsr_normalizer.denormalise(params['sustain_t']),
