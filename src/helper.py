@@ -739,7 +739,8 @@ class SpectralLoss:
              summary_writer: SummaryWriter,
              signal_chain_index: str,
              global_step: int,
-             return_spectrogram: bool=False):
+             return_spectrogram: bool=False,
+             log: bool = True):
         """ execute multi-spectral loss computation between two audio signals
 
         Args:
@@ -827,11 +828,12 @@ class SpectralLoss:
         #     loss += self.loudness_weight * mean_difference(
         #         target, value, self.loss_type, weights=weights)
 
-        for loss_name, loss_val in loss_dict.items():
-            summary_writer.add_scalar(f"sub_losses/{signal_chain_index}/{loss_name}", loss_val, global_step=global_step)
+        if log:
+            for loss_name, loss_val in loss_dict.items():
+                summary_writer.add_scalar(f"sub_losses/{signal_chain_index}/{loss_name}", loss_val, global_step=global_step)
 
-        for loss_name, loss_val in weighted_loss_dict.items():
-            summary_writer.add_scalar(f"weighted_sub_losses/{signal_chain_index}/{loss_name}", loss_val, global_step=global_step)
+            for loss_name, loss_val in weighted_loss_dict.items():
+                summary_writer.add_scalar(f"weighted_sub_losses/{signal_chain_index}/{loss_name}", loss_val, global_step=global_step)
 
         if return_spectrogram:
             return loss, spectrograms_dict

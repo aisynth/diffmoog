@@ -111,7 +111,7 @@ def run(args):
     dataset_name = args.dataset
     cfg, model_cfg, synth_cfg, dataset_cfg = configure_experiment(exp_name, dataset_name)
 
-    sample_idx = 0
+    sample_idx = 10
 
     summary_writer = SummaryWriter(cfg.tensorboard_logdir)
 
@@ -141,7 +141,7 @@ def run(args):
         freeze_params = parse_args_to_freeze(args.params_to_freeze, normalized_target_params)
         synth_net.freeze_params(freeze_params)
 
-    optimizer = torch.optim.Adam(synth_net.parameters(), lr=model_cfg.learning_rate,
+    optimizer = torch.optim.SGD(synth_net.parameters(), lr=model_cfg.learning_rate,
                                 weight_decay=model_cfg.optimizer_weight_decay)
 
     print(f"Training model start")
@@ -181,6 +181,7 @@ def parse_args_to_freeze(params_to_freeze, target_vals):
 
 
 if __name__ == "__main__":
+
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter,
                             description='Train AI Synth')
     parser.add_argument('-g', '--gpu_index', help='index of gpu (if exist, torch indexing) -1 for cpu',
@@ -194,6 +195,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    args.params_to_freeze = {(0, 0): ['freq'], (0, 1): ['waveform']}
+    args.params_to_freeze = {(0, 0): ['freq'], (0, 1): ['waveform', 'mod_index']}
 
     run(args)

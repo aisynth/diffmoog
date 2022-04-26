@@ -82,7 +82,7 @@ class Config:
     multi_spectral_delta_freq_weight: float = 0#1/10000
     multi_spectral_cumsum_freq_weight: float = 1/2000
     multi_spectral_cumsum_time_weight: float = 0#1/2000
-    multi_spectral_logmag_weight: float = 10
+    multi_spectral_logmag_weight: float = 0#10
     fft_sizes: tuple = (512, 256, 128, 64, 32)
     normalize_loss_by_nfft: bool = True
 
@@ -130,7 +130,7 @@ class Config:
 
         if self.spectrogram_loss_type == 'MULTI-SPECTRAL':
             # one of ['BOTH', 'MEL_SPECTROGRAM', 'SPECTROGRAM']
-            self.multi_spectral_loss_spec_type = 'MEL_SPECTROGRAM'
+            self.multi_spectral_loss_spec_type = 'SPECTROGRAM'
 
         if self.mode == 1:
             self.architecture = 'SPECTROGRAM_ONLY'
@@ -172,7 +172,7 @@ class ModelConfig:
     backbone: str = 'resnet'
     batch_size: int = 1
     num_epochs: int = 1000
-    learning_rate: float = 1e-4
+    learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
     optimizer_scheduler_gamma: float = 0.1
