@@ -106,7 +106,7 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
                 diff = [1 - v[idx] for idx, v in zip(filter_type_idx, pred_vals)]
                 diff = np.asarray(diff).squeeze()
             else:
-                diff = np.abs(target_vals - pred_vals)
+                diff = np.abs(target_vals.squeeze() - pred_vals.squeeze())
 
             all_diffs[f'{op_index}/{param_name}'] = diff
 

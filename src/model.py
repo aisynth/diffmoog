@@ -229,7 +229,7 @@ class BigSynthNetwork(nn.Module):
                 predicted_release_t = self.sigmoid(predicted_release_t)
 
                 output_dic[index] = {'operation': operation,
-                                     'params': {'attack_t': predicted_attack_t,
+                                     'parameters': {'attack_t': predicted_attack_t,
                                                 'decay_t': predicted_decay_t,
                                                 'sustain_t': predicted_sustain_t,
                                                 'sustain_level': predicted_sustain_level,
@@ -346,10 +346,10 @@ class DecoderOnlyNetwork(nn.Module):
 
 class SimpleSynthNetwork(nn.Module):
 
-    def __init__(self, synth_cfg: SynthConfig, device, backbone='resnet'):
+    def __init__(self, preset: str, synth_cfg: SynthConfig, device, backbone='resnet'):
         super().__init__()
 
-        self.preset = synth_presets_dict.get(synth_cfg.preset, None)
+        self.preset = synth_presets_dict.get(preset, None)
         if self.preset is None:
             ValueError("Unknown self.cfg.PRESET")
 
@@ -436,7 +436,7 @@ class SimpleSynthNetwork(nn.Module):
                 waveform_probabilities = self.softmax(waveform_logits)
 
                 output_dic[index] = {'operation': operation,
-                                     'params': {'amp': predicted_amplitude,
+                                     'parameters': {'amp': predicted_amplitude,
                                                 'freq': predicted_frequency,
                                                 'waveform': waveform_probabilities
                                                 }}
@@ -447,7 +447,7 @@ class SimpleSynthNetwork(nn.Module):
                 predicted_frequency = self.sigmoid(predicted_frequency) #self.sigmoid(predicted_frequency)
 
                 output_dic[index] = {'operation': operation,
-                                     'params': {'freq': predicted_frequency
+                                     'parameters': {'freq': predicted_frequency
                                                 }}
             elif operation == 'fm':
                 carrier_amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp_c')]
@@ -465,7 +465,7 @@ class SimpleSynthNetwork(nn.Module):
                 predicted_mod_index = self.sigmoid(predicted_mod_index)
 
                 output_dic[index] = {'operation': operation,
-                                     'params': {'amp_c': predicted_carrier_amplitude,
+                                     'parameters': {'amp_c': predicted_carrier_amplitude,
                                                 'freq_c': predicted_carrier_frequency,
                                                 'waveform': waveform_probabilities,
                                                 'mod_index': predicted_mod_index
@@ -481,7 +481,7 @@ class SimpleSynthNetwork(nn.Module):
                 predicted_filter_freq = self.sigmoid(predicted_filter_freq)
 
                 output_dic[index] = {'operation': operation,
-                                     'params': {'filter_type': filter_type_probabilities,
+                                     'parameters': {'filter_type': filter_type_probabilities,
                                                 'filter_freq': predicted_filter_freq
                                                 }}
 
@@ -508,7 +508,7 @@ class SimpleSynthNetwork(nn.Module):
                 predicted_release_t = self.sigmoid(predicted_release_t)
 
                 output_dic[index] = {'operation': operation,
-                                     'params': {'attack_t': predicted_attack_t,
+                                     'parameters': {'attack_t': predicted_attack_t,
                                                 'decay_t': predicted_decay_t,
                                                 'sustain_t': predicted_sustain_t,
                                                 'sustain_level': predicted_sustain_level,
