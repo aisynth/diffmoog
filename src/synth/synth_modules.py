@@ -12,9 +12,8 @@ import math
 
 from torchaudio.functional.filtering import lowpass_biquad, highpass_biquad
 import matplotlib.pyplot as plt
-import helper
+from model import helper
 import julius
-from synth.synth_config import *
 from config import SynthConfig
 
 try:

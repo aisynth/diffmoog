@@ -3,9 +3,7 @@ from typing import Sequence
 import torch
 from torch import nn
 from torchvision.models import resnet18, resnet34
-import helper
 from torchsummary import summary
-from dataclasses import dataclass
 from synth.synth_modular_presets import synth_presets_dict
 from config import SynthConfig
 

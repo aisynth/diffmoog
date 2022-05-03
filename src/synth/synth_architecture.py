@@ -1,13 +1,13 @@
 import matplotlib.pyplot as plt
 import numpy
-from config import SynthConfig, Config
+from config import SynthConfig
 from synth import synth_modular_presets
 import random
 import simpleaudio as sa
 import numpy as np
 import torch
 from torch import nn
-import helper
+from model import helper
 from synth.synth_modules import SynthModules
 
 

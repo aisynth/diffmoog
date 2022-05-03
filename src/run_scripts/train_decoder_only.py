@@ -3,11 +3,11 @@ from collections import defaultdict
 from tqdm import tqdm
 
 from config import Config, ModelConfig, configure_experiment
-from ai_synth_dataset import AiSynthDataset
+from dataset.ai_synth_dataset import AiSynthDataset
 from inference import visualize_signal_prediction
-from model import DecoderOnlyNetwork
+from model.model import DecoderOnlyNetwork
 from synth.synth_architecture import SynthModular
-import helper
+from model import helper
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from train_helper import *

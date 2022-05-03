@@ -2,13 +2,10 @@ import os
 import pandas as pd
 import scipy.io.wavfile
 import torch
-from pathlib import Path
-import helper
-from synth.synth_architecture import SynthModular
-from src.synth import synth_modular_presets
+from model import helper
 from config import SynthConfig, DatasetConfig, Config
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
-from synth.synth_architecture import SynthModularCell, SynthModular
+from synth.synth_architecture import SynthModular
 
 """
 Create a dataset by randomizing synthesizer parameters and generating sound.

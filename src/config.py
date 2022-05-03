@@ -74,17 +74,8 @@ class Config:
     freq_mse_loss_factor: float = 1e-3
     freq_reinforce_loss_factor: float = 1e5
 
-    # multi-spectral loss configs
-    multi_spectral_loss_type: str = 'L1'
     multi_spectral_loss_spec_type: str = 'BOTH'
-    multi_spectral_mag_weight: float = 1/200
-    multi_spectral_delta_time_weight: float = 0#1/200
-    multi_spectral_delta_freq_weight: float = 0#1/10000
-    multi_spectral_cumsum_freq_weight: float = 0#1/2000
-    multi_spectral_cumsum_time_weight: float = 0#1/2000
-    multi_spectral_logmag_weight: float = 0#10
-    fft_sizes: tuple = (64, 128) #(2048, 1024, 512, 256, 128, 64)
-    normalize_loss_by_nfft: bool = False
+    multi_spectral_loss_preset: str = 'cumsum_time'
 
     # Debug
     debug_mode: bool = False
@@ -168,12 +159,12 @@ class DatasetConfig:
 
 @dataclass
 class ModelConfig:
-    preset: str = 'FILTER_ONLY'
+    preset: str = 'LFO'
     model_type: str = 'simple'
     backbone: str = 'resnet'
     batch_size: int = 128
     num_epochs: int = 20
-    learning_rate: float = 3e-5
+    learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
     optimizer_scheduler_gamma: float = 0.1
@@ -183,7 +174,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'FM_FILTER'
+    preset: str = 'FM'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}

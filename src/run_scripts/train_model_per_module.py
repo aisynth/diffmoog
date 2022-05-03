@@ -1,21 +1,12 @@
 import os.path
 from collections import defaultdict
 
-import torch
-from torch import nn
-
-import numpy as np
-
-from torch.utils.tensorboard import SummaryWriter
-
-from config import Config, SynthConfig, DatasetConfig, ModelConfig, configure_experiment
-from ai_synth_dataset import AiSynthDataset, create_data_loader
+from config import Config, ModelConfig, configure_experiment
+from dataset.ai_synth_dataset import AiSynthDataset, create_data_loader
 from inference import visualize_signal_prediction
-from model import BigSynthNetwork, SimpleSynthNetwork, DecoderOnlyNetwork
-from synth.synth_architecture import SynthModular, SynthModularCell
-import helper
-import time
-from pathlib import Path
+from model.model import SimpleSynthNetwork
+from synth.synth_architecture import SynthModular
+from model import helper
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from tqdm import tqdm
 

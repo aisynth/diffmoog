@@ -1,8 +1,7 @@
 import os
-import torch
 import pandas as pd
 import torchaudio
-import helper
+from model import helper
 from torch.utils.data import Dataset
 from config import Config
 from torch.utils.data import DataLoader
