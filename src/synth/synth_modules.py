@@ -206,8 +206,20 @@ class SynthModules:
         amp_c = self._standardize_batch_input(amp_c, requested_dtype=torch.float32, requested_dims=2)
         freq_c = self._standardize_batch_input(freq_c, requested_dtype=torch.float32, requested_dims=2)
         mod_index = self._standardize_batch_input(mod_index, requested_dtype=torch.float32, requested_dims=2)
+        modulator = self._standardize_batch_input(modulator, requested_dtype=torch.float32, requested_dims=2)
 
-        fm_sine_wave, fm_square_wave, fm_sawtooth_wave = self._generate_wave_tensors(amp_c, freq_c, mod_index*modulator)
+        t = self.time_samples
+
+        fm_sine_wave = amp_c * torch.sin(TWO_PI * freq_c * t + mod_index * torch.cumsum(modulator, dim=1))
+
+        fm_square_wave = amp_c * torch.sign(
+            torch.sin(TWO_PI * freq_c * t + mod_index * torch.cumsum(modulator, dim=1)))
+
+        # fm_triangle_wave = (2 * amp_c / PI) * torch.arcsin(torch.sin((TWO_PI * freq_c * t + mod_index * torch.cumsum(modulator, dim=1))))
+
+        fm_sawtooth_wave = 2 * (t * freq_c - torch.floor(0.5 + t * freq_c))
+        fm_sawtooth_wave = (((fm_sawtooth_wave + 1) / 2) + mod_index * torch.cumsum(modulator, dim=1) / TWO_PI) % 1
+        fm_sawtooth_wave = amp_c * (fm_sawtooth_wave * 2 - 1)
 
         waves_tensor = torch.stack([fm_sine_wave, fm_square_wave, fm_sawtooth_wave])
         oscillator_tensor = self._mix_waveforms(waves_tensor, waveform, self.wave_type_indices)
@@ -674,6 +686,39 @@ class SynthModules:
             filtered_waveform_new = julius.highpass_filter_new(input_signal, cutoff_freq / self.sample_rate)
             return filtered_waveform_new
 
+    def tremolo_for_input_signal(self, input_signal, amount, freq_m, waveform_m):
+        """tremolo effect for an input signal
+
+            This is a kind of AM modulation, where the signal is multiplied as a whole by a given modulator.
+            The modulator is shifted such that it resides in range [start, 1], where start is <1 - amount>.
+            so start is > 0, such that the original amplitude of the input audio is preserved and there is no phase
+            shift due to multiplication by negative number.
+
+            Args:
+                self: Self object
+                input_signal: Input signal to be used as carrier
+                amount: amount of effect, in range [0, 1]
+                freq_m: Frequency of modulator in range [0, 20]
+                waveform_m: Waveform of modulator. One of [sine, square, triangle, sawtooth]
+
+            Returns:
+                A torch with the constructed AM signal
+
+            Raises:
+                ValueError: Provided variables are inappropriate
+                ValueError: Amount is out of range [-1, 1]
+            """
+        self.signal_values_sanity_check(amp=1, freq=freq_m, waveform=waveform_m)
+        if amount > 1 or amount < 0:
+            ValueError("amount is out of range [0, 1]")
+        modulator = SynthModules()
+        modulator.signal = modulator.oscillator(amp=1, freq=freq_m, phase=0, waveform=waveform_m)
+        modulator.signal = amount * (modulator.signal + 1) / 2 + (1 - amount)
+
+        am_signal = input_signal * modulator.signal
+
+        return am_signal
+
     def _standardize_batch_input(self, input_val, requested_dtype, requested_dims):
 
         # Single scalar input value
@@ -691,8 +736,10 @@ class SynthModules:
         # Add batch dim if doesn't exist
         if output_tensor.ndim == 0:
             output_tensor = torch.unsqueeze(output_tensor, dim=0)
-        if output_tensor.ndim == 1:
+        if output_tensor.ndim == 1 and len(output_tensor) != self.sample_rate:
             output_tensor = torch.unsqueeze(output_tensor, dim=1)
+        if output_tensor.ndim == 1 and len(output_tensor) == self.sample_rate:
+            output_tensor = torch.unsqueeze(output_tensor, dim=0)
 
         assert output_tensor.ndim == requested_dims, f"Input has unexpected number of dimensions: {output_tensor.ndim}"
 

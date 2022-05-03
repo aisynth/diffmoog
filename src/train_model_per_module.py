@@ -23,6 +23,7 @@ from train_helper import *
 
 
 def train_single_epoch(model,
+                       lfo_net,
                        epoch,
                        data_loader,
                        transform,
@@ -149,6 +150,7 @@ def train_single_epoch(model,
 
 
 def train(model,
+          lfo_net,
           data_loader,
           transform,
           optimizer,
@@ -199,6 +201,7 @@ def train(model,
         cur_epoch = start_epoch + epoch
         avg_epoch_loss = \
             train_single_epoch(model=model,
+                               lfo_net=lfo_net,
                                epoch=cur_epoch,
                                data_loader=data_loader,
                                transform=transform,
@@ -245,14 +248,18 @@ def run(args):
     ai_synth_dataset = AiSynthDataset(dataset_cfg.train_parameters_file, dataset_cfg.train_audio_dir, device)
     train_dataloader = create_data_loader(ai_synth_dataset, model_cfg.batch_size, ModelConfig.num_workers)
 
+    # Hard coded lfo predictor net
+    lfo_net = SimpleSynthNetwork('LFO', synth_cfg, device, backbone=model_cfg.backbone).to(device)
+    checkpoint = torch.load(cfg.lfo_model_path)
+    lfo_net.load_state_dict(checkpoint['model_state_dict'])
+    lfo_net.eval()
+    lfo_net.requires_grad_(False)
+
     # construct model and assign it to device
     if model_cfg.model_type == 'simple':
         synth_net = SimpleSynthNetwork(model_cfg.preset, synth_cfg, device, backbone=model_cfg.backbone).to(device)
     else:
         raise NotImplementedError("only SimpleSynthNetwork supported at the moment")
-
-    # for name, layer in synth_net.named_modules():
-    #     layer.register_forward_hook(get_activation(name, activations_dict))
 
     optimizer = torch.optim.Adam(synth_net.parameters(),
                                  lr=model_cfg.learning_rate,
@@ -272,6 +279,7 @@ def run(args):
 
     # train model
     train(model=synth_net,
+          lfo_net=lfo_net,
           data_loader=train_dataloader,
           transform=transform,
           optimizer=optimizer,

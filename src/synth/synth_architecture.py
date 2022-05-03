@@ -196,10 +196,10 @@ class SynthModular:
                               'freq': random.choices(synth_cfg.osc_freq_list, k=num_sounds),
                               'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds)}
                 elif operation == 'lfo':
-                    params = {'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds)}
+                    params = {'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds),
+                              'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds)}
                 elif operation == 'fm':
-                    params = {'amp_c': np.random.random_sample(size=num_sounds),
-                              'freq_c': self._sample_c_freq(synth_cfg, num_sounds),
+                    params = {'freq_c': self._sample_c_freq(synth_cfg, num_sounds),
                               'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds),
                               'mod_index': np.random.uniform(low=0, high=synth_cfg.max_mod_index, size=num_sounds)}
                 elif operation == 'mix':
@@ -283,7 +283,7 @@ class SynthModular:
                     cell.signal = synth_module.batch_oscillator(amp=1.0,
                                                                 freq=cell.parameters['freq'],
                                                                 phase=0,
-                                                                waveform='sine')
+                                                                waveform=cell.parameters['waveform'])
 
                 elif operation == 'fm':
                     if len(cell.input_list) == 1:
@@ -296,7 +296,7 @@ class SynthModular:
                         modulator = 0
                         AttributeError("Illegal cell input")
 
-                    cell.signal = synth_module.batch_oscillator_fm(amp_c=cell.parameters['amp_c'],
+                    cell.signal = synth_module.batch_oscillator_fm(amp_c=1.0,
                                                                    freq_c=cell.parameters['freq_c'],
                                                                    waveform=cell.parameters['waveform'],
                                                                    mod_index=cell.parameters['mod_index'],

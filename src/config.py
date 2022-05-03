@@ -76,14 +76,14 @@ class Config:
 
     # multi-spectral loss configs
     multi_spectral_loss_type: str = 'L1'
-    multi_spectral_loss_spec_type: str = 'MEL_SPECTROGRAM'
-    multi_spectral_mag_weight: float = 0#1/500
-    multi_spectral_delta_time_weight: float = 0#1/100
+    multi_spectral_loss_spec_type: str = 'BOTH'
+    multi_spectral_mag_weight: float = 1/200
+    multi_spectral_delta_time_weight: float = 0#1/200
     multi_spectral_delta_freq_weight: float = 0#1/10000
-    multi_spectral_cumsum_freq_weight: float = 1/2000
-    multi_spectral_cumsum_time_weight: float = 0#1/2000
+    multi_spectral_cumsum_freq_weight: float = 0#1/2000
+    multi_spectral_cumsum_time_weight: float = 1/2000
     multi_spectral_logmag_weight: float = 0#10
-    fft_sizes: tuple = (2048, 1024, 512, 256, 128, 64)
+    fft_sizes: tuple = (64, 128) #(2048, 1024, 512, 256, 128, 64)
     normalize_loss_by_nfft: bool = True
 
     # Debug
@@ -168,12 +168,12 @@ class DatasetConfig:
 
 @dataclass
 class ModelConfig:
-    preset: str = 'LFO'
+    preset: str = 'FM_ONLY'
     model_type: str = 'simple'
     backbone: str = 'resnet'
     batch_size: int = 128
-    num_epochs: int = 1000
-    learning_rate: float = 3e-4
+    num_epochs: int = 20
+    learning_rate: float = 3e-1
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
     optimizer_scheduler_gamma: float = 0.1
@@ -194,7 +194,7 @@ class SynthConfig:
     semitones_max_offset: int = 24
     middle_c_freq: float = 261.6255653005985
     max_amp: float = 1
-    max_mod_index: float = 100
+    max_mod_index: float = 0.3
     max_lfo_freq: float = 20
     min_filter_freq: float = 0
     max_filter_freq: float = 8000
@@ -211,7 +211,7 @@ class SynthConfig:
     # Modular synth possible modules from synth_modules.py
     modular_synth_operations = ['osc', 'fm', 'lfo', 'mix', 'filter', 'env_adsr']
     modular_synth_params = {'osc': ['amp', 'freq', 'waveform'],
-                            'lfo': ['freq'],
+                            'lfo': ['freq', 'waveform'],
                             'fm': ['amp_c', 'freq_c', 'waveform', 'mod_index'],
                             'mix': None,
                             'filter': ['filter_freq', 'filter_type'],

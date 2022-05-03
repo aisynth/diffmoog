@@ -379,6 +379,9 @@ class SimpleSynthNetwork(nn.Module):
                 frequency_head = MLPBlock([LATENT_SPACE_SIZE, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
 
+                carrier_waveform_head = MLPBlock([LATENT_SPACE_SIZE, len(synth_cfg.wave_type_dict)])
+                self.heads_module_dict[self.get_key(index, operation, 'waveform')] = carrier_waveform_head
+
             elif operation == 'fm':
                 carrier_amplitude_head = MLPBlock([LATENT_SPACE_SIZE, 1])
                 carrier_frequency_head = MLPBlock([LATENT_SPACE_SIZE, 1])
@@ -442,21 +445,26 @@ class SimpleSynthNetwork(nn.Module):
                                                 }}
             if operation == 'lfo':
                 frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq')]
+                waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]
 
                 predicted_frequency = frequency_head(latent)
                 predicted_frequency = self.sigmoid(predicted_frequency) #self.sigmoid(predicted_frequency)
 
+                waveform_logits = waveform_head(latent)
+                waveform_probabilities = self.softmax(waveform_logits)
+
                 output_dic[index] = {'operation': operation,
-                                     'parameters': {'freq': predicted_frequency
-                                                }}
+                                     'parameters': {'freq': predicted_frequency,
+                                                    'waveform': waveform_probabilities
+                                                    }}
             elif operation == 'fm':
-                carrier_amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp_c')]
+                # carrier_amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp_c')]
                 carrier_frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq_c')]
                 waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]
                 mod_index_head = self.heads_module_dict[self.get_key(index, operation, 'mod_index')]
 
-                predicted_carrier_amplitude = carrier_amplitude_head(latent)
-                predicted_carrier_amplitude = self.sigmoid(predicted_carrier_amplitude)
+                # predicted_carrier_amplitude = carrier_amplitude_head(latent)
+                # predicted_carrier_amplitude = self.sigmoid(predicted_carrier_amplitude)
                 predicted_carrier_frequency = carrier_frequency_head(latent)
                 predicted_carrier_frequency = self.sigmoid(predicted_carrier_frequency)
                 waveform_logits = waveform_head(latent)
@@ -465,11 +473,10 @@ class SimpleSynthNetwork(nn.Module):
                 predicted_mod_index = self.sigmoid(predicted_mod_index)
 
                 output_dic[index] = {'operation': operation,
-                                     'parameters': {'amp_c': predicted_carrier_amplitude,
-                                                'freq_c': predicted_carrier_frequency,
-                                                'waveform': waveform_probabilities,
-                                                'mod_index': predicted_mod_index
-                                                }}
+                                     'parameters': {'freq_c': predicted_carrier_frequency,
+                                                    'waveform': waveform_probabilities,
+                                                    'mod_index': predicted_mod_index
+                                                    }}
 
             elif operation == 'filter':
                 filter_type_head = self.heads_module_dict[self.get_key(index, operation, 'filter_type')]

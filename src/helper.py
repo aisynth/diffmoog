@@ -354,7 +354,8 @@ class Normalizer:
                     {'operation': operation,
                      'parameters':
                          {
-                          'freq': self.lfo_freq_normalizer.denormalise(params['freq'])
+                          'freq': self.lfo_freq_normalizer.denormalise(params['freq']),
+                          'waveform': params['waveform']
                           }
                      }
 
@@ -362,8 +363,7 @@ class Normalizer:
                 denormalized_params_dict[key] = \
                     {'operation': operation,
                      'parameters':
-                         {'amp_c': params['amp_c'],
-                          'freq_c': self.oscillator_freq_normalizer.denormalise(params['freq_c']),
+                         {'freq_c': self.oscillator_freq_normalizer.denormalise(params['freq_c']),
                           'waveform': params['waveform'],
                           'mod_index': self.mod_index_normalizer.denormalise(params['mod_index'])
                           }
@@ -780,8 +780,8 @@ class SpectralLoss:
                 value = torch.diff(value_mag, n=1, dim=1)
                 delta_time_loss = criterion(target, value)
                 loss_dict[f"{loss_name}_delta_time"] = delta_time_loss
-                weighted_loss_dict[f"{loss_name}_delta_time"] = self.delta_time_weight * delta_time_loss * n_fft_normalization_factor
-                c_loss += self.delta_time_weight * delta_time_loss * n_fft_normalization_factor
+                weighted_loss_dict[f"{loss_name}_delta_time"] = self.delta_time_weight * delta_time_loss * np.sqrt(n_fft_normalization_factor)
+                c_loss += self.delta_time_weight * delta_time_loss * np.sqrt(n_fft_normalization_factor)
 
             if self.delta_freq_weight > 0:
                 target = torch.diff(target_mag, n=1, dim=2)
