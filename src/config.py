@@ -81,10 +81,10 @@ class Config:
     multi_spectral_delta_time_weight: float = 0#1/200
     multi_spectral_delta_freq_weight: float = 0#1/10000
     multi_spectral_cumsum_freq_weight: float = 0#1/2000
-    multi_spectral_cumsum_time_weight: float = 1/2000
+    multi_spectral_cumsum_time_weight: float = 0#1/2000
     multi_spectral_logmag_weight: float = 0#10
     fft_sizes: tuple = (64, 128) #(2048, 1024, 512, 256, 128, 64)
-    normalize_loss_by_nfft: bool = True
+    normalize_loss_by_nfft: bool = False
 
     # Debug
     debug_mode: bool = False
@@ -173,7 +173,7 @@ class ModelConfig:
     backbone: str = 'resnet'
     batch_size: int = 128
     num_epochs: int = 20
-    learning_rate: float = 3e-1
+    learning_rate: float = 3e-3
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
     optimizer_scheduler_gamma: float = 0.1

@@ -1,3 +1,4 @@
+import copy
 import os.path
 from collections import defaultdict
 
@@ -73,20 +74,17 @@ def train_single_epoch(model,
                 epoch_param_diffs[op_idx].extend(diff_vals)
 
             # -------------Generate Signal-------------------------------
-            # --------------Predicted-------------------------------------
-            params_for_pred_signal_generation = target_param_dict.copy()
-            params_for_pred_signal_generation.update(predicted_param_dict)
-            modular_synth.update_cells_from_dict(params_for_pred_signal_generation)
-            pred_final_signal, pred_signals_through_chain = \
-                modular_synth.generate_signal(num_sounds=len(transformed_signal))
-
             # --------------Target-------------------------------------
             modular_synth.update_cells_from_dict(target_param_dict)
             target_final_signal, target_signals_through_chain = \
                 modular_synth.generate_signal(num_sounds=len(transformed_signal))
 
-            modular_synth.signal = helper.move_to(modular_synth.signal, device)
-            target_signal = target_signal.squeeze()
+            # --------------Predicted-------------------------------------
+            params_for_pred_signal_generation = copy.deepcopy(target_param_dict)
+            params_for_pred_signal_generation.update(predicted_param_dict)
+            modular_synth.update_cells_from_dict(params_for_pred_signal_generation)
+            pred_final_signal, pred_signals_through_chain = \
+                modular_synth.generate_signal(num_sounds=len(transformed_signal))
 
             # Compute loss and backprop
             loss_total = 0
@@ -133,7 +131,7 @@ def train_single_epoch(model,
                                              global_step=epoch,
                                              dataformats='HWC')
 
-            if num_of_mini_batches % 100 == 0:
+            if num_of_mini_batches % 50 == 0:
                 log_gradients_in_model(model, summary_writer, step)
 
             tepoch.set_postfix(loss=loss_total.item())
