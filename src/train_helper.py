@@ -103,7 +103,7 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
                 diff = [1 - v[idx] for idx, v in zip(waveform_idx, pred_vals)]
                 diff = np.asarray(diff).squeeze()
             elif param_name == 'filter_type':
-                filter_type_idx = [SynthConfig.filter_type_dict[ft] for ft in target_vals]
+                filter_type_idx = [SynthConfig.filter_type_dict[ft] for ft in target_vals.squeeze()]
                 diff = [1 - v[idx] for idx, v in zip(filter_type_idx, pred_vals)]
                 diff = np.asarray(diff).squeeze()
             else:

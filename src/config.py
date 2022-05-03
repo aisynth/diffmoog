@@ -141,7 +141,7 @@ class Config:
 @dataclass
 class DatasetConfig:
     dataset_size: int = 50000
-    batch_size: int = 100
+    batch_size: int = 1000
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
     train_audio_dir: str = None
@@ -168,12 +168,12 @@ class DatasetConfig:
 
 @dataclass
 class ModelConfig:
-    preset: str = 'FM_ONLY'
+    preset: str = 'FILTER_ONLY'
     model_type: str = 'simple'
     backbone: str = 'resnet'
     batch_size: int = 128
     num_epochs: int = 20
-    learning_rate: float = 3e-3
+    learning_rate: float = 3e-5
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
     optimizer_scheduler_gamma: float = 0.1
@@ -183,7 +183,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'FM'
+    preset: str = 'FM_FILTER'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}
