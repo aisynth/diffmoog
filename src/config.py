@@ -131,7 +131,7 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 50000
+    dataset_size: int = 1000
     batch_size: int = 1000
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
@@ -159,7 +159,7 @@ class DatasetConfig:
 
 @dataclass
 class ModelConfig:
-    preset: str = 'LFO'
+    preset: str = 'FM'
     model_type: str = 'simple'
     backbone: str = 'resnet'
     batch_size: int = 128
@@ -224,16 +224,16 @@ def configure_experiment(exp_name: str, dataset_name: str):
 
     project_root = os.path.join(EXP_ROOT, 'current', exp_name, '')
 
-    if os.path.isdir(project_root):
-        overwrite = input(colored(f"Folder {project_root} already exists. Overwrite previous experiment (Y/N)?"
-                                  f"\n\tThis will delete all files related to the previous run!",
-                                  'yellow'))
-        if overwrite.lower() != 'y':
-            print('Exiting...')
-            exit()
+    # if os.path.isdir(project_root):
+    #     overwrite = input(colored(f"Folder {project_root} already exists. Overwrite previous experiment (Y/N)?"
+    #                               f"\n\tThis will delete all files related to the previous run!",
+    #                               'yellow'))
+    #     if overwrite.lower() != 'y':
+    #         print('Exiting...')
+    #         exit()
 
-        print("Deleting previous experiment...")
-        rmtree(project_root)
+    print("Deleting previous experiment...")
+    rmtree(project_root)
 
     cfg = Config(project_root)
     synth_cfg = SynthConfig()
