@@ -79,6 +79,16 @@ DOUBLE_LFO = [
     {'index': (1, 1), 'operation': None, 'input_list': None, 'synth_config': synth_cfg}
 ]
 
+OSC_AMPLITUDE_SHAPER = [
+    {'index': (0, 0), 'operation': 'osc', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (0, 1), 'operation': 'amplitude_shape', 'default_connection': True, 'synth_config': synth_cfg}
+]
+
+OSC_FILTER_SHAPER = [
+    {'index': (0, 0), 'operation': 'osc', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (0, 1), 'operation': 'filter_shape', 'default_connection': True, 'synth_config': synth_cfg}
+]
+
 synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW, 'LFO': LFO, 'OSC': OSC, 'FM': FM,
                       'BASIC_FLOW_NO_ADSR': BASIC_FLOW_NO_ADSR,
                       'BASIC_FLOW_NO_ADSR_NO_FILTER': BASIC_FLOW_NO_ADSR_NO_FILTER,
@@ -86,4 +96,6 @@ synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW, 'LFO': LFO, 'OSC': OSC, 'FM': FM
                       'FM_FILTER': FM_FILTER,
                       'DOUBLE_LFO': DOUBLE_LFO,
                       'FM_ONLY': FM_ONLY,
-                      'FILTER_ONLY': FILTER_ONLY}
+                      'FILTER_ONLY': FILTER_ONLY,
+                      'OSC_AMPLITUDE_SHAPER': OSC_AMPLITUDE_SHAPER,
+                      'OSC_FILTER_SHAPER': OSC_FILTER_SHAPER}

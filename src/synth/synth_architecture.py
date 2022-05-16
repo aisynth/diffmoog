@@ -204,6 +204,8 @@ class SynthModular:
                               'mod_index': np.random.uniform(low=0, high=synth_cfg.max_mod_index, size=num_sounds)}
                 elif operation == 'mix':
                     params = None
+                elif operation == 'amplitude_shape':
+                    params = None
                 elif operation == 'filter':
                     params = {'filter_type': random.choices(list(synth_cfg.filter_type_dict), k=num_sounds),
                               'filter_freq': np.random.uniform(low=synth_cfg.min_filter_freq,
@@ -274,11 +276,15 @@ class SynthModular:
                     cell.signal = signal
 
                 elif operation == 'osc':
-                    cell.signal = synth_module.oscillator(amp=cell.parameters['amp'],
-                                                          freq=cell.parameters['freq'],
-                                                          phase=0,
-                                                          waveform=cell.parameters['waveform'],
-                                                          num_sounds=num_sounds)
+                    # cell.signal = synth_module.oscillator(amp=cell.parameters['amp'],
+                    #                                       freq=cell.parameters['freq'],
+                    #                                       phase=0,
+                    #                                       waveform=cell.parameters['waveform'],
+                    #                                       num_sounds=num_sounds)
+                    cell.signal = synth_module.batch_oscillator(amp=cell.parameters['amp'],
+                                                                freq=cell.parameters['freq'],
+                                                                phase=0,
+                                                                waveform=cell.parameters['waveform'])
                 elif operation == 'lfo':
                     cell.signal = synth_module.batch_oscillator(amp=1.0,
                                                                 freq=cell.parameters['freq'],
@@ -311,6 +317,32 @@ class SynthModular:
                         signal += input_sound
 
                     cell.signal = signal / num_inputs
+
+                elif operation == 'amplitude_shape':
+                    if len(cell.input_list) == 1:
+                        input_cell_index = cell.input_list[0]
+                        input_cell = self.architecture[input_cell_index[0]][input_cell_index[1]]
+                        input_signal = input_cell.signal
+                    else:
+                        input_signal = 0
+                        AttributeError("Illegal cell input")
+                    # todo: cahnge line below to wanted behavior
+                    # envelope_shape = torch.linspace(1, 0, 16000).to(self.device)
+                    envelope_shape = torch.ones(16000).to(self.device)
+                    cell.signal = synth_module.amplitude_envelope(input_signal, envelope_shape)
+
+                elif operation == 'filter_shape':
+                    if len(cell.input_list) == 1:
+                        input_cell_index = cell.input_list[0]
+                        input_cell = self.architecture[input_cell_index[0]][input_cell_index[1]]
+                        input_signal = input_cell.signal
+                    else:
+                        input_signal = 0
+                        AttributeError("Illegal cell input")
+                    # todo: change line below to wanted behavior
+                    # envelope_shape = torch.linspace(1, 0, 16000).to(self.device)
+                    envelope_shape = torch.ones(16000).to(self.device)
+                    cell.signal = synth_module.filter_envelope(input_signal, envelope_shape)
 
                 elif operation == 'filter':
                     if len(cell.input_list) == 1:

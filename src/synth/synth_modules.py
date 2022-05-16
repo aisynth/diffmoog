@@ -11,6 +11,7 @@ import torch
 import math
 
 from torchaudio.functional.filtering import lowpass_biquad, highpass_biquad
+from torchaudio.transforms import Spectrogram, GriffinLim
 import matplotlib.pyplot as plt
 from model import helper
 import julius
@@ -560,6 +561,41 @@ class SynthModules:
 
         enveloped_signal = input_signal * envelope
 
+        return enveloped_signal
+
+    def amplitude_envelope(self, input_signal, envelope_shape):
+        enveloped_signal = input_signal * envelope_shape
+        return enveloped_signal
+
+    def filter_envelope(self, input_signal, envelope_shape):
+        spectrogram_transform = Spectrogram(n_fft=1024)
+        inverse_spectrogram_transform = GriffinLim(n_fft=1024, length=16000)
+        input_signal = input_signal.to('cpu')
+        input_signal_spec = spectrogram_transform(input_signal)
+
+        #todo: this is just an example linear time changing filter:
+        envelope_shape = torch.ones_like(input_signal_spec)
+        linspace = torch.floor(torch.linspace(0, envelope_shape.shape[1], steps=envelope_shape.shape[2]))
+        for j in range(envelope_shape.shape[0]):
+            k = 0
+            for i in linspace.tolist():
+                a = int(i)
+                print(f"{j, a, k}")
+                envelope_shape[j][0:a, k] = 0
+                k += 1
+        plt.imshow(envelope_shape[1])
+        plt.show()
+        plt.imshow(input_signal_spec[1].detach().cpu().numpy())
+        plt.show()
+        filtered_signal_spec = input_signal_spec * envelope_shape
+        plt.imshow(filtered_signal_spec[1].detach().cpu().numpy())
+        plt.show()
+
+        filtered_signal = inverse_spectrogram_transform(filtered_signal_spec)
+
+        return filtered_signal.to(self.device)
+
+        enveloped_signal = input_signal * envelope_shape
         return enveloped_signal
 
     def filter(self, input_signal, filter_freq, filter_type, num_sounds=1):

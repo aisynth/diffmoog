@@ -174,7 +174,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'FM'
+    preset: str = 'OSC_FILTER_SHAPER'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}
