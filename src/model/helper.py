@@ -1,5 +1,4 @@
 import torch
-import os
 
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from torch import Tensor
@@ -786,7 +785,7 @@ def print_synth_param_stats(predicted_param_dict, target_param_dict, synth_cfg: 
 def tensor_linspace(start: Tensor, stop: Tensor, num: int):
     """
     Creates a tensor of shape [num, *start.shape] whose values are evenly spaced from start to end, inclusive.
-    Replicates but the multi-dimensional bahaviour of numpy.linspace in PyTorch.
+    Replicates but the multi-dimensional behaviour of numpy.linspace in PyTorch.
     """
     # create a tensor of 'num' steps from 0 to 1
     steps = torch.arange(num, dtype=torch.float32, device=start.device) / (num - 1)

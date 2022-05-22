@@ -455,7 +455,7 @@ class SynthModules:
                 attack_num_samples_sc = attack_num_samples[i].int().squeeze()
                 decay_num_samples_sc = decay_num_samples[i].int().squeeze()
                 sustain_num_samples_sc = sustain_num_samples[i].int().squeeze()
-                sustain_level_sc = sustain_level[i].int().squeeze()
+                sustain_level_sc = sustain_level[i].squeeze()
                 release_num_samples_sc = release_num_samples[i].int().squeeze()
 
                 attack = torch.linspace(0, 1, attack_num_samples_sc)

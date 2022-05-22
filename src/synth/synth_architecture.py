@@ -252,10 +252,10 @@ class SynthModular:
                 cell.parameters = params
 
     def generate_random_adsr_values(self, num_sounds_=1):
-        attack_t = torch.rand(num_sounds_)
-        decay_t = torch.rand(num_sounds_)
-        sustain_t = torch.rand(num_sounds_)
-        release_t = torch.rand(num_sounds_)
+        attack_t = torch.rand(num_sounds_, device=self.device)
+        decay_t = torch.rand(num_sounds_, device=self.device)
+        sustain_t = torch.rand(num_sounds_, device=self.device)
+        release_t = torch.rand(num_sounds_, device=self.device)
         adsr_sum = attack_t + decay_t + sustain_t + release_t
         attack_t = attack_t / adsr_sum
         decay_t = decay_t / adsr_sum
@@ -351,7 +351,7 @@ class SynthModular:
                         input_signal = 0
                         AttributeError("Illegal cell input")
                     envelope_shape = cell.parameters['envelope']
-                    plt.plot(envelope_shape[3].detach().numpy())
+                    plt.plot(envelope_shape[1].detach().numpy())
                     plt.show()
                     cell.signal = synth_module.amplitude_envelope(input_signal, envelope_shape)
 
@@ -467,7 +467,7 @@ class SynthModular:
                 attack_num_samples_sc = attack_num_samples[k].int().squeeze()
                 decay_num_samples_sc = decay_num_samples[k].int().squeeze()
                 sustain_num_samples_sc = sustain_num_samples[k].int().squeeze()
-                sustain_level_sc = sustain_level[k].int().squeeze()
+                sustain_level_sc = sustain_level[k].squeeze()
                 release_num_samples_sc = release_num_samples[k].int().squeeze()
 
                 attack = torch.linspace(0, 1, attack_num_samples_sc)
