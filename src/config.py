@@ -159,7 +159,7 @@ class DatasetConfig:
 
 @dataclass
 class ModelConfig:
-    preset: str = 'FM'
+    preset: str = 'OSC_AMPLITUDE_SHAPER'
     model_type: str = 'simple'
     backbone: str = 'resnet'
     batch_size: int = 128
@@ -174,7 +174,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'OSC_FILTER_SHAPER'
+    preset: str = 'OSC_AMPLITUDE_SHAPER'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}

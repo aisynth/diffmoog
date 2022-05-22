@@ -43,7 +43,7 @@ def create_dataset(train: bool, dataset_cfg: DatasetConfig, synth_cfg: SynthConf
     synth_obj = SynthModular(synth_cfg=synth_cfg,
                              sample_rate=cfg.sample_rate,
                              signal_duration_sec=cfg.signal_duration_sec,
-                             num_sounds=dataset_cfg.dataset_size,
+                             num_sounds_=dataset_cfg.dataset_size,
                              device=device,
                              preset=synth_cfg.preset)
 
@@ -51,8 +51,8 @@ def create_dataset(train: bool, dataset_cfg: DatasetConfig, synth_cfg: SynthConf
     for batch_idx in range(num_batches):
 
         synth_obj.generate_random_params(synth_cfg=synth_cfg,
-                                         num_sounds=dataset_cfg.batch_size)
-        synth_obj.generate_signal(num_sounds=dataset_cfg.batch_size)
+                                         num_sounds_=dataset_cfg.batch_size)
+        synth_obj.generate_signal(num_sounds_=dataset_cfg.batch_size)
 
         audio = synth_obj.signal
 

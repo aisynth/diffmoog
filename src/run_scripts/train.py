@@ -70,14 +70,14 @@ def train_single_epoch(model,
             # --------------Target-------------------------------------
             modular_synth.update_cells_from_dict(target_param_dict)
             target_final_signal, target_signals_through_chain = \
-                modular_synth.generate_signal(num_sounds=len(transformed_signal))
+                modular_synth.generate_signal(num_sounds_=len(transformed_signal))
 
             # --------------Predicted-------------------------------------
             params_for_pred_signal_generation = copy.deepcopy(target_param_dict)
             params_for_pred_signal_generation.update(predicted_param_dict)
             modular_synth.update_cells_from_dict(params_for_pred_signal_generation)
             pred_final_signal, pred_signals_through_chain = \
-                modular_synth.generate_signal(num_sounds=len(transformed_signal))
+                modular_synth.generate_signal(num_sounds_=len(transformed_signal))
 
             # Compute loss and backprop
             loss_total = 0

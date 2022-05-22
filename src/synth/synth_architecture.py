@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from torch import nn
 from model import helper
-from synth.synth_modules import SynthModules
+from synth.synth_modules import SynthModules, check_adsr_timings
 
 
 class SynthModularCell:
@@ -70,10 +70,10 @@ class SynthModularCell:
         if input_list is not None:
             if type(input_list) is not list:
                 ValueError("Illegal input_list")
-            for input in input_list:
-                if len(input) != 2:
+            for input_ in input_list:
+                if len(input_) != 2:
                     ValueError("Illegal input index")
-                input_layer = input[1]
+                input_layer = input_[1]
 
                 if input_layer >= layer:
                     ValueError("Illegal input chain")
@@ -101,7 +101,7 @@ class SynthModular:
                  synth_cfg: SynthConfig = None,
                  sample_rate=44100,
                  signal_duration_sec=1.0,
-                 num_sounds=1,
+                 num_sounds_=1,
                  device='cuda:0',
                  preset: str = None
                  ):
@@ -113,7 +113,7 @@ class SynthModular:
         self.num_layers = synth_cfg.num_layers
         self.sample_rate = sample_rate
         self.signal_duration_sec = signal_duration_sec
-        self.num_sound = num_sounds
+        self.num_sound = num_sounds_
         self.signal = torch.zeros((1, int(sample_rate * signal_duration_sec)), requires_grad=True)
         self.synth_cfg = synth_cfg
         self.device = device
@@ -150,8 +150,8 @@ class SynthModular:
         cell = self.architecture[index[0]][index[1]]
         if input_list is not None:
             cell.input_list = input_list
-            for input in input_list:
-                input_cell = self.architecture[input[0]][input[1]]
+            for input_ in input_list:
+                input_cell = self.architecture[input_[0]][input_[1]]
                 input_cell.output = cell.index
         if operation is not None:
             if operation == 'osc' or operation == 'lfo' and len(cell.input_list) != 0:
@@ -185,56 +185,56 @@ class SynthModular:
                 ValueError("Illegal parameter for the provided operation")
         cell.parameters = parameters
 
-    def generate_random_params(self, synth_cfg: SynthConfig = None, num_sounds=1):
+    def generate_random_params(self, synth_cfg: SynthConfig = None, num_sounds_=1):
+        params = {}
         for layer in range(synth_cfg.num_layers):
             for channel in range(synth_cfg.num_channels):
                 cell = self.architecture[channel][layer]
                 operation = cell.operation
 
                 if operation == 'osc':
-                    params = {'amp': np.random.random_sample(size=num_sounds),
-                              'freq': random.choices(synth_cfg.osc_freq_list, k=num_sounds),
-                              'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds)}
+                    params = {'amp': np.random.random_sample(size=num_sounds_),
+                              'freq': random.choices(synth_cfg.osc_freq_list, k=num_sounds_),
+                              'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds_)}
+
                 elif operation == 'lfo':
-                    params = {'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds),
-                              'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds)}
+                    params = {'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds_),
+                              'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds_)}
+
                 elif operation == 'fm':
-                    params = {'freq_c': self._sample_c_freq(synth_cfg, num_sounds),
-                              'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds),
-                              'mod_index': np.random.uniform(low=0, high=synth_cfg.max_mod_index, size=num_sounds)}
+                    params = {'freq_c': self._sample_c_freq(synth_cfg, num_sounds_),
+                              'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds_),
+                              'mod_index': np.random.uniform(low=0, high=synth_cfg.max_mod_index, size=num_sounds_)}
+
                 elif operation == 'mix':
                     params = None
+
                 elif operation == 'amplitude_shape':
-                    params = None
+                    attack_t, decay_t, sustain_t, sustain_level, release_t = \
+                        self.generate_random_adsr_values(num_sounds_=num_sounds_)
+
+                    envelope = self.make_envelope_shape(attack_t,
+                                                        decay_t,
+                                                        sustain_t,
+                                                        sustain_level,
+                                                        release_t,
+                                                        num_sounds_)
+                    params = {'envelope': envelope}
+
                 elif operation == 'filter':
-                    params = {'filter_type': random.choices(list(synth_cfg.filter_type_dict), k=num_sounds),
+                    params = {'filter_type': random.choices(list(synth_cfg.filter_type_dict), k=num_sounds_),
                               'filter_freq': np.random.uniform(low=synth_cfg.min_filter_freq,
                                                                high=synth_cfg.max_filter_freq,
-                                                               size=num_sounds)}
+                                                               size=num_sounds_)}
                 elif operation == 'env_adsr':
-                    attack_t = np.random.random_sample(size=num_sounds)
-                    decay_t = np.random.random_sample(size=num_sounds)
-                    sustain_t = np.random.random_sample(size=num_sounds)
-                    release_t = np.random.random_sample(size=num_sounds)
-                    adsr_sum = attack_t + decay_t + sustain_t + release_t
-                    attack_t = attack_t / adsr_sum
-                    decay_t = decay_t / adsr_sum
-                    sustain_t = sustain_t / adsr_sum
-                    release_t = release_t / adsr_sum
 
-                    # fixing a numerical issue in case the ADSR times exceeds signal length
-                    adsr_aggregated_time = attack_t + decay_t + sustain_t + release_t
-                    overflow_indices = [idx for idx, val in enumerate(adsr_aggregated_time) if
-                                        val > self.signal_duration_sec]
-                    attack_t[overflow_indices] -= 1e-6
-                    decay_t[overflow_indices] -= 1e-6
-                    sustain_t[overflow_indices] -= 1e-6
-                    release_t[overflow_indices] -= 1e-6
+                    attack_t, decay_t, sustain_t, sustain_level, release_t = \
+                        self.generate_random_adsr_values(num_sounds_=num_sounds_)
 
                     params = {'attack_t': attack_t,
                               'decay_t': decay_t,
                               'sustain_t': sustain_t,
-                              'sustain_level': np.random.random_sample(size=num_sounds),
+                              'sustain_level': sustain_level,
                               'release_t': release_t}
 
                 elif operation is None:
@@ -245,13 +245,37 @@ class SynthModular:
                         if isinstance(val, numpy.ndarray):
                             params[key] = val.tolist()
 
-                    if num_sounds == 1:
+                    if num_sounds_ == 1:
                         for key, value in params.items():
                             params[key] = value[0]
 
                 cell.parameters = params
 
-    def generate_signal(self, num_sounds=1):
+    def generate_random_adsr_values(self, num_sounds_=1):
+        attack_t = torch.rand(num_sounds_)
+        decay_t = torch.rand(num_sounds_)
+        sustain_t = torch.rand(num_sounds_)
+        release_t = torch.rand(num_sounds_)
+        adsr_sum = attack_t + decay_t + sustain_t + release_t
+        attack_t = attack_t / adsr_sum
+        decay_t = decay_t / adsr_sum
+        sustain_t = sustain_t / adsr_sum
+        release_t = release_t / adsr_sum
+
+        # fixing a numerical issue in case the ADSR times exceeds signal length
+        adsr_aggregated_time = attack_t + decay_t + sustain_t + release_t
+        overflow_indices = [idx for idx, val in enumerate(adsr_aggregated_time) if
+                            val > self.signal_duration_sec]
+        attack_t[overflow_indices] -= 1e-6
+        decay_t[overflow_indices] -= 1e-6
+        sustain_t[overflow_indices] -= 1e-6
+        release_t[overflow_indices] -= 1e-6
+
+        sustain_level = torch.rand(num_sounds_)
+
+        return attack_t, decay_t, sustain_t, sustain_level, release_t
+
+    def generate_signal(self, num_sounds_=1):
         synth_module = SynthModules(num_sounds=1,
                                     sample_rate=self.sample_rate,
                                     signal_duration_sec=self.signal_duration_sec,
@@ -326,9 +350,9 @@ class SynthModular:
                     else:
                         input_signal = 0
                         AttributeError("Illegal cell input")
-                    # todo: cahnge line below to wanted behavior
-                    # envelope_shape = torch.linspace(1, 0, 16000).to(self.device)
-                    envelope_shape = torch.ones(16000).to(self.device)
+                    envelope_shape = cell.parameters['envelope']
+                    plt.plot(envelope_shape[3].detach().numpy())
+                    plt.show()
                     cell.signal = synth_module.amplitude_envelope(input_signal, envelope_shape)
 
                 elif operation == 'filter_shape':
@@ -371,7 +395,7 @@ class SynthModular:
                                                              sustain_t=cell.parameters['sustain_t'],
                                                              sustain_level=cell.parameters['sustain_level'],
                                                              release_t=cell.parameters['release_t'],
-                                                             num_sounds=num_sounds)
+                                                             num_sounds=num_sounds_)
                     # cell.signal = synth_module.batch_adsr_envelope(input_signal,
                     #                                                attack_t=cell.parameters['attack_t'],
                     #                                                decay_t=cell.parameters['decay_t'],
@@ -398,7 +422,83 @@ class SynthModular:
         self.signal = final_signal
         return final_signal, output_signals
 
-    def get_preset(self, preset: str):
+    def make_envelope_shape(self, attack_t, decay_t, sustain_t, sustain_level, release_t, num_sounds=1):
+        check_adsr_timings(attack_t,
+                           decay_t,
+                           sustain_t,
+                           sustain_level,
+                           release_t,
+                           self.signal_duration_sec,
+                           num_sounds)
+
+        if num_sounds == 1:
+            attack_num_samples = int(self.sample_rate * attack_t)
+            decay_num_samples = int(self.sample_rate * decay_t)
+            sustain_num_samples = int(self.sample_rate * sustain_t)
+            release_num_samples = int(self.sample_rate * release_t)
+        else:
+            attack_num_samples = [torch.floor(self.sample_rate * attack_t[k]) for k in range(num_sounds)]
+            decay_num_samples = [torch.floor(self.sample_rate * decay_t[k]) for k in range(num_sounds)]
+            sustain_num_samples = [torch.floor(self.sample_rate * sustain_t[k]) for k in range(num_sounds)]
+            release_num_samples = [torch.floor(self.sample_rate * release_t[k]) for k in range(num_sounds)]
+            attack_num_samples = torch.stack(attack_num_samples)
+            decay_num_samples = torch.stack(decay_num_samples)
+            sustain_num_samples = torch.stack(sustain_num_samples)
+            release_num_samples = torch.stack(release_num_samples)
+
+        if num_sounds > 1:
+            if torch.is_tensor(sustain_level[0]):
+                sustain_level = [sustain_level[i] for i in range(num_sounds)]
+                sustain_level = torch.stack(sustain_level)
+            else:
+                sustain_level = [sustain_level[i] for i in range(num_sounds)]
+
+        envelopes_tensor = torch.tensor((), requires_grad=True).to(helper.get_device())
+        first_time = True
+        for k in range(num_sounds):
+            if num_sounds == 1:
+                attack = torch.linspace(0, 1, attack_num_samples)
+                decay = torch.linspace(1, sustain_level, decay_num_samples)
+                sustain = torch.full((sustain_num_samples,), sustain_level)
+                release = torch.linspace(sustain_level, 0, release_num_samples)
+            else:
+                # convert 1d vector to scalar tensor to be used in linspace
+                # IMPORTANT: lost gradients here! Using int() loses gradients since only float tensors have gradients
+                attack_num_samples_sc = attack_num_samples[k].int().squeeze()
+                decay_num_samples_sc = decay_num_samples[k].int().squeeze()
+                sustain_num_samples_sc = sustain_num_samples[k].int().squeeze()
+                sustain_level_sc = sustain_level[k].int().squeeze()
+                release_num_samples_sc = release_num_samples[k].int().squeeze()
+
+                attack = torch.linspace(0, 1, attack_num_samples_sc)
+                decay = torch.linspace(1, sustain_level_sc, decay_num_samples_sc)
+                sustain = torch.full((sustain_num_samples_sc,), sustain_level_sc)
+                release = torch.linspace(sustain_level_sc, 0, release_num_samples_sc)
+
+            envelope = torch.cat((attack, decay, sustain, release))
+
+            envelope_num_samples = envelope.shape[0]
+            signal_num_samples = int(self.signal_duration_sec * self.sample_rate)
+            if envelope_num_samples <= signal_num_samples:
+                padding = torch.zeros((signal_num_samples - envelope_num_samples), device=helper.get_device())
+                envelope = torch.cat((envelope, padding))
+            else:
+                raise ValueError("Envelope length exceeds signal duration")
+
+            if first_time:
+                if num_sounds == 1:
+                    envelopes_tensor = envelope
+                else:
+                    envelopes_tensor = torch.cat((envelopes_tensor, envelope), dim=0).unsqueeze(dim=0)
+                    first_time = False
+            else:
+                envelope = envelope.unsqueeze(dim=0)
+                envelopes_tensor = torch.cat((envelopes_tensor, envelope), dim=0)
+
+        return envelopes_tensor
+
+    @staticmethod
+    def get_preset(preset: str):
 
         preset_list = synth_modular_presets.synth_presets_dict.get(preset, None)
         if preset_list is None:
@@ -433,13 +533,13 @@ class SynthModular:
         return params_dict
 
     @staticmethod
-    def _sample_c_freq(synth_cfg: SynthConfig, num_sounds: int):
+    def _sample_c_freq(synth_cfg: SynthConfig, num_sounds_: int):
 
         osc_freq_list = np.asarray(synth_cfg.osc_freq_list)
 
         base_freqs = np.random.uniform(low=synth_cfg.osc_freq_list[0],
                                        high=synth_cfg.osc_freq_list[-1],
-                                       size=num_sounds)
+                                       size=num_sounds_)
 
         idx = np.searchsorted(synth_cfg.osc_freq_list, base_freqs, side="left")
         idx = idx - (np.abs(base_freqs - osc_freq_list[idx - 1]) < np.abs(base_freqs - osc_freq_list[idx]))
@@ -507,7 +607,7 @@ if __name__ == "__main__":
                                   bytes_per_sample=4,
                                   sample_rate=44100)
         play_obj.wait_done()
-    num_sounds = 10
+    num_sounds_ = 10
     b = torch.rand(10, 44100)
     b = helper.move_to(b, helper.get_device())
     criterion = nn.MSELoss()

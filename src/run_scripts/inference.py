@@ -92,7 +92,7 @@ def predict(model,
                     update_params.append(synth_modular_cell)
 
                 modular_synth.update_cells(update_params)
-                modular_synth.generate_signal(num_sounds=len(transformed_signal))
+                modular_synth.generate_signal(num_sounds_=len(transformed_signal))
 
                 if cfg.spectrogram_loss_type == 'MULTI-SPECTRAL':
                     multi_spec_loss = helper.SpectralLoss(cfg=cfg,

@@ -70,12 +70,12 @@ def train_single_epoch(model,
             params_for_pred_signal_generation.update(predicted_param_dict)
             modular_synth.update_cells_from_dict(params_for_pred_signal_generation)
             pred_final_signal, pred_signals_through_chain = \
-                modular_synth.generate_signal(num_sounds=len(transformed_signal))
+                modular_synth.generate_signal(num_sounds_=len(transformed_signal))
 
             # --------------Target-------------------------------------
             modular_synth.update_cells_from_dict(target_param_dict)
             target_final_signal, target_signals_through_chain = \
-                modular_synth.generate_signal(num_sounds=len(transformed_signal))
+                modular_synth.generate_signal(num_sounds_=len(transformed_signal))
 
             modular_synth.signal = helper.move_to(modular_synth.signal, device)
             target_signal = target_signal.squeeze()

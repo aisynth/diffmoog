@@ -415,13 +415,7 @@ class SynthModules:
             Raises:
                 ValueError: Provided ADSR timings are not the same as the signal length
             """
-        if num_sounds == 1:
-            if attack_t + decay_t + sustain_t + release_t > self.sig_duration:
-                raise ValueError("Provided ADSR durations exceeds signal duration")
-        else:
-            for i in range(num_sounds):
-                if attack_t[i] + decay_t[i] + sustain_t[i] + release_t[i] > self.sig_duration:
-                    raise ValueError("Provided ADSR durations exceeds signal duration")
+        check_adsr_timings(attack_t, decay_t, sustain_t, sustain_level, release_t, self.sig_duration, num_sounds)
 
         if num_sounds == 1:
             attack_num_samples = int(self.sample_rate * attack_t)
@@ -801,6 +795,27 @@ class SynthModules:
         if isinstance(waveform, str):
             if not any(x in waveform for x in ['sine', 'square', 'triangle', 'sawtooth']):
                 raise ValueError("Unknown waveform provided")
+
+
+def check_adsr_timings(attack_t, decay_t, sustain_t, sustain_level, release_t, signal_duration, num_sounds=1):
+    """
+    The function checks that:
+    1.ADSR timings does not exceed signal duration
+    2.Sustain level within [0,1] range
+
+    :exception: throws value error when faulty.
+    """
+    if num_sounds == 1:
+        if attack_t + decay_t + sustain_t + release_t > signal_duration:
+            raise ValueError("Provided ADSR durations exceeds signal duration")
+        if sustain_level < 0 or sustain_level > 1:
+            raise ValueError("Provided sustain level is out of range [0, 1]")
+    else:
+        for i in range(num_sounds):
+            if attack_t[i] + decay_t[i] + sustain_t[i] + release_t[i] > signal_duration:
+                raise ValueError("Provided ADSR durations exceeds signal duration")
+            if sustain_level[i] < 0 or sustain_level[i] > 1:
+                raise ValueError("Provided sustain level is out of range [0, 1]")
 
 
 """
