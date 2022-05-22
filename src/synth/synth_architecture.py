@@ -351,8 +351,8 @@ class SynthModular:
                         input_signal = 0
                         AttributeError("Illegal cell input")
                     envelope_shape = cell.parameters['envelope']
-                    plt.plot(envelope_shape[1].detach().numpy())
-                    plt.show()
+                    # plt.plot(envelope_shape[1].detach().numpy())
+                    # plt.show()
                     cell.signal = synth_module.amplitude_envelope(input_signal, envelope_shape)
 
                 elif operation == 'filter_shape':

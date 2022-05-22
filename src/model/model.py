@@ -5,7 +5,7 @@ from torch import nn
 from torchvision.models import resnet18, resnet34
 from torchsummary import summary
 from synth.synth_modular_presets import synth_presets_dict
-from config import SynthConfig
+from config import SynthConfig, Config
 
 # todo: this is value from Valerio Tutorial. has to check
 # LINEAR_IN_CHANNELS = 128 * 5 * 4
@@ -344,7 +344,7 @@ class DecoderOnlyNetwork(nn.Module):
 
 class SimpleSynthNetwork(nn.Module):
 
-    def __init__(self, preset: str, synth_cfg: SynthConfig, device, backbone='resnet'):
+    def __init__(self, preset: str, synth_cfg: SynthConfig, cfg: Config, device, backbone='resnet'):
         super().__init__()
 
         self.preset = synth_presets_dict.get(preset, None)
@@ -407,6 +407,11 @@ class SimpleSynthNetwork(nn.Module):
                 self.heads_module_dict[self.get_key(index, operation, 'sustain_t')] = sustain_t_head
                 self.heads_module_dict[self.get_key(index, operation, 'sustain_level')] = sustain_level_head
                 self.heads_module_dict[self.get_key(index, operation, 'release_t')] = release_t_head
+
+            elif operation == 'amplitude_shape':
+                freeform_amplitude_shape_head = MLPBlock([LATENT_SPACE_SIZE, cfg.sample_rate])
+                self.heads_module_dict[self.get_key(index, operation, 'envelope')] = freeform_amplitude_shape_head
+
 
         self.softmax = nn.Softmax(dim=1)
         self.sigmoid = nn.Sigmoid()
@@ -519,6 +524,16 @@ class SimpleSynthNetwork(nn.Module):
                                                 'sustain_level': predicted_sustain_level,
                                                 'release_t': predicted_release_t
                                                 }}
+
+            elif operation == 'amplitude_shape':
+                freeform_amplitude_shape_head = self.heads_module_dict[self.get_key(index, operation, 'attack_t')]
+
+                predicted_envelope = freeform_amplitude_shape_head(latent)
+                predicted_envelope = self.sigmoid(predicted_envelope)
+
+                output_dic[index] = {'operation': operation,
+                                     'parameters': {'envelope': predicted_envelope}
+                                     }
 
         return output_dic
 

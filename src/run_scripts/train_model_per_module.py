@@ -240,7 +240,7 @@ def run(args):
     train_dataloader = create_data_loader(ai_synth_dataset, model_cfg.batch_size, ModelConfig.num_workers)
 
     # Hard coded lfo predictor net
-    lfo_net = SimpleSynthNetwork('LFO', synth_cfg, device, backbone=model_cfg.backbone).to(device)
+    lfo_net = SimpleSynthNetwork('LFO', synth_cfg, cfg, device, backbone=model_cfg.backbone).to(device)
     checkpoint = torch.load(cfg.lfo_model_path)
     lfo_net.load_state_dict(checkpoint['model_state_dict'])
     lfo_net.eval()
@@ -248,7 +248,7 @@ def run(args):
 
     # construct model and assign it to device
     if model_cfg.model_type == 'simple':
-        synth_net = SimpleSynthNetwork(model_cfg.preset, synth_cfg, device, backbone=model_cfg.backbone).to(device)
+        synth_net = SimpleSynthNetwork(model_cfg.preset, synth_cfg, cfg, device, backbone=model_cfg.backbone).to(device)
     else:
         raise NotImplementedError("only SimpleSynthNetwork supported at the moment")
 

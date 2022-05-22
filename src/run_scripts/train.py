@@ -109,7 +109,9 @@ def train_single_epoch(model,
 
             if num_of_mini_batches == 1:
                 for i in range(5):
-                    sample_params_orig, sample_params_pred = parse_synth_params(target_param_dict, predicted_param_dict, i)
+                    sample_params_orig, sample_params_pred = parse_synth_params(target_param_dict,
+                                                                                predicted_param_dict,
+                                                                                i)
                     summary_writer.add_audio(f'input_{i}_target', target_final_signal[i], global_step=epoch,
                                              sample_rate=cfg.sample_rate)
                     summary_writer.add_audio(f'input_{i}_pred', pred_final_signal[i], global_step=epoch,
@@ -175,7 +177,7 @@ def train(model,
     modular_synth = SynthModular(synth_cfg=synth_cfg,
                                  sample_rate=cfg.sample_rate,
                                  signal_duration_sec=cfg.signal_duration_sec,
-                                 num_sounds=1,
+                                 num_sounds_=1,
                                  device=device,
                                  preset=synth_cfg.preset)
 
@@ -231,7 +233,7 @@ def run(args):
 
     # construct model and assign it to device
     if model_cfg.model_type == 'simple':
-        synth_net = SimpleSynthNetwork(model_cfg.preset, synth_cfg, device, backbone=model_cfg.backbone).to(device)
+        synth_net = SimpleSynthNetwork(model_cfg.preset, synth_cfg, cfg, device, backbone=model_cfg.backbone).to(device)
     else:
         raise NotImplementedError("only SimpleSynthNetwork supported at the moment")
 

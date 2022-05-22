@@ -206,7 +206,8 @@ class SynthConfig:
                             'fm': ['amp_c', 'freq_c', 'waveform', 'mod_index'],
                             'mix': None,
                             'filter': ['filter_freq', 'filter_type'],
-                            'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']}
+                            'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t'],
+                            'amplitude_shape': ['envelope']}
 
     def __post_init__(self):
         self.wave_type_dic_inv = {v: k for k, v in self.wave_type_dict.items()}
