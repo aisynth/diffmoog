@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
+from synth.synth_modules import make_envelope_shape
 
 from config import SynthConfig
 
@@ -106,6 +107,12 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
                 filter_type_idx = [SynthConfig.filter_type_dict[ft] for ft in target_vals.squeeze()]
                 diff = [1 - v[idx] for idx, v in zip(filter_type_idx, pred_vals)]
                 diff = np.asarray(diff).squeeze()
+            elif param_name in ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']:
+                continue
+            elif param_name == 'envelope':
+                # pdist = torch.nn.PairwiseDistance(p=2)
+                diff = [np.linalg.norm(pred_vals[k] - target_vals[k]) for k in range(pred_vals.shape[0])]
+                # diff = dist(pred_vals, target_vals)
             else:
                 diff = np.abs(target_vals.squeeze() - pred_vals.squeeze())
 

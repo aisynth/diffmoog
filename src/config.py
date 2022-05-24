@@ -131,7 +131,7 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 100
+    dataset_size: int = 1000
     batch_size: int = 100
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
@@ -169,7 +169,7 @@ class ModelConfig:
     optimizer_scheduler_lr: float = 0
     optimizer_scheduler_gamma: float = 0.1
     reinforcement_epsilon: float = 0.15
-    num_workers: int = 1
+    num_workers: int = 0
 
 
 @dataclass

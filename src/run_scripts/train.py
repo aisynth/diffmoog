@@ -58,9 +58,14 @@ def train_single_epoch(model,
             denormalized_output_dict = normalizer.denormalize(output_params)
             predicted_param_dict = helper.clamp_adsr_params(denormalized_output_dict, synth_cfg, cfg)
 
+
             for op_idx, op_dict in predicted_param_dict.items():
                 for param_name, param_vals in op_dict['parameters'].items():
                     epoch_param_vals[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
+
+            target_param_dict = helper.build_envelope_from_adsr(target_param_dict,
+                                                                cfg,
+                                                                device)
 
             batch_param_diffs = get_param_diffs(predicted_param_dict, target_param_dict)
             for op_idx, diff_vals in batch_param_diffs.items():

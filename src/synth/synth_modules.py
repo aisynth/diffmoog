@@ -818,6 +818,90 @@ def check_adsr_timings(attack_t, decay_t, sustain_t, sustain_level, release_t, s
                 raise ValueError("Provided sustain level is out of range [0, 1]")
 
 
+def make_envelope_shape(attack_t,
+                        decay_t,
+                        sustain_t,
+                        sustain_level,
+                        release_t,
+                        signal_duration,
+                        sample_rate,
+                        device,
+                        num_sounds=1):
+
+    check_adsr_timings(attack_t,
+                       decay_t,
+                       sustain_t,
+                       sustain_level,
+                       release_t,
+                       signal_duration,
+                       num_sounds)
+
+    if num_sounds == 1:
+        attack_num_samples = int(sample_rate * attack_t)
+        decay_num_samples = int(sample_rate * decay_t)
+        sustain_num_samples = int(sample_rate * sustain_t)
+        release_num_samples = int(sample_rate * release_t)
+    else:
+        attack_num_samples = [torch.floor(sample_rate * attack_t[k]) for k in range(num_sounds)]
+        decay_num_samples = [torch.floor(sample_rate * decay_t[k]) for k in range(num_sounds)]
+        sustain_num_samples = [torch.floor(sample_rate * sustain_t[k]) for k in range(num_sounds)]
+        release_num_samples = [torch.floor(sample_rate * release_t[k]) for k in range(num_sounds)]
+        attack_num_samples = torch.stack(attack_num_samples)
+        decay_num_samples = torch.stack(decay_num_samples)
+        sustain_num_samples = torch.stack(sustain_num_samples)
+        release_num_samples = torch.stack(release_num_samples)
+
+    if num_sounds > 1:
+        if torch.is_tensor(sustain_level[0]):
+            sustain_level = [sustain_level[i] for i in range(num_sounds)]
+            sustain_level = torch.stack(sustain_level)
+        else:
+            sustain_level = [sustain_level[i] for i in range(num_sounds)]
+
+    envelopes_tensor = torch.tensor((), requires_grad=True).to(helper.get_device())
+    first_time = True
+    for k in range(num_sounds):
+        if num_sounds == 1:
+            attack = torch.linspace(0, 1, attack_num_samples)
+            decay = torch.linspace(1, sustain_level, decay_num_samples)
+            sustain = torch.full((sustain_num_samples,), sustain_level)
+            release = torch.linspace(sustain_level, 0, release_num_samples)
+        else:
+            # convert 1d vector to scalar tensor to be used in linspace
+            # IMPORTANT: lost gradients here! Using int() loses gradients since only float tensors have gradients
+            attack_num_samples_sc = attack_num_samples[k].int().squeeze()
+            decay_num_samples_sc = decay_num_samples[k].int().squeeze()
+            sustain_num_samples_sc = sustain_num_samples[k].int().squeeze()
+            sustain_level_sc = sustain_level[k].squeeze()
+            release_num_samples_sc = release_num_samples[k].int().squeeze()
+
+            attack = torch.linspace(0, 1, attack_num_samples_sc)
+            decay = torch.linspace(1, sustain_level_sc, decay_num_samples_sc)
+            sustain = torch.full((sustain_num_samples_sc,), sustain_level_sc)
+            release = torch.linspace(sustain_level_sc, 0, release_num_samples_sc)
+
+        envelope = torch.cat((attack, decay, sustain, release)).to(device)
+
+        envelope_num_samples = envelope.shape[0]
+        signal_num_samples = int(signal_duration * sample_rate)
+        if envelope_num_samples <= signal_num_samples:
+            padding = torch.zeros((signal_num_samples - envelope_num_samples), device=device)
+            envelope = torch.cat((envelope, padding))
+        else:
+            raise ValueError("Envelope length exceeds signal duration")
+
+        if first_time:
+            if num_sounds == 1:
+                envelopes_tensor = envelope
+            else:
+                envelopes_tensor = torch.cat((envelopes_tensor, envelope), dim=0).unsqueeze(dim=0)
+                first_time = False
+        else:
+            envelope = envelope.unsqueeze(dim=0)
+            envelopes_tensor = torch.cat((envelopes_tensor, envelope), dim=0)
+
+    return envelopes_tensor
+
 """
 Reverb implementation - Currently not working as expected
 So it is not used

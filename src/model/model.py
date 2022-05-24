@@ -412,7 +412,6 @@ class SimpleSynthNetwork(nn.Module):
                 freeform_amplitude_shape_head = MLPBlock([LATENT_SPACE_SIZE, cfg.sample_rate])
                 self.heads_module_dict[self.get_key(index, operation, 'envelope')] = freeform_amplitude_shape_head
 
-
         self.softmax = nn.Softmax(dim=1)
         self.sigmoid = nn.Sigmoid()
 
@@ -526,13 +525,20 @@ class SimpleSynthNetwork(nn.Module):
                                                 }}
 
             elif operation == 'amplitude_shape':
-                freeform_amplitude_shape_head = self.heads_module_dict[self.get_key(index, operation, 'attack_t')]
+                freeform_amplitude_shape_head = self.heads_module_dict[self.get_key(index, operation, 'envelope')]
 
                 predicted_envelope = freeform_amplitude_shape_head(latent)
                 predicted_envelope = self.sigmoid(predicted_envelope)
 
+                batch_size = predicted_envelope.shape[0]
                 output_dic[index] = {'operation': operation,
-                                     'parameters': {'envelope': predicted_envelope}
+                                     'parameters': {'envelope': predicted_envelope,
+                                                    'attack_t': torch.full([batch_size], -1),
+                                                    'decay_t': torch.full([batch_size], -1),
+                                                    'sustain_t': torch.full([batch_size], -1),
+                                                    'sustain_level': torch.full([batch_size], -1),
+                                                    'release_t': torch.full([batch_size], -1)
+                                                    }
                                      }
 
         return output_dic

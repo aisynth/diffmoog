@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from torch import nn
 from model import helper
-from synth.synth_modules import SynthModules, check_adsr_timings
+from synth.synth_modules import SynthModules, make_envelope_shape
 
 
 class SynthModularCell:
@@ -209,17 +209,28 @@ class SynthModular:
                 elif operation == 'mix':
                     params = None
 
+                # todo: remove adsr \ amp_shape duplication
                 elif operation == 'amplitude_shape':
                     attack_t, decay_t, sustain_t, sustain_level, release_t = \
                         self.generate_random_adsr_values(num_sounds_=num_sounds_)
 
-                    envelope = self.make_envelope_shape(attack_t,
-                                                        decay_t,
-                                                        sustain_t,
-                                                        sustain_level,
-                                                        release_t,
-                                                        num_sounds_)
-                    params = {'envelope': envelope}
+                    params = {'attack_t': attack_t,
+                              'decay_t': decay_t,
+                              'sustain_t': sustain_t,
+                              'sustain_level': sustain_level,
+                              'release_t': release_t,
+                              'envelope': torch.full([num_sounds_], -1)}
+
+                    # attack_t, decay_t, sustain_t, sustain_level, release_t = \
+                    #     self.generate_random_adsr_values(num_sounds_=num_sounds_)
+
+                    # envelope = self.make_envelope_shape(attack_t,
+                    #                                     decay_t,
+                    #                                     sustain_t,
+                    #                                     sustain_level,
+                    #                                     release_t,
+                    #                                     num_sounds_)
+                    # params = {'envelope': envelope}
 
                 elif operation == 'filter':
                     params = {'filter_type': random.choices(list(synth_cfg.filter_type_dict), k=num_sounds_),
@@ -350,7 +361,29 @@ class SynthModular:
                     else:
                         input_signal = 0
                         AttributeError("Illegal cell input")
-                    envelope_shape = cell.parameters['envelope']
+
+                    attack_t = cell.parameters['attack_t']
+                    decay_t = cell.parameters['decay_t']
+                    sustain_t = cell.parameters['sustain_t']
+                    sustain_level = cell.parameters['sustain_level']
+                    release_t = cell.parameters['release_t']
+                    envelope = cell.parameters['envelope']
+
+                    if isinstance(envelope[0], int) and envelope[0] == -1:
+                        envelope_shape = make_envelope_shape(attack_t,
+                                                             decay_t,
+                                                             sustain_t,
+                                                             sustain_level,
+                                                             release_t,
+                                                             self.signal_duration_sec,
+                                                             self.sample_rate,
+                                                             self.device,
+                                                             num_sounds_)
+                    else:
+                        envelope_shape = envelope
+
+
+                    # envelope_shape = cell.parameters['envelope']
                     # plt.plot(envelope_shape[1].detach().numpy())
                     # plt.show()
                     cell.signal = synth_module.amplitude_envelope(input_signal, envelope_shape)
@@ -421,81 +454,6 @@ class SynthModular:
 
         self.signal = final_signal
         return final_signal, output_signals
-
-    def make_envelope_shape(self, attack_t, decay_t, sustain_t, sustain_level, release_t, num_sounds=1):
-        check_adsr_timings(attack_t,
-                           decay_t,
-                           sustain_t,
-                           sustain_level,
-                           release_t,
-                           self.signal_duration_sec,
-                           num_sounds)
-
-        if num_sounds == 1:
-            attack_num_samples = int(self.sample_rate * attack_t)
-            decay_num_samples = int(self.sample_rate * decay_t)
-            sustain_num_samples = int(self.sample_rate * sustain_t)
-            release_num_samples = int(self.sample_rate * release_t)
-        else:
-            attack_num_samples = [torch.floor(self.sample_rate * attack_t[k]) for k in range(num_sounds)]
-            decay_num_samples = [torch.floor(self.sample_rate * decay_t[k]) for k in range(num_sounds)]
-            sustain_num_samples = [torch.floor(self.sample_rate * sustain_t[k]) for k in range(num_sounds)]
-            release_num_samples = [torch.floor(self.sample_rate * release_t[k]) for k in range(num_sounds)]
-            attack_num_samples = torch.stack(attack_num_samples)
-            decay_num_samples = torch.stack(decay_num_samples)
-            sustain_num_samples = torch.stack(sustain_num_samples)
-            release_num_samples = torch.stack(release_num_samples)
-
-        if num_sounds > 1:
-            if torch.is_tensor(sustain_level[0]):
-                sustain_level = [sustain_level[i] for i in range(num_sounds)]
-                sustain_level = torch.stack(sustain_level)
-            else:
-                sustain_level = [sustain_level[i] for i in range(num_sounds)]
-
-        envelopes_tensor = torch.tensor((), requires_grad=True).to(helper.get_device())
-        first_time = True
-        for k in range(num_sounds):
-            if num_sounds == 1:
-                attack = torch.linspace(0, 1, attack_num_samples)
-                decay = torch.linspace(1, sustain_level, decay_num_samples)
-                sustain = torch.full((sustain_num_samples,), sustain_level)
-                release = torch.linspace(sustain_level, 0, release_num_samples)
-            else:
-                # convert 1d vector to scalar tensor to be used in linspace
-                # IMPORTANT: lost gradients here! Using int() loses gradients since only float tensors have gradients
-                attack_num_samples_sc = attack_num_samples[k].int().squeeze()
-                decay_num_samples_sc = decay_num_samples[k].int().squeeze()
-                sustain_num_samples_sc = sustain_num_samples[k].int().squeeze()
-                sustain_level_sc = sustain_level[k].squeeze()
-                release_num_samples_sc = release_num_samples[k].int().squeeze()
-
-                attack = torch.linspace(0, 1, attack_num_samples_sc)
-                decay = torch.linspace(1, sustain_level_sc, decay_num_samples_sc)
-                sustain = torch.full((sustain_num_samples_sc,), sustain_level_sc)
-                release = torch.linspace(sustain_level_sc, 0, release_num_samples_sc)
-
-            envelope = torch.cat((attack, decay, sustain, release))
-
-            envelope_num_samples = envelope.shape[0]
-            signal_num_samples = int(self.signal_duration_sec * self.sample_rate)
-            if envelope_num_samples <= signal_num_samples:
-                padding = torch.zeros((signal_num_samples - envelope_num_samples), device=helper.get_device())
-                envelope = torch.cat((envelope, padding))
-            else:
-                raise ValueError("Envelope length exceeds signal duration")
-
-            if first_time:
-                if num_sounds == 1:
-                    envelopes_tensor = envelope
-                else:
-                    envelopes_tensor = torch.cat((envelopes_tensor, envelope), dim=0).unsqueeze(dim=0)
-                    first_time = False
-            else:
-                envelope = envelope.unsqueeze(dim=0)
-                envelopes_tensor = torch.cat((envelopes_tensor, envelope), dim=0)
-
-        return envelopes_tensor
 
     @staticmethod
     def get_preset(preset: str):

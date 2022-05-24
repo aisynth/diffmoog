@@ -15,6 +15,8 @@ from pathlib import Path
 import math
 import numpy as np
 
+from synth.synth_modules import make_envelope_shape
+
 
 def get_device(gpu_index: int = 0):
     if int(gpu_index) >= 0 and torch.cuda.is_available():
@@ -177,7 +179,7 @@ def clamp_adsr_params(parameters_dict: dict, synth_cfg: SynthConfig, cfg: Config
         if operation == 'env_adsr':
             attack_t = operation_params['attack_t']
             decay_t = operation_params['decay_t']
-            sustain_t = operation_params['release_t']
+            sustain_t = operation_params['sustain_t']
             release_t = operation_params['release_t']
 
             clamped_attack, clamped_decay, clamped_sustain, clamped_release = \
@@ -237,6 +239,42 @@ def clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t, cfg: Confi
 
     return normalized_attack_tensor, normalized_decay_tensor, normalized_sustain_tensor, normalized_release_tensor
 
+
+def build_envelope_from_adsr(params_dict, cfg, device):
+    for key, val in params_dict.items():
+        operation = val['operation'][0]
+        operation_params = val['parameters']
+
+        if operation == 'amplitude_shape':
+            attack_t = operation_params['attack_t']
+            decay_t = operation_params['decay_t']
+            sustain_t = operation_params['sustain_t']
+            sustain_level = operation_params['sustain_level']
+            release_t = operation_params['release_t']
+
+            envelope_tensor = make_envelope_shape(attack_t,
+                                                  decay_t,
+                                                  sustain_t,
+                                                  sustain_level,
+                                                  release_t,
+                                                  cfg.signal_duration_sec,
+                                                  cfg.sample_rate,
+                                                  device,
+                                                  num_sounds=len(attack_t))
+
+            params_dict[key] = \
+                {'operation': operation,
+                 'parameters':
+                     {'attack_t': attack_t,
+                      'decay_t': decay_t,
+                      'sustain_t': sustain_t,
+                      'sustain_level': sustain_level,
+                      'release_t': release_t,
+                      'envelope': envelope_tensor
+                      }
+                 }
+
+    return params_dict
 
 class Normalizer:
     """ normalize/de-normalise regression parameters"""
@@ -386,6 +424,19 @@ class Normalizer:
                           'sustain_t': self.adsr_normalizer.denormalise(params['sustain_t']),
                           'sustain_level': params['sustain_level'],
                           'release_t': self.filter_freq_normalizer.denormalise(params['release_t'])
+                          }
+                     }
+
+            elif operation == 'amplitude_shape':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'parameters':
+                         {'attack_t': params['attack_t'],
+                          'decay_t': params['decay_t'],
+                          'sustain_t': params['sustain_t'],
+                          'sustain_level': params['sustain_level'],
+                          'release_t': params['release_t'],
+                          'envelope': params['envelope']
                           }
                      }
 
