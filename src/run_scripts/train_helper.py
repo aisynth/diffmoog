@@ -3,6 +3,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from config import SynthConfig
+from synth.synth_modular_presets import synth_presets_dict
 
 
 def log_gradients_in_model(model, writer: SummaryWriter, step):
@@ -138,3 +139,57 @@ def to_numpy_recursive(input_to_convert):
 
     if isinstance(input_to_convert, dict):
         return {k: to_numpy_recursive(v) for k, v in input_to_convert.items()}
+
+
+def count_unpredicted_params(synth_preset_name, model_preset_name):
+
+    synth_preset = synth_presets_dict[synth_preset_name]
+    model_preset = synth_presets_dict[model_preset_name]
+
+    predicted_indices = [cell['index'] for cell in model_preset]
+
+    n_unpredicted_params = 0
+    for cell in synth_preset:
+        index = cell.get('index')
+        operation = cell.get('operation')
+
+        if index in predicted_indices or operation is None:
+            continue
+
+        op_params = SynthConfig.modular_synth_params[operation]
+        if op_params is not None:
+            n_unpredicted_params += len(op_params)
+
+    return n_unpredicted_params
+
+
+def vectorize_unpredicted_params(target_params, model_preset, device):
+
+    predicted_indices = [cell['index'] for cell in model_preset]
+
+    unpredicted_params = []
+    for index, params in target_params.items():
+
+        if index in predicted_indices:
+            continue
+
+        op = params['operation']
+        op_params = params['parameters']
+        if op_params is None or op[0] in ['None', 'mix']:
+            continue
+
+        for param_name, param_val in op_params.items():
+            if param_name == 'waveform':
+                waveform_idx = [SynthConfig.wave_type_dict[wt] for wt in param_val]
+                param_val = torch.tensor(waveform_idx, device=device)
+            elif param_name == 'filter_type':
+                filter_type_idx = [SynthConfig.filter_type_dict[ft] for ft in param_val]
+                param_val = torch.tensor(filter_type_idx, device=device)
+            else:
+                param_val = torch.tensor(param_val, device=device)
+
+            unpredicted_params.append(param_val)
+
+    unpredicted_params_tensor = torch.stack(unpredicted_params, dim=1).float()
+
+    return unpredicted_params_tensor

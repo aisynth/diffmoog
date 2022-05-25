@@ -105,6 +105,9 @@ class SpectralLoss:
                 raw_loss, weighted_loss = self.calc_loss(loss_type, pre_loss_fn, target_mag, value_mag, n_fft,
                                                          global_step)
 
+                if weighted_loss == 0:
+                    continue
+
                 loss_dict[f"{loss_name}_{loss_type}"] = raw_loss
                 weighted_loss_dict[f"{loss_name}_{loss_type}"] = weighted_loss
 
@@ -149,7 +152,9 @@ class SpectralLoss:
         # Normalize by n_fft if required
         if self.preset['normalize_loss_by_nfft']:
             n_fft_normalization_factor = (300.0 / n_fft)
-            if loss_type not in ['delta_time', 'cumulative_time', 'logmag']:
+            if loss_type in ['cumsum_time']:
+                n_fft_normalization_factor = 1
+            elif loss_type not in ['delta_time', 'logmag']:
                 n_fft_normalization_factor = n_fft_normalization_factor ** 2
             weighted_loss_val *= n_fft_normalization_factor
 

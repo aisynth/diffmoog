@@ -366,42 +366,46 @@ class SimpleSynthNetwork(nn.Module):
             index = cell.get('index')
             operation = cell.get('operation')
             if operation == 'osc':
-                amplitude_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                frequency_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                waveform_head = MLPBlock([LATENT_SPACE_SIZE, len(synth_cfg.wave_type_dict)])
+                amplitude_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                frequency_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                waveform_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, len(synth_cfg.wave_type_dict)])
                 self.heads_module_dict[self.get_key(index, operation, 'amp')] = amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = waveform_head
 
-            if operation == 'lfo':
-                frequency_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+            elif operation in ['lfo', 'lfo_non_sine']:
+                frequency_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
 
-                carrier_waveform_head = MLPBlock([LATENT_SPACE_SIZE, len(synth_cfg.wave_type_dict)])
+                carrier_waveform_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, len(synth_cfg.wave_type_dict)])
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = carrier_waveform_head
 
+            elif operation == 'lfo_sine':
+                frequency_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
+
             elif operation == 'fm':
-                carrier_amplitude_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                carrier_frequency_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                carrier_waveform_head = MLPBlock([LATENT_SPACE_SIZE, len(synth_cfg.wave_type_dict)])
-                modulation_index_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                carrier_amplitude_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                carrier_frequency_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                carrier_waveform_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, len(synth_cfg.wave_type_dict)])
+                modulation_index_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'amp_c')] = carrier_amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq_c')] = carrier_frequency_head
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = carrier_waveform_head
                 self.heads_module_dict[self.get_key(index, operation, 'mod_index')] = modulation_index_head
 
             elif operation == 'filter':
-                filter_type_head = MLPBlock([LATENT_SPACE_SIZE, len(synth_cfg.filter_type_dict)])
-                filter_freq_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                filter_type_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, len(synth_cfg.filter_type_dict)])
+                filter_freq_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'filter_type')] = filter_type_head
                 self.heads_module_dict[self.get_key(index, operation, 'filter_freq')] = filter_freq_head
 
             elif operation == 'env_adsr':
-                attack_t_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                decay_t_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                sustain_t_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                sustain_level_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                release_t_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                attack_t_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                decay_t_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                sustain_t_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                sustain_level_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                release_t_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'attack_t')] = attack_t_head
                 self.heads_module_dict[self.get_key(index, operation, 'decay_t')] = decay_t_head
                 self.heads_module_dict[self.get_key(index, operation, 'sustain_t')] = sustain_t_head
@@ -409,9 +413,8 @@ class SimpleSynthNetwork(nn.Module):
                 self.heads_module_dict[self.get_key(index, operation, 'release_t')] = release_t_head
 
             elif operation == 'amplitude_shape':
-                freeform_amplitude_shape_head = MLPBlock([LATENT_SPACE_SIZE, cfg.sample_rate])
+                freeform_amplitude_shape_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, cfg.sample_rate])
                 self.heads_module_dict[self.get_key(index, operation, 'envelope')] = freeform_amplitude_shape_head
-
 
         self.softmax = nn.Softmax(dim=1)
         self.sigmoid = nn.Sigmoid()
@@ -420,122 +423,179 @@ class SimpleSynthNetwork(nn.Module):
     def get_key(index: tuple, operation: str, parameter: str) -> str:
         return f'{index}' + '_' + operation + '_' + parameter
 
-    def forward(self, x):
-        latent = self.backbone(x)
+    def embed(self, x):
+        return self.backbone(x)
 
-        # Apply different heads to predict each synth parameter
-        output_dic = {}
-        for cell in self.preset:
-            index = cell.get('index')
-            operation = cell.get('operation')
+    def apply_head(self, latent_vector, index, operation):
 
-            if operation == 'osc':
-                amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp')]
-                frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq')]
-                waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]
+        if operation == 'osc':
+            amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp')]
+            frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq')]
+            waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]
 
-                predicted_amplitude = amplitude_head(latent)
-                predicted_amplitude = self.sigmoid(predicted_amplitude)
-                predicted_frequency = frequency_head(latent)
-                predicted_frequency = self.sigmoid(predicted_frequency)
-                waveform_logits = waveform_head(latent)
-                waveform_probabilities = self.softmax(waveform_logits)
+            predicted_amplitude = amplitude_head(latent_vector)
+            predicted_amplitude = self.sigmoid(predicted_amplitude)
+            predicted_frequency = frequency_head(latent_vector)
+            predicted_frequency = self.sigmoid(predicted_frequency)
+            waveform_logits = waveform_head(latent_vector)
+            waveform_probabilities = self.softmax(waveform_logits)
 
-                output_dic[index] = {'operation': operation,
-                                     'parameters': {'amp': predicted_amplitude,
-                                                'freq': predicted_frequency,
+            predicted_params = {'amp': predicted_amplitude,
+                                'freq': predicted_frequency,
+                                'waveform': waveform_probabilities}
+
+        if operation in ['lfo', 'lfo_non_sine']:
+            frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq')]
+            waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]
+
+            predicted_frequency = frequency_head(latent_vector)
+            predicted_frequency = self.sigmoid(predicted_frequency) #self.sigmoid(predicted_frequency)
+
+            waveform_logits = waveform_head(latent_vector)
+            waveform_probabilities = self.softmax(waveform_logits)
+
+            predicted_params = {'freq': predicted_frequency,
                                                 'waveform': waveform_probabilities
-                                                }}
-            if operation == 'lfo':
-                frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq')]
-                waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]
+                                                }
 
-                predicted_frequency = frequency_head(latent)
-                predicted_frequency = self.sigmoid(predicted_frequency) #self.sigmoid(predicted_frequency)
+        if operation == 'lfo_sine':
+            frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq')]
 
-                waveform_logits = waveform_head(latent)
-                waveform_probabilities = self.softmax(waveform_logits)
+            predicted_frequency = frequency_head(latent_vector)
+            predicted_frequency = self.sigmoid(predicted_frequency) #self.sigmoid(predicted_frequency)
 
-                output_dic[index] = {'operation': operation,
-                                     'parameters': {'freq': predicted_frequency,
-                                                    'waveform': waveform_probabilities
-                                                    }}
-            elif operation == 'fm':
-                # carrier_amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp_c')]
-                carrier_frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq_c')]
-                waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]
-                mod_index_head = self.heads_module_dict[self.get_key(index, operation, 'mod_index')]
+            predicted_params = {'freq': predicted_frequency}
 
-                # predicted_carrier_amplitude = carrier_amplitude_head(latent)
-                # predicted_carrier_amplitude = self.sigmoid(predicted_carrier_amplitude)
-                predicted_carrier_frequency = carrier_frequency_head(latent)
-                predicted_carrier_frequency = self.sigmoid(predicted_carrier_frequency)
-                waveform_logits = waveform_head(latent)
-                waveform_probabilities = self.softmax(waveform_logits)
-                predicted_mod_index = mod_index_head(latent)
-                predicted_mod_index = self.sigmoid(predicted_mod_index)
+        elif operation == 'fm':
+            # carrier_amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp_c')]
+            carrier_frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq_c')]
+            waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]
+            mod_index_head = self.heads_module_dict[self.get_key(index, operation, 'mod_index')]
 
-                output_dic[index] = {'operation': operation,
-                                     'parameters': {'freq_c': predicted_carrier_frequency,
-                                                    'waveform': waveform_probabilities,
-                                                    'mod_index': predicted_mod_index
-                                                    }}
+            # predicted_carrier_amplitude = carrier_amplitude_head(latent)
+            # predicted_carrier_amplitude = self.sigmoid(predicted_carrier_amplitude)
+            predicted_carrier_frequency = carrier_frequency_head(latent_vector)
+            predicted_carrier_frequency = self.sigmoid(predicted_carrier_frequency)
+            waveform_logits = waveform_head(latent_vector)
+            waveform_probabilities = self.softmax(waveform_logits)
+            predicted_mod_index = mod_index_head(latent_vector)
+            predicted_mod_index = self.sigmoid(predicted_mod_index)
 
-            elif operation == 'filter':
-                filter_type_head = self.heads_module_dict[self.get_key(index, operation, 'filter_type')]
-                filter_freq_head = self.heads_module_dict[self.get_key(index, operation, 'filter_freq')]
+            predicted_params = {'freq_c': predicted_carrier_frequency,
+                                                'waveform': waveform_probabilities,
+                                                'mod_index': predicted_mod_index
+                                                }
 
-                filter_type_logits = filter_type_head(latent)
-                filter_type_probabilities = self.softmax(filter_type_logits)
-                predicted_filter_freq = filter_freq_head(latent)
-                predicted_filter_freq = self.sigmoid(predicted_filter_freq)
+        elif operation == 'filter':
+            filter_type_head = self.heads_module_dict[self.get_key(index, operation, 'filter_type')]
+            filter_freq_head = self.heads_module_dict[self.get_key(index, operation, 'filter_freq')]
 
-                output_dic[index] = {'operation': operation,
-                                     'parameters': {'filter_type': filter_type_probabilities,
+            filter_type_logits = filter_type_head(latent_vector)
+            filter_type_probabilities = self.softmax(filter_type_logits)
+            predicted_filter_freq = filter_freq_head(latent_vector)
+            predicted_filter_freq = self.sigmoid(predicted_filter_freq)
+
+            predicted_params = {'filter_type': filter_type_probabilities,
                                                 'filter_freq': predicted_filter_freq
-                                                }}
+                                                }
 
-            elif operation == 'env_adsr':
-                attack_t_head = self.heads_module_dict[self.get_key(index, operation, 'attack_t')]
-                decay_t_head = self.heads_module_dict[self.get_key(index, operation, 'decay_t')]
-                sustain_t_head = self.heads_module_dict[self.get_key(index, operation, 'sustain_t')]
-                sustain_level_head = self.heads_module_dict[self.get_key(index, operation, 'sustain_level')]
-                release_t_head = self.heads_module_dict[self.get_key(index, operation, 'release_t')]
+        elif operation == 'env_adsr':
+            attack_t_head = self.heads_module_dict[self.get_key(index, operation, 'attack_t')]
+            decay_t_head = self.heads_module_dict[self.get_key(index, operation, 'decay_t')]
+            sustain_t_head = self.heads_module_dict[self.get_key(index, operation, 'sustain_t')]
+            sustain_level_head = self.heads_module_dict[self.get_key(index, operation, 'sustain_level')]
+            release_t_head = self.heads_module_dict[self.get_key(index, operation, 'release_t')]
 
-                predicted_attack_t = attack_t_head(latent)
-                predicted_attack_t = self.sigmoid(predicted_attack_t)
+            predicted_attack_t = attack_t_head(latent_vector)
+            predicted_attack_t = self.sigmoid(predicted_attack_t)
 
-                predicted_decay_t = decay_t_head(latent)
-                predicted_decay_t = self.sigmoid(predicted_decay_t)
+            predicted_decay_t = decay_t_head(latent_vector)
+            predicted_decay_t = self.sigmoid(predicted_decay_t)
 
-                predicted_sustain_t = sustain_t_head(latent)
-                predicted_sustain_t = self.sigmoid(predicted_sustain_t)
+            predicted_sustain_t = sustain_t_head(latent_vector)
+            predicted_sustain_t = self.sigmoid(predicted_sustain_t)
 
-                predicted_sustain_level = sustain_level_head(latent)
-                predicted_sustain_level = self.sigmoid(predicted_sustain_level)
+            predicted_sustain_level = sustain_level_head(latent_vector)
+            predicted_sustain_level = self.sigmoid(predicted_sustain_level)
 
-                predicted_release_t = release_t_head(latent)
-                predicted_release_t = self.sigmoid(predicted_release_t)
+            predicted_release_t = release_t_head(latent_vector)
+            predicted_release_t = self.sigmoid(predicted_release_t)
 
-                output_dic[index] = {'operation': operation,
-                                     'parameters': {'attack_t': predicted_attack_t,
+            predicted_params = {'attack_t': predicted_attack_t,
                                                 'decay_t': predicted_decay_t,
                                                 'sustain_t': predicted_sustain_t,
                                                 'sustain_level': predicted_sustain_level,
                                                 'release_t': predicted_release_t
-                                                }}
+                                                }
 
-            elif operation == 'amplitude_shape':
-                freeform_amplitude_shape_head = self.heads_module_dict[self.get_key(index, operation, 'attack_t')]
+        elif operation == 'amplitude_shape':
+            freeform_amplitude_shape_head = self.heads_module_dict[self.get_key(index, operation, 'attack_t')]
 
-                predicted_envelope = freeform_amplitude_shape_head(latent)
-                predicted_envelope = self.sigmoid(predicted_envelope)
+            predicted_envelope = freeform_amplitude_shape_head(latent_vector)
+            predicted_envelope = self.sigmoid(predicted_envelope)
 
-                output_dic[index] = {'operation': operation,
-                                     'parameters': {'envelope': predicted_envelope}
-                                     }
+            predicted_params = {'envelope': predicted_envelope}
 
-        return output_dic
+        return predicted_params
+
+    def forward(self, x):
+        latent = self.embed(x)
+
+        # Apply different heads to predict each synth parameter
+        output_dict = {}
+        for cell in self.preset:
+            index = cell.get('index')
+            operation = cell.get('operation')
+
+            if operation is None or operation == 'mix':
+                continue
+
+            predicted_params = self.apply_head(latent, index, operation)
+
+            output_dict[index] = {'operation': operation,
+                                  'parameters': predicted_params}
+
+        return output_dict
+
+
+class ConditionalSynthNetwork(SimpleSynthNetwork):
+
+    def __init__(self, conditional_input_size: int, preset: str, synth_cfg: SynthConfig, cfg: Config, device, backbone='resnet'):
+
+        super().__init__(preset, synth_cfg, cfg, device, backbone)
+        self.embedding_layers = nn.ModuleDict({})
+        for cell in self.preset:
+            index = cell.get('index')
+            embedding_layer = MLPBlock([LATENT_SPACE_SIZE + conditional_input_size, LATENT_SPACE_SIZE,
+                                        LATENT_SPACE_SIZE])
+            self.embedding_layers[str(index)] = embedding_layer
+
+    @staticmethod
+    def get_key(index: tuple, operation: str, parameter: str) -> str:
+        return f'{index}' + '_' + operation + '_' + parameter
+
+    def forward(self, x, conditional_input):
+
+        latent = self.embed(x)
+        conditional_latent = torch.cat([latent, conditional_input], dim=1)
+
+        # Apply different heads to predict each synth parameter
+        output_dict = {}
+        for cell in self.preset:
+            index = cell.get('index')
+            operation = cell.get('operation')
+
+            if operation is None or operation == 'mix':
+                continue
+
+            embedded_conditional = self.embedding_layers[str(index)](conditional_latent)
+
+            predicted_params = self.apply_head(embedded_conditional, index, operation)
+
+            output_dict[index] = {'operation': operation,
+                                  'parameters': predicted_params}
+
+        return output_dict
 
 
 class ConvBlock(nn.Module):

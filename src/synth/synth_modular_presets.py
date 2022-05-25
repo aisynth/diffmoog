@@ -15,9 +15,9 @@ BASIC_FLOW = [
 ]
 
 BASIC_FLOW_NO_ADSR = [
-    {'index': (0, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (0, 0), 'operation': 'lfo_sine', 'default_connection': True, 'synth_config': synth_cfg},
     {'index': (0, 1), 'operation': 'fm', 'default_connection': True, 'synth_config': synth_cfg},
-    {'index': (1, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (1, 0), 'operation': 'lfo_non_sine', 'default_connection': True, 'synth_config': synth_cfg},
     {'index': (1, 1), 'operation': 'fm', 'input_list': [[1, 0]], 'output': [0, 2], 'synth_config': synth_cfg},
     {'index': (1, 2), 'operation': None, 'input_list': None, 'synth_config': synth_cfg},
     {'index': (0, 2), 'operation': 'mix', 'input_list': [[0, 1], [1, 1]], 'synth_config': synth_cfg},
@@ -25,10 +25,25 @@ BASIC_FLOW_NO_ADSR = [
 ]
 
 BASIC_FLOW_NO_ADSR_NO_FILTER = [
-    {'index': (0, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (0, 0), 'operation': 'lfo_sine', 'default_connection': True, 'synth_config': synth_cfg},
     {'index': (0, 1), 'operation': 'fm', 'default_connection': True, 'synth_config': synth_cfg},
-    {'index': (1, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (1, 0), 'operation': 'lfo_non_sine', 'default_connection': True, 'synth_config': synth_cfg},
     {'index': (1, 1), 'operation': 'fm', 'input_list': [[1, 0]], 'output': [0, 2], 'synth_config': synth_cfg},
+    {'index': (1, 2), 'operation': None, 'input_list': None, 'synth_config': synth_cfg},
+    {'index': (0, 2), 'operation': 'mix', 'input_list': [[0, 1], [1, 1]], 'synth_config': synth_cfg},
+]
+
+SINE_LFO = [
+    {'index': (0, 0), 'operation': 'lfo_sine', 'default_connection': True, 'synth_config': synth_cfg},
+]
+
+NON_SINE_LFO = [
+    {'index': (1, 0), 'operation': 'lfo_non_sine', 'default_connection': True, 'synth_config': synth_cfg},
+]
+
+DOUBLE_FM_ONLY = [
+    {'index': (0, 1), 'operation': 'fm', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (1, 1), 'operation': 'fm', 'input_list': [], 'output': [0, 2], 'synth_config': synth_cfg},
     {'index': (1, 2), 'operation': None, 'input_list': None, 'synth_config': synth_cfg},
     {'index': (0, 2), 'operation': 'mix', 'input_list': [[0, 1], [1, 1]], 'synth_config': synth_cfg},
 ]
@@ -73,8 +88,8 @@ FM_FILTER_ADSR = [
 ]
 
 DOUBLE_LFO = [
-    {'index': (0, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
-    {'index': (1, 0), 'operation': 'lfo', 'output': [0, 1], 'synth_config': synth_cfg},
+    {'index': (0, 0), 'operation': 'lfo_sine', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (1, 0), 'operation': 'lfo_non_sine', 'output': [0, 1], 'synth_config': synth_cfg},
     {'index': (0, 1), 'operation': 'mix', 'input_list': [[0, 0], [1, 0]], 'output': [0, 2], 'synth_config': synth_cfg},
     {'index': (1, 1), 'operation': None, 'input_list': None, 'synth_config': synth_cfg}
 ]
@@ -98,4 +113,7 @@ synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW, 'LFO': LFO, 'OSC': OSC, 'FM': FM
                       'FM_ONLY': FM_ONLY,
                       'FILTER_ONLY': FILTER_ONLY,
                       'OSC_AMPLITUDE_SHAPER': OSC_AMPLITUDE_SHAPER,
-                      'OSC_FILTER_SHAPER': OSC_FILTER_SHAPER}
+                      'OSC_FILTER_SHAPER': OSC_FILTER_SHAPER,
+                      'DOUBLE_FM_ONLY': DOUBLE_FM_ONLY,
+                      'NON_SINE_LFO': NON_SINE_LFO,
+                      'SINE_LFO': SINE_LFO}
