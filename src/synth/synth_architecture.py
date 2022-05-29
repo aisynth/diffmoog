@@ -369,7 +369,12 @@ class SynthModular:
                     release_t = cell.parameters['release_t']
                     envelope = cell.parameters['envelope']
 
-                    if isinstance(envelope[0], int) and envelope[0] == -1:
+                    if envelope.dim() == 1:
+                            compute_envelope = True
+                    else:
+                            compute_envelope = False
+
+                    if compute_envelope:
                         envelope_shape = make_envelope_shape(attack_t,
                                                              decay_t,
                                                              sustain_t,

@@ -858,7 +858,7 @@ def make_envelope_shape(attack_t,
         else:
             sustain_level = [sustain_level[i] for i in range(num_sounds)]
 
-    envelopes_tensor = torch.tensor((), requires_grad=True).to(helper.get_device())
+    envelopes_tensor = torch.tensor((), requires_grad=True).to(device)
     first_time = True
     for k in range(num_sounds):
         if num_sounds == 1:

@@ -58,7 +58,6 @@ def train_single_epoch(model,
             denormalized_output_dict = normalizer.denormalize(output_params)
             predicted_param_dict = helper.clamp_adsr_params(denormalized_output_dict, synth_cfg, cfg)
 
-
             for op_idx, op_dict in predicted_param_dict.items():
                 for param_name, param_vals in op_dict['parameters'].items():
                     epoch_param_vals[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
@@ -78,7 +77,7 @@ def train_single_epoch(model,
                 modular_synth.generate_signal(num_sounds_=len(transformed_signal))
 
             # --------------Predicted-------------------------------------
-            params_for_pred_signal_generation = copy.deepcopy(target_param_dict)
+            params_for_pred_signal_generation = copy.copy(target_param_dict)
             params_for_pred_signal_generation.update(predicted_param_dict)
             modular_synth.update_cells_from_dict(params_for_pred_signal_generation)
             pred_final_signal, pred_signals_through_chain = \
