@@ -77,6 +77,10 @@ class Config:
     multi_spectral_loss_spec_type: str = 'BOTH'
     multi_spectral_loss_preset: str = 'cumsum_time'
 
+    add_parameters_loss = True
+    parameters_loss_type = 'L2'
+    parameters_loss_weight = 1/4000
+
     # Debug
     debug_mode: bool = False
     plot_spec: bool = False

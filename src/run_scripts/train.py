@@ -7,6 +7,7 @@ from dataset.ai_synth_dataset import AiSynthDataset, create_data_loader
 from inference import visualize_signal_prediction
 from model.model import SimpleSynthNetwork
 from model.spectral_loss import SpectralLoss
+from model.parameters_loss import ParametersLoss
 from model.spectral_loss_presets import loss_presets
 from synth.synth_architecture import SynthModular
 from model import helper
@@ -85,6 +86,8 @@ def train_single_epoch(model,
 
             # Compute loss and backprop
             loss_total = 0
+            spectrogram_loss = 0
+            parameters_loss = 0
             for op_index in output_params.keys():
                 op_index = str(op_index)
 
@@ -93,13 +96,21 @@ def train_single_epoch(model,
                     continue
 
                 target_signal = target_signals_through_chain[op_index]
-                loss, ret_spectrograms = loss_handler.call(target_signal,
-                                                           pred_signal,
-                                                           summary_writer,
-                                                           op_index,
-                                                           step,
-                                                           return_spectrogram=True)
-                loss_total += loss
+                loss, ret_spectrograms = loss_handler['spectrogram_loss'].call(target_signal,
+                                                                               pred_signal,
+                                                                               summary_writer,
+                                                                               op_index,
+                                                                               step,
+                                                                               return_spectrogram=True)
+                spectrogram_loss += loss
+
+            if cfg.add_parameters_loss:
+                parameters_loss = loss_handler['parameters_loss'].call(predicted_parameters_dict=predicted_param_dict,
+                                                                       target_parameters_dict=target_param_dict,
+                                                                       summary_writer=summary_writer,
+                                                                       global_step=step)
+
+            loss_total = spectrogram_loss + (cfg.parameters_loss_weight * parameters_loss)
 
             num_of_mini_batches += 1
             sum_epoch_loss += loss_total.item()
@@ -169,13 +180,21 @@ def train(model,
     #                                               mode='triangular2', cycle_momentum=False)
     normalizer = helper.Normalizer(cfg.signal_duration_sec, synth_cfg)
 
+    loss_handler = {}
     if cfg.spectrogram_loss_type == 'MULTI-SPECTRAL':
         loss_preset = cfg.multi_spectral_loss_preset
         total_train_steps = num_epochs * len(data_loader)
-        loss_handler = SpectralLoss(cfg=cfg, preset_name=loss_preset, device=device,
-                                    total_train_steps=total_train_steps)
+        loss_handler['spectrogram_loss'] = SpectralLoss(cfg=cfg,
+                                                        preset_name=loss_preset,
+                                                        device=device,
+                                                        total_train_steps=total_train_steps)
     else:
         raise ValueError("SYNTH_TYPE 'MODULAR' supports only SPECTROGRAM_LOSS_TYPE of type 'MULTI-SPECTRAL'")
+
+    if cfg.add_parameters_loss:
+        loss_handler['parameters_loss'] = ParametersLoss(cfg=cfg,
+                                                         loss_type=cfg.parameters_loss_type,
+                                                         device=device)
 
     # init modular synth
     modular_synth = SynthModular(synth_cfg=synth_cfg,

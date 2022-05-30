@@ -34,7 +34,8 @@ def move_to(obj, device):
     elif isinstance(obj, dict):
         res = {}
         for k, v in obj.items():
-            res[k] = move_to(v, device)
+            obj[k] = move_to(v, device)
+            res[k] = obj[k]
         return res
     elif isinstance(obj, list):
         res = []
