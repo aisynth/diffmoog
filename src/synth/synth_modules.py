@@ -858,7 +858,9 @@ def make_envelope_shape(attack_t,
         sustain_num_samples = torch.stack(sustain_num_samples)
         release_num_samples = torch.stack(release_num_samples)
 
-    if num_sounds > 1:
+    if num_sounds == 1:
+        sustain_level = sustain_level.item()
+    else:
         if torch.is_tensor(sustain_level[0]):
             sustain_level = [sustain_level[i] for i in range(num_sounds)]
             sustain_level = torch.stack(sustain_level)

@@ -315,11 +315,11 @@ class SynthModular:
                     #                                       freq=cell.parameters['freq'],
                     #                                       phase=0,
                     #                                       waveform=cell.parameters['waveform'],
-                    #                                       num_sounds=num_sounds)
-                    cell.signal = synth_module.batch_oscillator(amp=cell.parameters['amp'],
-                                                                freq=cell.parameters['freq'],
+                    #                                       num_sounds=num_sounds_)
+                    cell.signal = synth_module.batch_oscillator(amp=1,
+                                                                freq=440,
                                                                 phase=0,
-                                                                waveform=cell.parameters['waveform'])
+                                                                waveform='square')
                 elif operation == 'lfo':
                     cell.signal = synth_module.batch_oscillator(amp=1.0,
                                                                 freq=cell.parameters['freq'],
