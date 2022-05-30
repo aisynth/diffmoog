@@ -828,6 +828,13 @@ def make_envelope_shape(attack_t,
                         device,
                         num_sounds=1):
 
+    if isinstance(attack_t, list) or isinstance(attack_t, np.ndarray):
+        attack_t = torch.tensor(attack_t)
+        decay_t = torch.tensor(decay_t)
+        sustain_t = torch.tensor(sustain_t)
+        sustain_level = torch.tensor(sustain_level)
+        release_t = torch.tensor(release_t)
+
     check_adsr_timings(attack_t,
                        decay_t,
                        sustain_t,

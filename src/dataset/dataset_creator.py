@@ -58,12 +58,6 @@ def create_dataset(train: bool, dataset_cfg: DatasetConfig, synth_cfg: SynthConf
 
         for j in range(dataset_cfg.batch_size):
 
-            sample_idx = (dataset_cfg.batch_size * batch_idx) + j
-
-            file_name = f"sound_{sample_idx}"
-
-            c_audio = audio[j]
-
             params_dict = {}
             for layer in range(synth_cfg.num_layers):
                 for channel in range(synth_cfg.num_channels):
@@ -73,14 +67,22 @@ def create_dataset(train: bool, dataset_cfg: DatasetConfig, synth_cfg: SynthConf
                     else:
                         operation = 'None'
                     if cell.parameters is not None:
-                        parameters = {k: v[j] for k, v in cell.parameters.items()}
+                        if isinstance(list(cell.parameters.values())[0], float):
+                            parameters = {k: v for k, v in cell.parameters.items()}
+                        else:
+                            parameters = {k: v[j] for k, v in cell.parameters.items()}
                     else:
                         parameters = 'None'
                     params_dict[cell.index] = {'operation': operation, 'parameters': parameters}
             dataset_parameters.append(params_dict)
 
+            sample_idx = (dataset_cfg.batch_size * batch_idx) + j
+            file_name = f"sound_{sample_idx}"
             audio_path = os.path.join(wav_files_dir, f"{file_name}.wav")
-
+            if audio.dim() > 1:
+                c_audio = audio[j]
+            else:
+                c_audio = audio
             c_audio = torch.squeeze(c_audio)
             c_audio = c_audio.detach().cpu().numpy()
 

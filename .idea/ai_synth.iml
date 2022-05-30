@@ -15,7 +15,7 @@
     <content url="file://$MODULE_DIR$/julius">
       <sourceFolder url="file://$MODULE_DIR$/julius" isTestSource="false" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.10" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.9 (ai_synth)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

@@ -193,7 +193,7 @@ class SynthModular:
                 operation = cell.operation
 
                 if operation == 'osc':
-                    params = {'amp': np.random.random_sample(size=num_sounds_),
+                    params = {'amp': np.random.random(size=num_sounds_),
                               'freq': random.choices(synth_cfg.osc_freq_list, k=num_sounds_),
                               'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds_)}
 
@@ -263,10 +263,10 @@ class SynthModular:
                 cell.parameters = params
 
     def generate_random_adsr_values(self, num_sounds_=1):
-        attack_t = torch.rand(num_sounds_, device=self.device)
-        decay_t = torch.rand(num_sounds_, device=self.device)
-        sustain_t = torch.rand(num_sounds_, device=self.device)
-        release_t = torch.rand(num_sounds_, device=self.device)
+        attack_t = np.random.random(size=num_sounds_)
+        decay_t = np.random.random(size=num_sounds_)
+        sustain_t = np.random.random(size=num_sounds_)
+        release_t = np.random.random(size=num_sounds_)
         adsr_sum = attack_t + decay_t + sustain_t + release_t
         attack_t = attack_t / adsr_sum
         decay_t = decay_t / adsr_sum
@@ -282,7 +282,7 @@ class SynthModular:
         sustain_t[overflow_indices] -= 1e-6
         release_t[overflow_indices] -= 1e-6
 
-        sustain_level = torch.rand(num_sounds_)
+        sustain_level = np.random.random(size=num_sounds_)
 
         return attack_t, decay_t, sustain_t, sustain_level, release_t
 
