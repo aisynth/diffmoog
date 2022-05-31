@@ -28,22 +28,37 @@ def get_device(gpu_index: int = 0):
     return device
 
 
+# def move_to(obj, device):
+#     if torch.is_tensor(obj):
+#         return obj.to(device)
+#     elif isinstance(obj, dict):
+#         res = {}
+#         for k, v in obj.items():
+#             obj[k] = move_to(v, device)
+#             res[k] = obj[k]
+#         return res
+#     elif isinstance(obj, list):
+#         res = []
+#         for v in obj:
+#             res.append(move_to(v, device))
+#         return res
+#     else:
+#         raise TypeError("Invalid type for move_to")
+
 def move_to(obj, device):
     if torch.is_tensor(obj):
-        return obj.to(device)
+        obj = obj.to(device)
+        return obj
     elif isinstance(obj, dict):
-        res = {}
         for k, v in obj.items():
             obj[k] = move_to(v, device)
-            res[k] = obj[k]
-        return res
+        return obj
     elif isinstance(obj, list):
-        res = []
-        for v in obj:
-            res.append(move_to(v, device))
-        return res
+        for idx, v in enumerate(obj):
+            obj[idx] = move_to(v, device)
+        return obj
     else:
-        raise TypeError("Invalid type for move_to")
+        return obj
 
 
 def spectrogram_transform():

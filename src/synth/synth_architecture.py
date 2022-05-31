@@ -187,6 +187,7 @@ class SynthModular:
 
     def generate_random_params(self, synth_cfg: SynthConfig = None, num_sounds_=1):
         params = {}
+        np.random.seed(440)
         for layer in range(synth_cfg.num_layers):
             for channel in range(synth_cfg.num_channels):
                 cell = self.architecture[channel][layer]
@@ -311,15 +312,15 @@ class SynthModular:
                     cell.signal = signal
 
                 elif operation == 'osc':
-                    # cell.signal = synth_module.oscillator(amp=cell.parameters['amp'],
-                    #                                       freq=cell.parameters['freq'],
-                    #                                       phase=0,
-                    #                                       waveform=cell.parameters['waveform'],
-                    #                                       num_sounds=num_sounds_)
-                    cell.signal = synth_module.batch_oscillator(amp=1,
-                                                                freq=440,
-                                                                phase=0,
-                                                                waveform='square')
+                    cell.signal = synth_module.oscillator(amp=cell.parameters['amp'],
+                                                          freq=cell.parameters['freq'],
+                                                          phase=0,
+                                                          waveform=cell.parameters['waveform'],
+                                                          num_sounds=num_sounds_)
+                    # cell.signal = synth_module.batch_oscillator(amp=1,
+                    #                                             freq=440,
+                    #                                             phase=0,
+                    #                                             waveform='square')
                 elif operation == 'lfo':
                     cell.signal = synth_module.batch_oscillator(amp=1.0,
                                                                 freq=cell.parameters['freq'],

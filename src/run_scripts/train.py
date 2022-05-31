@@ -13,6 +13,7 @@ from synth.synth_architecture import SynthModular
 from model import helper
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from tqdm import tqdm
+from collections.abc import Iterable
 
 from train_helper import *
 
@@ -38,6 +39,7 @@ def train_single_epoch(model,
     with tqdm(data_loader, unit="batch") as tepoch:
         for target_signal, target_param_dict, signal_index in tepoch:
 
+            num_sounds = len(signal_index)
             step = epoch * len(data_loader) + num_of_mini_batches
 
             tepoch.set_description(f"Epoch {epoch}")
@@ -46,8 +48,10 @@ def train_single_epoch(model,
             # https://tigress-web.princeton.edu/~jdh4/PyTorchPerformanceTuningGuide_GTC2021.pdf
             model.zero_grad(set_to_none=True)
 
+            target_param_dict = helper.move_to(target_param_dict, device)
             target_signal = target_signal.to(device)
             transformed_signal = transform(target_signal)
+
 
             # -----------Run Model-----------------
             output_params = model(transformed_signal)
@@ -69,20 +73,24 @@ def train_single_epoch(model,
 
             batch_param_diffs = get_param_diffs(predicted_param_dict, target_param_dict)
             for op_idx, diff_vals in batch_param_diffs.items():
-                epoch_param_diffs[op_idx].extend(diff_vals)
+                # print(op_idx, diff_vals)
+                if isinstance(diff_vals, Iterable):
+                    epoch_param_diffs[op_idx].extend(diff_vals)
+                else:
+                    epoch_param_diffs[op_idx].append(diff_vals)
 
             # -------------Generate Signal-------------------------------
             # --------------Target-------------------------------------
             modular_synth.update_cells_from_dict(target_param_dict)
             target_final_signal, target_signals_through_chain = \
-                modular_synth.generate_signal(num_sounds_=len(transformed_signal))
+                modular_synth.generate_signal(num_sounds_=num_sounds)
 
             # --------------Predicted-------------------------------------
             params_for_pred_signal_generation = copy.copy(target_param_dict)
             params_for_pred_signal_generation.update(predicted_param_dict)
             modular_synth.update_cells_from_dict(params_for_pred_signal_generation)
             pred_final_signal, pred_signals_through_chain = \
-                modular_synth.generate_signal(num_sounds_=len(transformed_signal))
+                modular_synth.generate_signal(num_sounds_=num_sounds)
 
             # Compute loss and backprop
             loss_total = 0
@@ -123,23 +131,47 @@ def train_single_epoch(model,
             summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
 
             if num_of_mini_batches == 1:
-                for i in range(5):
+                if num_sounds == 1:
                     sample_params_orig, sample_params_pred = parse_synth_params(target_param_dict,
                                                                                 predicted_param_dict,
-                                                                                i)
-                    summary_writer.add_audio(f'input_{i}_target', target_final_signal[i], global_step=epoch,
+                                                                                0)
+                    summary_writer.add_audio(f'input_0_target', target_final_signal, global_step=epoch,
                                              sample_rate=cfg.sample_rate)
-                    summary_writer.add_audio(f'input_{i}_pred', pred_final_signal[i], global_step=epoch,
+                    summary_writer.add_audio(f'input_0_pred', pred_final_signal, global_step=epoch,
                                              sample_rate=cfg.sample_rate)
 
-                    signal_vis = visualize_signal_prediction(target_final_signal[i], pred_final_signal[i],
+                    pred_final_signal = pred_final_signal.squeeze()
+                    target_final_signal = target_final_signal.squeeze()
+                    signal_vis = visualize_signal_prediction(target_final_signal, pred_final_signal,
                                                              sample_params_orig, sample_params_pred, db=True)
                     signal_vis_t = torch.tensor(signal_vis, dtype=torch.uint8, requires_grad=False)
 
-                    summary_writer.add_image(f'{256}_spec/input_{i}',
+                    summary_writer.add_image(f'{256}_spec/input_0',
                                              signal_vis_t,
                                              global_step=epoch,
                                              dataformats='HWC')
+                else:
+                    if num_sounds < 5:
+                        range_ = range(num_sounds)
+                    else:
+                        range_ = range(5)
+                    for i in range_:
+                        sample_params_orig, sample_params_pred = parse_synth_params(target_param_dict,
+                                                                                    predicted_param_dict,
+                                                                                    i)
+                        summary_writer.add_audio(f'input_{i}_target', target_final_signal[i], global_step=epoch,
+                                                 sample_rate=cfg.sample_rate)
+                        summary_writer.add_audio(f'input_{i}_pred', pred_final_signal[i], global_step=epoch,
+                                                 sample_rate=cfg.sample_rate)
+
+                        signal_vis = visualize_signal_prediction(target_final_signal[i], pred_final_signal[i],
+                                                                 sample_params_orig, sample_params_pred, db=True)
+                        signal_vis_t = torch.tensor(signal_vis, dtype=torch.uint8, requires_grad=False)
+
+                        summary_writer.add_image(f'{256}_spec/input_{i}',
+                                                 signal_vis_t,
+                                                 global_step=epoch,
+                                                 dataformats='HWC')
 
             if num_of_mini_batches % 50 == 0:
                 log_gradients_in_model(model, summary_writer, step)

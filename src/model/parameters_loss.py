@@ -95,6 +95,12 @@ class ParametersLoss:
 
                 # move_to(target_parameters[param], self.device)
                 target_parameters[param] = target_parameters[param].type(torch.FloatTensor).to(self.device)
+                if predicted_parameters[param].dim() > 1 and predicted_parameters[param].shape[0] == 1:
+                    predicted_parameters[param] = predicted_parameters[param].squeeze(dim=0)
+                else:
+                    predicted_parameters[param] = predicted_parameters[param].squeeze()
+                if target_parameters[param].dim() > 1:
+                    target_parameters[param] = target_parameters[param].squeeze(dim=0)
                 loss = self.criterion(predicted_parameters[param], target_parameters[param])
                 total_loss += loss
 

@@ -80,16 +80,19 @@ class SynthModules:
         first_time = True
         for i in range(num_sounds):
 
-            if num_sounds == 1:
+            if num_sounds == 1 \
+                    and not isinstance(amp, list)\
+                    and not torch.is_tensor(amp):
                 freq_float = freq
                 amp_float = amp
+                waveform_current = waveform
             else:
                 if isinstance(amp, int):
                     amp_float = amp
                 else:
                     amp_float = amp[i]
                 freq_float = freq[i]
-
+                waveform_current = waveform[i]
             sine_wave = amp_float * torch.sin(TWO_PI * freq_float * t + phase)
             square_wave = amp_float * torch.sign(torch.sin(TWO_PI * freq_float * t + phase))
             triangle_wave = (2 * amp_float / PI) * torch.arcsin(torch.sin((TWO_PI * freq_float * t + phase)))
@@ -99,14 +102,14 @@ class SynthModules:
             sawtooth_wave = (((sawtooth_wave + 1) / 2) + phase / TWO_PI) % 1
             sawtooth_wave = amp_float * (sawtooth_wave * 2 - 1)  # re-normalization to range [-amp, amp]
 
-            if isinstance(waveform, str):
-                if waveform == 'sine':
+            if isinstance(waveform_current, str):
+                if waveform_current == 'sine':
                     oscillator = sine_wave
-                elif waveform == 'square':
+                elif waveform_current == 'square':
                     oscillator = square_wave
-                elif waveform == 'triangle':
+                elif waveform_current == 'triangle':
                     oscillator = triangle_wave
-                elif waveform == 'sawtooth':
+                elif waveform_current == 'sawtooth':
                     oscillator = sawtooth_wave
 
             else:

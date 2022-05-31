@@ -102,15 +102,19 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
                 target_vals = target_vals.squeeze()
                 if target_vals.ndim == 0:
                     waveform_idx = [SynthConfig.wave_type_dict[target_vals.item()]]
-                    diff = [1 - pred_vals[0][waveform_idx]]
+                    diff = (1 - pred_vals[0][waveform_idx]).item()
                 else:
                     waveform_idx = [SynthConfig.wave_type_dict[wt] for wt in target_vals]
                     diff = [1 - v[idx] for idx, v in zip(waveform_idx, pred_vals)]
-                diff = np.asarray(diff).squeeze()
+                    diff = np.asarray(diff).squeeze()
             elif param_name == 'filter_type':
-                filter_type_idx = [SynthConfig.filter_type_dict[ft] for ft in target_vals.squeeze()]
-                diff = [1 - v[idx] for idx, v in zip(filter_type_idx, pred_vals)]
-                diff = np.asarray(diff).squeeze()
+                if target_vals.ndim == 0:
+                    filter_type_idx = [SynthConfig.filter_type_dict[target_vals.item()]]
+                    diff = (1 - pred_vals[0][filter_type_idx]).item()
+                else:
+                    filter_type_idx = [SynthConfig.filter_type_dict[ft] for ft in target_vals.squeeze()]
+                    diff = [1 - v[idx] for idx, v in zip(filter_type_idx, pred_vals)]
+                    diff = np.asarray(diff).squeeze()
             elif param_name in ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']:
                 continue
             elif param_name == 'envelope':
