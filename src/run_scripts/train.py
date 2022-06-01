@@ -118,7 +118,7 @@ def train_single_epoch(model,
                                                                        summary_writer=summary_writer,
                                                                        global_step=step)
 
-            loss_total = spectrogram_loss + (cfg.parameters_loss_weight * parameters_loss)
+            loss_total = (cfg.spectrogram_loss_weight * spectrogram_loss) + (cfg.parameters_loss_weight * parameters_loss)
 
             num_of_mini_batches += 1
             sum_epoch_loss += loss_total.item()

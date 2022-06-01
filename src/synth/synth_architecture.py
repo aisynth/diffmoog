@@ -187,7 +187,7 @@ class SynthModular:
 
     def generate_random_params(self, synth_cfg: SynthConfig = None, num_sounds_=1):
         params = {}
-        np.random.seed(440)
+        np.random.seed(synth_cfg.seed)
         for layer in range(synth_cfg.num_layers):
             for channel in range(synth_cfg.num_channels):
                 cell = self.architecture[channel][layer]

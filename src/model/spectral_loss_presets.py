@@ -15,6 +15,11 @@ CUMSUM_TIME_LOSS = {'fft_sizes': (2048, 1024, 512, 256, 128, 64),
                     'multi_spectral_cumsum_time_weight': 1/2000,
                     'normalize_loss_by_nfft': True}
 
+CUMSUM_FREQ_LOSS = {'fft_sizes': (2048, 1024, 512, 256, 128, 64),
+                    'multi_spectral_loss_type': 'L1',
+                    'multi_spectral_cumsum_freq_weight': 1/2000,
+                    'normalize_loss_by_nfft': True}
+
 
 CUMSUM_TIME_LOW_FFT_LOSS = {'fft_sizes': (128, 64),
                             'multi_spectral_loss_type': 'L1',
@@ -30,5 +35,6 @@ FM_ONLY_LOSS = {'fft_sizes': (128, 64),
                 'normalize_loss_by_nfft': True}
 
 loss_presets = {'cumsum_time': CUMSUM_TIME_LOSS,
+                'cumsum_freq': CUMSUM_FREQ_LOSS,
                 'cumsum_time_low_fft': CUMSUM_TIME_LOW_FFT_LOSS,
                 'fm_only': FM_ONLY_LOSS}

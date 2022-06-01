@@ -24,6 +24,16 @@ BASIC_FLOW_NO_ADSR = [
     {'index': (0, 3), 'operation': 'filter', 'default_connection': True, 'synth_config': synth_cfg},
 ]
 
+BASIC_FLOW_NO_FILTER = [
+    {'index': (0, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (0, 1), 'operation': 'fm', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (1, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (1, 1), 'operation': 'fm', 'input_list': [[1, 0]], 'output': [0, 2], 'synth_config': synth_cfg},
+    {'index': (1, 2), 'operation': None, 'input_list': None, 'synth_config': synth_cfg},
+    {'index': (0, 2), 'operation': 'mix', 'input_list': [[0, 1], [1, 1]], 'synth_config': synth_cfg},
+    {'index': (0, 3), 'operation': 'amplitude_shape', 'default_connection': True, 'synth_config': synth_cfg},
+]
+
 BASIC_FLOW_NO_ADSR_NO_FILTER = [
     {'index': (0, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
     {'index': (0, 1), 'operation': 'fm', 'default_connection': True, 'synth_config': synth_cfg},
@@ -98,4 +108,5 @@ synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW, 'LFO': LFO, 'OSC': OSC, 'FM': FM
                       'FM_ONLY': FM_ONLY,
                       'FILTER_ONLY': FILTER_ONLY,
                       'OSC_AMPLITUDE_SHAPER': OSC_AMPLITUDE_SHAPER,
-                      'OSC_FILTER_SHAPER': OSC_FILTER_SHAPER}
+                      'OSC_FILTER_SHAPER': OSC_FILTER_SHAPER,
+                      'BASIC_FLOW_NO_FILTER': BASIC_FLOW_NO_FILTER}

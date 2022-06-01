@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
@@ -19,6 +20,15 @@ class ParametersLoss:
             self.criterion = nn.MSELoss()
         else:
             raise ValueError("unknown loss type")
+
+    @staticmethod
+    def diff_loss(t: torch.Tensor):
+
+        diff_tensor = torch.abs(torch.diff(t, n=1, dim=-1))
+        diff_tensor = torch.abs(torch.diff(diff_tensor, n=1, dim=-1))
+        loss_val = diff_tensor.mean()
+
+        return loss_val
 
     def call(self, predicted_parameters_dict, target_parameters_dict, summary_writer: SummaryWriter,
              global_step: int, log: bool = True):
@@ -90,8 +100,14 @@ class ParametersLoss:
                                                          self.device,
                                                          num_sounds=num_sounds)
                     target_parameters['envelope'] = envelope_shape
-                elif param in ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']:
-                    continue
+
+                    if self.cfg.smoothness_loss_weight > 0:
+                        smoothness_loss = self.diff_loss(predicted_parameters[param]) * self.cfg.smoothness_loss_weight
+                        loss_dict[f"{key}_{operation}_{param}_smoothness"] = smoothness_loss
+                        total_loss += smoothness_loss
+
+                # elif param in ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']:
+                #     continue
 
                 # move_to(target_parameters[param], self.device)
                 target_parameters[param] = target_parameters[param].type(torch.FloatTensor).to(self.device)
@@ -101,14 +117,15 @@ class ParametersLoss:
                     predicted_parameters[param] = predicted_parameters[param].squeeze()
                 if target_parameters[param].dim() > 1:
                     target_parameters[param] = target_parameters[param].squeeze(dim=0)
+
                 loss = self.criterion(predicted_parameters[param], target_parameters[param])
                 total_loss += loss
 
                 loss_dict[f"{key}_{operation}_{param}"] = loss
 
-                if log:
-                    for loss_name, loss_val in loss_dict.items():
-                        summary_writer.add_scalar(f"parameter_sub_losses/{loss_name}",
-                                                  loss_val,
-                                                  global_step=global_step)
+        if log:
+            for loss_name, loss_val in loss_dict.items():
+                summary_writer.add_scalar(f"parameter_sub_losses/{loss_name}",
+                                          loss_val,
+                                          global_step=global_step)
         return total_loss

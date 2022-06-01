@@ -9,11 +9,10 @@ from torch.utils.tensorboard import SummaryWriter
 from config import Config
 from model.spectral_loss_presets import loss_presets
 
-# todo: make sur cumsimetime dim is correct (was 2, I changed it to 0)
 loss_type_to_function = {'mag': lambda x: x,
                          'delta_time': lambda x: torch.diff(x, n=1, dim=1),
                          'delta_freq': lambda x: torch.diff(x, n=1, dim=2),
-                         'cumsum_time': lambda x: torch.cumsum(x, dim=0),
+                         'cumsum_time': lambda x: torch.cumsum(x, dim=2),
                          'cumsum_freq': lambda x: torch.cumsum(x, dim=1),
                          'logmag': lambda x: torch.log(x + 1)}
 

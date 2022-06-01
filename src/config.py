@@ -75,11 +75,13 @@ class Config:
     freq_reinforce_loss_factor: float = 1e5
 
     multi_spectral_loss_spec_type: str = 'BOTH'
-    multi_spectral_loss_preset: str = 'cumsum_time'
+    multi_spectral_loss_preset: str = 'cumsum_freq'
 
     add_parameters_loss = True
     parameters_loss_type = 'L2'
-    parameters_loss_weight = 1/4000
+    parameters_loss_weight = 1/100
+    spectrogram_loss_weight = 0
+    smoothness_loss_weight = 0
 
     # Debug
     debug_mode: bool = False
@@ -135,8 +137,8 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 1
-    batch_size: int = 1
+    dataset_size: int = 50000
+    batch_size: int = 100
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
     train_audio_dir: str = None
@@ -167,7 +169,7 @@ class ModelConfig:
     model_type: str = 'simple'
     backbone: str = 'resnet'
     batch_size: int = 128
-    num_epochs: int = 20
+    num_epochs: int = 100
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
@@ -178,7 +180,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'OSC_AMPLITUDE_SHAPER'
+    preset: str = 'BASIC_FLOW_NO_FILTER'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}
@@ -202,6 +204,9 @@ class SynthConfig:
     # Modular Synth attributes:
     num_channels: int = 4
     num_layers: int = 5
+
+    # Seed for random parameters generator
+    seed = 1
 
     # Modular synth possible modules from synth_modules.py
     modular_synth_operations = ['osc', 'fm', 'lfo', 'mix', 'filter', 'env_adsr']
