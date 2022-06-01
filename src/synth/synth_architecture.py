@@ -154,7 +154,7 @@ class SynthModular:
                 input_cell = self.architecture[input_[0]][input_[1]]
                 input_cell.output = cell.index
         if operation is not None:
-            if operation == 'osc' or operation == 'lfo' and len(cell.input_list) != 0:
+            if operation == 'osc' or operation[:3] == 'lfo' and len(cell.input_list) != 0:
                 AttributeError(f'Operation {operation} does not take input audio')
             elif operation in ['filter', 'env_adsr'] and len(cell.input_list) != 1:
                 AttributeError(f'{operation} must have single input')
@@ -194,13 +194,22 @@ class SynthModular:
                 operation = cell.operation
 
                 if operation == 'osc':
-                    params = {'amp': np.random.random(size=num_sounds_),
+                    params = {'amp': np.random.random_sample(size=num_sounds_),
                               'freq': random.choices(synth_cfg.osc_freq_list, k=num_sounds_),
                               'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds_)}
 
                 elif operation == 'lfo':
                     params = {'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds_),
-                              'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds_)}
+                              'waveform': random.choices([k for k in synth_cfg.wave_type_dict.keys()],
+                                                         k=num_sounds_)}
+
+                elif operation == 'lfo_non_sine':
+                    params = {'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds_),
+                              'waveform': random.choices([k for k in synth_cfg.wave_type_dict.keys() if k != 'sine'],
+                                                         k=num_sounds_)}
+
+                elif operation == 'lfo_sine':
+                    params = {'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds_)}
 
                 elif operation == 'fm':
                     params = {'freq_c': self._sample_c_freq(synth_cfg, num_sounds_),
@@ -210,7 +219,6 @@ class SynthModular:
                 elif operation == 'mix':
                     params = None
 
-                # todo: remove adsr \ amp_shape duplication
                 elif operation == 'amplitude_shape':
                     attack_t, decay_t, sustain_t, sustain_level, release_t = \
                         self.generate_random_adsr_values(num_sounds_=num_sounds_)
@@ -326,6 +334,11 @@ class SynthModular:
                                                                 freq=cell.parameters['freq'],
                                                                 phase=0,
                                                                 waveform=cell.parameters['waveform'])
+                elif operation == 'lfo_sine':
+                    cell.signal = synth_module.batch_oscillator(amp=1.0,
+                                                                freq=cell.parameters['freq'],
+                                                                phase=0,
+                                                                waveform='sine')
 
                 elif operation == 'fm':
                     if len(cell.input_list) == 1:

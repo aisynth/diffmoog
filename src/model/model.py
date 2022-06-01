@@ -366,42 +366,46 @@ class SimpleSynthNetwork(nn.Module):
             index = cell.get('index')
             operation = cell.get('operation')
             if operation == 'osc':
-                amplitude_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                frequency_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                waveform_head = MLPBlock([LATENT_SPACE_SIZE, len(synth_cfg.wave_type_dict)])
+                amplitude_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                frequency_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                waveform_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, len(synth_cfg.wave_type_dict)])
                 self.heads_module_dict[self.get_key(index, operation, 'amp')] = amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = waveform_head
 
-            if operation == 'lfo':
-                frequency_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+            elif operation in ['lfo', 'lfo_non_sine']:
+                frequency_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
 
-                carrier_waveform_head = MLPBlock([LATENT_SPACE_SIZE, len(synth_cfg.wave_type_dict)])
+                carrier_waveform_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, len(synth_cfg.wave_type_dict)])
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = carrier_waveform_head
 
+            elif operation == 'lfo_sine':
+                frequency_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
+
             elif operation == 'fm':
-                carrier_amplitude_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                carrier_frequency_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                carrier_waveform_head = MLPBlock([LATENT_SPACE_SIZE, len(synth_cfg.wave_type_dict)])
-                modulation_index_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                carrier_amplitude_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                carrier_frequency_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                carrier_waveform_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, len(synth_cfg.wave_type_dict)])
+                modulation_index_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'amp_c')] = carrier_amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq_c')] = carrier_frequency_head
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = carrier_waveform_head
                 self.heads_module_dict[self.get_key(index, operation, 'mod_index')] = modulation_index_head
 
             elif operation == 'filter':
-                filter_type_head = MLPBlock([LATENT_SPACE_SIZE, len(synth_cfg.filter_type_dict)])
-                filter_freq_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                filter_type_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, len(synth_cfg.filter_type_dict)])
+                filter_freq_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'filter_type')] = filter_type_head
                 self.heads_module_dict[self.get_key(index, operation, 'filter_freq')] = filter_freq_head
 
             elif operation in ['env_adsr', 'amplitude_shape']:
-                attack_t_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                decay_t_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                sustain_t_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                sustain_level_head = MLPBlock([LATENT_SPACE_SIZE, 1])
-                release_t_head = MLPBlock([LATENT_SPACE_SIZE, 1])
+                attack_t_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                decay_t_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                sustain_t_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                sustain_level_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                release_t_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'attack_t')] = attack_t_head
                 self.heads_module_dict[self.get_key(index, operation, 'decay_t')] = decay_t_head
                 self.heads_module_dict[self.get_key(index, operation, 'sustain_t')] = sustain_t_head

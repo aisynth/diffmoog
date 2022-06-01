@@ -6,6 +6,8 @@ from pathlib import Path, WindowsPath
 from shutil import rmtree
 from termcolor import colored
 
+import numpy as np
+
 # from synth_config import BASIC_FLOW
 from typing import Dict, List
 
@@ -138,7 +140,7 @@ class Config:
 @dataclass
 class DatasetConfig:
     dataset_size: int = 50000
-    batch_size: int = 100
+    batch_size: int = 1000
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
     train_audio_dir: str = None
@@ -169,13 +171,13 @@ class ModelConfig:
     model_type: str = 'simple'
     backbone: str = 'resnet'
     batch_size: int = 128
-    num_epochs: int = 100
+    num_epochs: int = 20
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
     optimizer_scheduler_gamma: float = 0.1
     reinforcement_epsilon: float = 0.15
-    num_workers: int = 0
+    num_workers: int = 1
 
 
 @dataclass
@@ -211,8 +213,9 @@ class SynthConfig:
     # Modular synth possible modules from synth_modules.py
     modular_synth_operations = ['osc', 'fm', 'lfo', 'mix', 'filter', 'env_adsr']
     modular_synth_params = {'osc': ['amp', 'freq', 'waveform'],
-                            'lfo': ['freq', 'waveform'],
-                            'fm': ['amp_c', 'freq_c', 'waveform', 'mod_index'],
+                            'lfo_sine': ['freq'],
+                            'lfo_non_sine': ['freq', 'waveform'],
+                            'fm': ['freq_c', 'waveform', 'mod_index'],
                             'mix': None,
                             'filter': ['filter_freq', 'filter_type'],
                             'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t'],
@@ -228,6 +231,13 @@ class SynthConfig:
         self.osc_freq_dic = {round(key, 4): value for value, key in enumerate(self.osc_freq_list)}
         self.osc_freq_dic_inv = {v: k for k, v in self.osc_freq_dic.items()}
         self.oscillator_freq = self.osc_freq_list[-1] + self.margin
+
+        self.all_params_presets = {
+            'lfo': {'freq': np.asarray([0.5] + [k+1 for k in range(self.max_lfo_freq)])},
+            'fm': {'freq_c': np.asarray(self.osc_freq_list),
+                   'mod_index': np.linspace(0, self.max_mod_index, 16)},
+            'filter': {'filter_freq': np.asarray([100*1.4**k for k in range(14)])}
+        }
 
 
 def configure_experiment(exp_name: str, dataset_name: str):

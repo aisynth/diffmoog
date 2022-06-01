@@ -402,7 +402,7 @@ class Normalizer:
                           }
                      }
 
-            elif operation == 'lfo':
+            elif operation in ['lfo', 'lfo_non_sine']:
                 denormalized_params_dict[key] = \
                     {'operation': operation,
                      'parameters':
@@ -410,6 +410,14 @@ class Normalizer:
                           'freq': self.lfo_freq_normalizer.denormalise(params['freq']),
                           'waveform': params['waveform']
                           }
+                     }
+            elif operation == 'lfo_sine':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'parameters':
+                         {
+                             'freq': self.lfo_freq_normalizer.denormalise(params['freq']),
+                         }
                      }
 
             elif operation == 'fm':
