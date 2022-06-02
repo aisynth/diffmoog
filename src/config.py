@@ -139,8 +139,8 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 10000
-    batch_size: int = 100
+    dataset_size: int = 1000
+    batch_size: int = 1000
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
     train_audio_dir: str = None
@@ -171,7 +171,7 @@ class ModelConfig:
     model_type: str = 'simple'
     backbone: str = 'resnet'
     batch_size: int = 64
-    num_epochs: int = 20
+    num_epochs: int = 50
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
@@ -197,6 +197,8 @@ class SynthConfig:
     max_lfo_freq: float = 20
     min_filter_freq: float = 0
     max_filter_freq: float = 8000
+    min_resonance_val: float = 0.01
+    max_resonance_val: float = 10
 
     # When predicting oscillator frequency by regression, the defines are used to normalize the output from the model
     margin: float = 200
@@ -208,16 +210,21 @@ class SynthConfig:
     num_layers: int = 5
 
     # Seed for random parameters generator
-    seed = 1
+    seed = 2
 
     # Modular synth possible modules from synth_modules.py
     modular_synth_operations = ['osc', 'fm', 'lfo', 'mix', 'filter', 'env_adsr']
     modular_synth_params = {'osc': ['amp', 'freq', 'waveform'],
                             'lfo_sine': ['freq'],
                             'lfo_non_sine': ['freq', 'waveform'],
+                            'lfo': ['freq', 'waveform'],
                             'fm': ['freq_c', 'waveform', 'mod_index'],
+                            'fm_sine': ['freq_c', 'mod_index'],
+                            'fm_square': ['freq_c', 'mod_index'],
+                            'fm_saw': ['freq_c', 'mod_index'],
                             'mix': None,
                             'filter': ['filter_freq', 'filter_type'],
+                            'lowpass_filter': ['filter_freq', 'resonance'],
                             'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t'],
                             'amplitude_shape': ['envelope']}
 

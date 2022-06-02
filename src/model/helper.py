@@ -63,8 +63,8 @@ def move_to(obj, device):
 
 def spectrogram_transform():
     return torchaudio.transforms.Spectrogram(  # win_length default = n_fft. hop_length default = win_length / 2
-                                             n_fft=512,
-                                             power=2.0)
+        n_fft=512,
+        power=2.0)
 
 
 def mel_spectrogram_transform(sample_rate):
@@ -203,13 +203,35 @@ def clamp_adsr_params(parameters_dict: dict, synth_cfg: SynthConfig, cfg: Config
 
             parameters_dict[key] = \
                 {'operation': operation,
-                 'params':
+                 'parameters':
                      {'attack_t': clamped_attack,
                       'decay_t': clamped_decay,
                       'sustain_t': clamped_sustain,
                       'sustain_level': torch.clamp(operation_params['sustain_level'], min=0,
                                                    max=synth_cfg.max_amp),
                       'release_t': clamped_release
+                      }
+                 }
+
+        elif operation == 'amplitude_shape':
+            attack_t = operation_params['attack_t']
+            decay_t = operation_params['decay_t']
+            sustain_t = operation_params['sustain_t']
+            release_t = operation_params['release_t']
+
+            clamped_attack, clamped_decay, clamped_sustain, clamped_release = \
+                clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t, cfg)
+
+            parameters_dict[key] = \
+                {'operation': operation,
+                 'parameters':
+                     {'attack_t': clamped_attack,
+                      'decay_t': clamped_decay,
+                      'sustain_t': clamped_sustain,
+                      'sustain_level': torch.clamp(operation_params['sustain_level'], min=0,
+                                                   max=synth_cfg.max_amp),
+                      'release_t': clamped_release,
+                      'envelope': operation_params['envelope']
                       }
                  }
 
@@ -292,6 +314,7 @@ def build_envelope_from_adsr(params_dict, cfg, device):
 
     return params_dict
 
+
 class Normalizer:
     """ normalize/de-normalise regression parameters"""
 
@@ -320,6 +343,11 @@ class Normalizer:
                                                        target_max_val=1,
                                                        original_min_val=0,
                                                        original_max_val=synth_cfg.max_filter_freq)
+
+        self.lowpass_filter_resonance_normalizer = MinMaxNormaliser(target_min_val=0,
+                                                                    target_max_val=1,
+                                                                    original_min_val=synth_cfg.min_resonance_val,
+                                                                    original_max_val=synth_cfg.max_resonance_val)
 
         self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                            target_max_val=1,
@@ -407,9 +435,9 @@ class Normalizer:
                     {'operation': operation,
                      'parameters':
                          {
-                          'freq': self.lfo_freq_normalizer.denormalise(params['freq']),
-                          'waveform': params['waveform']
-                          }
+                             'freq': self.lfo_freq_normalizer.denormalise(params['freq']),
+                             'waveform': params['waveform']
+                         }
                      }
             elif operation == 'lfo_sine':
                 denormalized_params_dict[key] = \
@@ -430,11 +458,29 @@ class Normalizer:
                           }
                      }
 
+            elif operation in ['fm_sine', 'fm_square', 'fm_saw']:
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'parameters':
+                         {'freq_c': self.oscillator_freq_normalizer.denormalise(params['freq_c']),
+                          'mod_index': self.mod_index_normalizer.denormalise(params['mod_index'])
+                          }
+                     }
+
             elif operation == 'filter':
                 denormalized_params_dict[key] = \
                     {'operation': operation,
                      'parameters':
                          {'filter_type': params['filter_type'],
+                          'filter_freq': self.filter_freq_normalizer.denormalise(params['filter_freq'])
+                          }
+                     }
+
+            elif operation == 'lowpass_filter':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'parameters':
+                         {'resonance': self.lowpass_filter_resonance_normalizer.denormalise(params['resonance']),
                           'filter_freq': self.filter_freq_normalizer.denormalise(params['filter_freq'])
                           }
                      }

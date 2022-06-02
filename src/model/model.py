@@ -228,15 +228,15 @@ class BigSynthNetwork(nn.Module):
 
                 output_dic[index] = {'operation': operation,
                                      'parameters': {'attack_t': predicted_attack_t,
-                                                'decay_t': predicted_decay_t,
-                                                'sustain_t': predicted_sustain_t,
-                                                'sustain_level': predicted_sustain_level,
-                                                'release_t': predicted_release_t
-                                                }}
+                                                    'decay_t': predicted_decay_t,
+                                                    'sustain_t': predicted_sustain_t,
+                                                    'sustain_level': predicted_sustain_level,
+                                                    'release_t': predicted_release_t
+                                                    }}
 
         return output_dic
-    
-    
+
+
 class DecoderOnlyNetwork(nn.Module):
     def __init__(self, synth_cfg: SynthConfig, device):
         self.preset = synth_presets_dict.get(synth_cfg.preset, None)
@@ -281,7 +281,7 @@ class DecoderOnlyNetwork(nn.Module):
                                                  requires_grad=True), do_softmax=True)
 
             elif operation == 'filter':
-                self.parameters_dict[self.get_key(index, operation, 'filter_type')] =\
+                self.parameters_dict[self.get_key(index, operation, 'filter_type')] = \
                     SimpleWeightLayer(torch.rand(len(self.synth_cfg.filter_type_dict), device=self.device,
                                                  requires_grad=True), do_softmax=True)
                 self.parameters_dict[self.get_key(index, operation, 'filter_freq')] = \
@@ -290,7 +290,7 @@ class DecoderOnlyNetwork(nn.Module):
 
             elif operation == 'env_adsr':
                 for adsr_param in ['attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']:
-                    self.parameters_dict[self.get_key(index, operation, adsr_param)] =\
+                    self.parameters_dict[self.get_key(index, operation, adsr_param)] = \
                         SimpleWeightLayer(torch.tensor(init_values[adsr_param], dtype=torch.float, device=self.device,
                                                        requires_grad=True), do_sigmoid=True)
 
@@ -334,7 +334,7 @@ class DecoderOnlyNetwork(nn.Module):
                 param_vals = {k: self.parameters_dict[self.get_key(index, operation, k)]() for k in op_params}
                 output_dic[index] = {'operation': operation,
                                      'parameters': param_vals}
-    
+
         return output_dic
 
     @staticmethod
@@ -377,7 +377,8 @@ class SimpleSynthNetwork(nn.Module):
                 frequency_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'freq')] = frequency_head
 
-                carrier_waveform_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, len(synth_cfg.wave_type_dict)])
+                carrier_waveform_head = MLPBlock(
+                    [LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, len(synth_cfg.wave_type_dict)])
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = carrier_waveform_head
 
             elif operation == 'lfo_sine':
@@ -387,18 +388,35 @@ class SimpleSynthNetwork(nn.Module):
             elif operation == 'fm':
                 carrier_amplitude_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
                 carrier_frequency_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
-                carrier_waveform_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, len(synth_cfg.wave_type_dict)])
+                carrier_waveform_head = MLPBlock(
+                    [LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, len(synth_cfg.wave_type_dict)])
                 modulation_index_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'amp_c')] = carrier_amplitude_head
                 self.heads_module_dict[self.get_key(index, operation, 'freq_c')] = carrier_frequency_head
                 self.heads_module_dict[self.get_key(index, operation, 'waveform')] = carrier_waveform_head
                 self.heads_module_dict[self.get_key(index, operation, 'mod_index')] = modulation_index_head
 
+            elif operation in ['fm_sine', 'fm_square', 'fm_saw']:
+                carrier_amplitude_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                carrier_frequency_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                modulation_index_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                self.heads_module_dict[self.get_key(index, operation, 'amp_c')] = carrier_amplitude_head
+                self.heads_module_dict[self.get_key(index, operation, 'freq_c')] = carrier_frequency_head
+                self.heads_module_dict[self.get_key(index, operation, 'mod_index')] = modulation_index_head
+
             elif operation == 'filter':
-                filter_type_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, len(synth_cfg.filter_type_dict)])
+                filter_type_head = MLPBlock(
+                    [LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, len(synth_cfg.filter_type_dict)])
                 filter_freq_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
                 self.heads_module_dict[self.get_key(index, operation, 'filter_type')] = filter_type_head
                 self.heads_module_dict[self.get_key(index, operation, 'filter_freq')] = filter_freq_head
+
+            elif operation == 'lowpass_filter':
+                filter_freq_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                resonance_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                self.heads_module_dict[self.get_key(index, operation, 'filter_freq')] = filter_freq_head
+                self.heads_module_dict[self.get_key(index, operation, 'resonance')] = resonance_head
+
 
             elif operation in ['env_adsr', 'amplitude_shape']:
                 attack_t_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
@@ -413,8 +431,9 @@ class SimpleSynthNetwork(nn.Module):
                 self.heads_module_dict[self.get_key(index, operation, 'release_t')] = release_t_head
 
                 if operation == 'amplitude_shape':
-                    freeform_amplitude_shape_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE*4, LATENT_SPACE_SIZE*8,
-                                                              cfg.sample_rate])
+                    freeform_amplitude_shape_head = MLPBlock(
+                        [LATENT_SPACE_SIZE, LATENT_SPACE_SIZE * 4, LATENT_SPACE_SIZE * 8,
+                         cfg.sample_rate])
                     self.heads_module_dict[self.get_key(index, operation, 'envelope')] = freeform_amplitude_shape_head
 
         self.softmax = nn.Softmax(dim=1)
@@ -447,15 +466,15 @@ class SimpleSynthNetwork(nn.Module):
 
                 output_dic[index] = {'operation': operation,
                                      'parameters': {'amp': predicted_amplitude,
-                                                'freq': predicted_frequency,
-                                                'waveform': waveform_probabilities
-                                                }}
+                                                    'freq': predicted_frequency,
+                                                    'waveform': waveform_probabilities
+                                                    }}
             if operation == 'lfo':
                 frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq')]
                 waveform_head = self.heads_module_dict[self.get_key(index, operation, 'waveform')]
 
                 predicted_frequency = frequency_head(latent)
-                predicted_frequency = self.sigmoid(predicted_frequency) #self.sigmoid(predicted_frequency)
+                predicted_frequency = self.sigmoid(predicted_frequency)  # self.sigmoid(predicted_frequency)
 
                 waveform_logits = waveform_head(latent)
                 waveform_probabilities = self.softmax(waveform_logits)
@@ -485,6 +504,23 @@ class SimpleSynthNetwork(nn.Module):
                                                     'mod_index': predicted_mod_index
                                                     }}
 
+            elif operation in ['fm_sine', 'fm_square', 'fm_saw']:
+                # carrier_amplitude_head = self.heads_module_dict[self.get_key(index, operation, 'amp_c')]
+                carrier_frequency_head = self.heads_module_dict[self.get_key(index, operation, 'freq_c')]
+                mod_index_head = self.heads_module_dict[self.get_key(index, operation, 'mod_index')]
+
+                # predicted_carrier_amplitude = carrier_amplitude_head(latent)
+                # predicted_carrier_amplitude = self.sigmoid(predicted_carrier_amplitude)
+                predicted_carrier_frequency = carrier_frequency_head(latent)
+                predicted_carrier_frequency = self.sigmoid(predicted_carrier_frequency)
+                predicted_mod_index = mod_index_head(latent)
+                predicted_mod_index = self.sigmoid(predicted_mod_index)
+
+                output_dic[index] = {'operation': operation,
+                                     'parameters': {'freq_c': predicted_carrier_frequency,
+                                                    'mod_index': predicted_mod_index
+                                                    }}
+
             elif operation == 'filter':
                 filter_type_head = self.heads_module_dict[self.get_key(index, operation, 'filter_type')]
                 filter_freq_head = self.heads_module_dict[self.get_key(index, operation, 'filter_freq')]
@@ -496,8 +532,23 @@ class SimpleSynthNetwork(nn.Module):
 
                 output_dic[index] = {'operation': operation,
                                      'parameters': {'filter_type': filter_type_probabilities,
-                                                'filter_freq': predicted_filter_freq
-                                                }}
+                                                    'filter_freq': predicted_filter_freq
+                                                    }}
+
+            elif operation == 'lowpass_filter':
+                filter_freq_head = self.heads_module_dict[self.get_key(index, operation, 'filter_freq')]
+                resonance_head = self.heads_module_dict[self.get_key(index, operation, 'resonance')]
+
+                predicted_filter_freq = filter_freq_head(latent)
+                predicted_filter_freq = self.sigmoid(predicted_filter_freq)
+
+                resonance = resonance_head(latent)
+                resonance = self.softmax(resonance)
+
+                output_dic[index] = {'operation': operation,
+                                     'parameters': {'filter_freq': predicted_filter_freq,
+                                                    'resonance': resonance
+                                                    }}
 
             elif operation in ['env_adsr', 'amplitude_shape']:
                 attack_t_head = self.heads_module_dict[self.get_key(index, operation, 'attack_t')]
@@ -523,11 +574,11 @@ class SimpleSynthNetwork(nn.Module):
 
                 output_dic[index] = {'operation': operation,
                                      'parameters': {'attack_t': predicted_attack_t,
-                                                'decay_t': predicted_decay_t,
-                                                'sustain_t': predicted_sustain_t,
-                                                'sustain_level': predicted_sustain_level,
-                                                'release_t': predicted_release_t
-                                                }}
+                                                    'decay_t': predicted_decay_t,
+                                                    'sustain_t': predicted_sustain_t,
+                                                    'sustain_level': predicted_sustain_level,
+                                                    'release_t': predicted_release_t
+                                                    }}
 
                 if operation == 'amplitude_shape':
                     freeform_amplitude_shape_head = self.heads_module_dict[self.get_key(index, operation, 'envelope')]
@@ -544,17 +595,17 @@ class ConvBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int):
         super().__init__()
         self.conv_op = nn.Sequential(
-                            nn.Conv2d(
-                                in_channels=in_channels,
-                                out_channels=out_channels,
-                                kernel_size=3,
-                                stride=1,
-                                padding=2
-                            ),
-                            nn.BatchNorm2d(out_channels),
-                            nn.ReLU(),
-                            nn.MaxPool2d(kernel_size=2)
-                        )
+            nn.Conv2d(
+                in_channels=in_channels,
+                out_channels=out_channels,
+                kernel_size=3,
+                stride=1,
+                padding=2
+            ),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2)
+        )
 
     def forward(self, x):
         return self.conv_op(x)
@@ -564,7 +615,7 @@ class MLPBlock(nn.Module):
 
     def __init__(self, layer_sizes: Sequence[int]):
         super(MLPBlock, self).__init__()
-        layers = [nn.Linear(layer_sizes[i], layer_sizes[i+1], bias=False) for i in range(len(layer_sizes) - 1)]
+        layers = [nn.Linear(layer_sizes[i], layer_sizes[i + 1], bias=False) for i in range(len(layer_sizes) - 1)]
         self.mlp = nn.Sequential(*layers)
 
     def forward(self, x):
@@ -606,7 +657,7 @@ class RNNBackbone(nn.Module):
 
 
 class SimpleWeightLayer(nn.Module):
-    
+
     def __init__(self, w: torch.Tensor, requires_grad=True, do_sigmoid=False, do_softmax=False):
         super().__init__()
 

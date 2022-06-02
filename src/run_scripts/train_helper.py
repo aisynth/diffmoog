@@ -25,7 +25,7 @@ def parse_synth_params(original_params: dict, predicted_params: dict, sample_idx
 
     for k, d in predicted_params.items():
         op = d['operation'] if isinstance(d['operation'], str) else d['operation'][0]
-        if op in pred_res:
+        while op in pred_res:
             op = op + '_|'
         pred_res[op] = {}
         orig_res[op] = {}

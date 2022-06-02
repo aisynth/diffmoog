@@ -1,5 +1,5 @@
 import matplotlib
-from torchaudio.transforms import Spectrogram, MelSpectrogram
+from torchaudio.transforms import Spectrogram, MelSpectrogram, AmplitudeToDB
 import matplotlib.pyplot as plt
 import torch
 from matplotlib.backends.backend_agg import FigureCanvasAgg
@@ -24,6 +24,8 @@ matplotlib.use('Agg')
 summary_writer = SummaryWriter()
 
 spectrogram = Spectrogram(n_fft=1024)
+amp_to_db = AmplitudeToDB()
+
 mel_spectrogram = MelSpectrogram(
     sample_rate=16000,
     n_fft=1024,
@@ -53,6 +55,8 @@ mel_spectrogram_low_frequencies = MelSpectrogram(
     f_min=0,
     f_max=30,
 )
+
+
 
 
 def predict(model,
@@ -204,8 +208,12 @@ def visualize_signal_prediction(orig_audio, pred_audio, orig_params, pred_params
     orig_audio_np = orig_audio.detach().cpu().numpy()
     pred_audio_np = pred_audio.detach().cpu().numpy()
 
-    orig_spectrograms = [spectrogram(orig_audio.cpu())]
-    pred_spectrograms = [spectrogram(pred_audio.cpu())]
+    if db:
+        orig_spectrograms = [amp_to_db(spectrogram(orig_audio.cpu()))]
+        pred_spectrograms = [amp_to_db(spectrogram(pred_audio.cpu()))]
+    else:
+        orig_spectrograms = [spectrogram(orig_audio.cpu())]
+        pred_spectrograms = [spectrogram(pred_audio.cpu())]
 
     # orig_mel_spectrograms = [mel_spectrogram(orig_audio.cpu().double())]
     # pred_mel_spectrograms = [mel_spectrogram(pred_audio.cpu().double())]

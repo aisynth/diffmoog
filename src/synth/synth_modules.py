@@ -183,19 +183,66 @@ class SynthModules:
             raise ValueError("Provided factor value is out of range [0, 1]")
         self.signal = factor * self.signal + (1 - factor) * new_signal
 
-    def batch_oscillator_fm(self, amp_c, freq_c, waveform, mod_index, modulator):
-        """Basic oscillator with FM modulation
+    def batch_specific_waveform_oscillator_fm(self, amp_c, freq_c, waveform, mod_index, modulator):
+        """Sine/Square/Saw oscillator with FM modulation
 
             Creates an oscillator and modulates its frequency by a given modulator
 
             Args:
                 self: Self object
-                amp_c: Amplitude in range [0, 1]
-                freq_c: Frequency in range [0, 22000]
-                waveform: One of [sine, square, triangle, sawtooth]
-                mod_index: Modulation index, which affects the amount of modulation
-                modulator: Modulator signal, to affect carrier frequency
-                num_sounds: number of sounds to process
+                amp_c: Vector of amplitude in range [0, 1]
+                freq_c: Vector of Frequencies in range [0, 22000]
+                waveform: type from ['sine', 'square', 'triangle', 'sawtooth']
+                mod_index: Vector of modulation indexes, which affects the amount of modulation
+                modulator: Vector of modulator signals, to affect carrier frequency
+
+            Returns:
+                A torch with the constructed FM signal
+
+            Raises:
+                ValueError: Provided variables are out of range
+            """
+
+        self.signal_values_sanity_check(amp_c, freq_c, waveform)
+
+        amp_c = self._standardize_batch_input(amp_c, requested_dtype=torch.float32, requested_dims=2)
+        freq_c = self._standardize_batch_input(freq_c, requested_dtype=torch.float32, requested_dims=2)
+        mod_index = self._standardize_batch_input(mod_index, requested_dtype=torch.float32, requested_dims=2)
+        modulator = self._standardize_batch_input(modulator, requested_dtype=torch.float32, requested_dims=2)
+
+        t = self.time_samples
+
+        if waveform == 'sine':
+            oscillator_tensor = amp_c * torch.sin(TWO_PI * freq_c * t + mod_index * torch.cumsum(modulator, dim=1))
+
+        elif waveform == 'square':
+            oscillator_tensor = amp_c * torch.sign(
+                torch.sin(TWO_PI * freq_c * t + mod_index * torch.cumsum(modulator, dim=1)))
+
+        # fm_triangle_wave = (2 * amp_c / PI) * torch.arcsin(torch.sin((TWO_PI * freq_c * t + mod_index * torch.cumsum(modulator, dim=1))))
+
+        elif waveform == 'sawtooth':
+            fm_sawtooth_wave = 2 * (t * freq_c - torch.floor(0.5 + t * freq_c))
+            fm_sawtooth_wave = (((fm_sawtooth_wave + 1) / 2) + mod_index * torch.cumsum(modulator, dim=1) / TWO_PI) % 1
+            oscillator_tensor = amp_c * (fm_sawtooth_wave * 2 - 1)
+        else:
+            oscillator_tensor = -1
+            ValueError("Provided waveform is not supported")
+
+        return oscillator_tensor
+
+    def batch_oscillator_fm(self, amp_c, freq_c, waveform, mod_index, modulator):
+        """Batch oscillator with FM modulation
+
+            Creates an oscillator and modulates its frequency by a given modulator
+            Args come as vector of values, with length of the numer of sounds to create
+            Args:
+                self: Self object
+                amp_c: Vector of amplitude in range [0, 1]
+                freq_c: Vector of Frequencies in range [0, 22000]
+                waveform: Vector of waveform with type from [sine, square, triangle, sawtooth]
+                mod_index: Vector of modulation indexes, which affects the amount of modulation
+                modulator: Vector of modulator signals, to affect carrier frequency
 
             Returns:
                 A torch with the constructed FM signal
@@ -686,7 +733,7 @@ class SynthModules:
                                                    sample_rate=self.sample_rate)
         else:
             low_pass_signal = [self.low_pass(input_signal[i], filter_freq[i].cpu()) for i in range(num_sounds)]
-            high_pass_signal = [self.low_pass(input_signal[i], filter_freq[i].cpu()) for i in range(num_sounds)]
+            high_pass_signal = [self.high_pass(input_signal[i], filter_freq[i].cpu()) for i in range(num_sounds)]
 
             low_pass_signal = torch.stack(low_pass_signal)
             high_pass_signal = torch.stack(high_pass_signal)
@@ -699,6 +746,47 @@ class SynthModules:
         filtered_signal_tensor = self._mix_waveforms(waves_tensor, filter_type, self.filter_type_indices)
 
         return filtered_signal_tensor
+
+    def lowpass_batch_filter(self, input_signal, filter_freq, resonance):
+        """Apply an ADSR envelope to the signal
+
+            builds the ADSR shape and multiply by the signal
+
+            Args:
+                self: Self object
+                :param input_signal: 1D or 2D array or tensor to apply filter along rows
+                :param filter_type: one of ['low_pass', 'high_pass', 'band_pass']
+                :param filter_freq: corner or central frequency
+                :param num_sounds: number of sounds in the input
+
+            Raises:
+                none
+
+            """
+
+        filter_freq = self._standardize_batch_input(filter_freq, requested_dtype=torch.float64, requested_dims=2)
+        resonance = self._standardize_batch_input(resonance, requested_dtype=torch.float64, requested_dims=2)
+
+        num_sounds = len(filter_freq)
+        assert torch.all(filter_freq <= (self.sample_rate / 2)), "Filter cutoff frequency higher then Nyquist." \
+                                                                 " Please check config"
+
+        if has_vmap:
+            low_pass_signal = vmap(lowpass_biquad)(input_signal.double(), cutoff_freq=filter_freq,
+                                                   sample_rate=self.sample_rate,
+                                                   Q=resonance)
+        else:
+            low_pass_signal = [self.low_pass(input_signal[i], filter_freq[i].cpu()) for i in range(num_sounds)]
+
+            low_pass_signal = torch.stack(low_pass_signal)
+
+        if torch.any(torch.isnan(low_pass_signal)):
+            raise RuntimeError("Synth filter module: Signal has NaN. Exiting...")
+
+        filtered_signal_tensor = low_pass_signal
+
+        return filtered_signal_tensor
+
 
     def low_pass(self, input_signal, cutoff_freq, q=0.707, index=0):
         # filtered_waveform = taF.lowpass_biquad(input_signal, self.sample_rate, cutoff_freq, q)
@@ -837,6 +925,14 @@ def make_envelope_shape(attack_t,
         sustain_t = torch.tensor(sustain_t, dtype=torch.float64)
         sustain_level = torch.tensor(sustain_level, dtype=torch.float64)
         release_t = torch.tensor(release_t, dtype=torch.float64)
+
+    # todo: prevent substruction so we get negative numbers here. consider substract only when check_adsr_timngs fail
+    # with try catch exception
+    epsilon = 1e-5
+    attack_t = attack_t - epsilon
+    decay_t = decay_t - epsilon
+    sustain_t = sustain_t - epsilon
+    release_t = release_t - epsilon
 
     check_adsr_timings(attack_t,
                        decay_t,

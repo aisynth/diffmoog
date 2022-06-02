@@ -216,6 +216,10 @@ class SynthModular:
                               'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds_),
                               'mod_index': np.random.uniform(low=0, high=synth_cfg.max_mod_index, size=num_sounds_)}
 
+                elif operation in ['fm_sine', 'fm_square', 'fm_saw']:
+                    params = {'freq_c': self._sample_c_freq(synth_cfg, num_sounds_),
+                              'mod_index': np.random.uniform(low=0, high=synth_cfg.max_mod_index, size=num_sounds_)}
+
                 elif operation == 'mix':
                     params = None
 
@@ -246,6 +250,14 @@ class SynthModular:
                               'filter_freq': np.random.uniform(low=synth_cfg.min_filter_freq,
                                                                high=synth_cfg.max_filter_freq,
                                                                size=num_sounds_)}
+
+                elif operation == 'lowpass_filter':
+                    params = {'filter_freq': np.random.uniform(low=synth_cfg.min_filter_freq,
+                                                               high=synth_cfg.max_filter_freq,
+                                                               size=num_sounds_),
+                              'resonance': np.random.uniform(low=synth_cfg.min_resonance_val,
+                                                             high=synth_cfg.max_resonance_val,
+                                                             size=num_sounds_)}
                 elif operation == 'env_adsr':
 
                     attack_t, decay_t, sustain_t, sustain_level, release_t = \
@@ -340,7 +352,7 @@ class SynthModular:
                                                                 phase=0,
                                                                 waveform='sine')
 
-                elif operation == 'fm':
+                elif operation in ['fm', 'fm_sine', 'fm_square', 'fm_saw']:
                     if len(cell.input_list) == 1:
                         input_cell_index = cell.input_list[0]
                         input_cell = self.architecture[input_cell_index[0]][input_cell_index[1]]
@@ -351,11 +363,29 @@ class SynthModular:
                         modulator = 0
                         AttributeError("Illegal cell input")
 
-                    cell.signal = synth_module.batch_oscillator_fm(amp_c=1.0,
-                                                                   freq_c=cell.parameters['freq_c'],
-                                                                   waveform=cell.parameters['waveform'],
-                                                                   mod_index=cell.parameters['mod_index'],
-                                                                   modulator=modulator)
+                    if operation == 'fm':
+                        cell.signal = synth_module.batch_oscillator_fm(amp_c=1.0,
+                                                                       freq_c=cell.parameters['freq_c'],
+                                                                       waveform=cell.parameters['waveform'],
+                                                                       mod_index=cell.parameters['mod_index'],
+                                                                       modulator=modulator)
+                    else:
+                        if operation == 'fm_sine':
+                            waveform = 'sine'
+                        elif operation == 'fm_square':
+                            waveform = 'square'
+                        elif operation == 'fm_saw':
+                            waveform = 'sawtooth'
+                        else:
+                            ValueError("Unsupported waveform")
+                        cell.signal = synth_module.batch_specific_waveform_oscillator_fm(amp_c=1.0,
+                                                                                         freq_c=cell.parameters[
+                                                                                             'freq_c'],
+                                                                                         waveform=waveform,
+                                                                                         mod_index=cell.parameters[
+                                                                                             'mod_index'],
+                                                                                         modulator=modulator)
+
 
                 elif operation == 'mix':
                     signal = 0
@@ -384,9 +414,9 @@ class SynthModular:
                     envelope = cell.parameters['envelope']
 
                     if envelope.dim() == 1:
-                            compute_envelope = True
+                        compute_envelope = True
                     else:
-                            compute_envelope = False
+                        compute_envelope = False
 
                     if compute_envelope:
                         envelope_shape = make_envelope_shape(attack_t,
@@ -400,7 +430,6 @@ class SynthModular:
                                                              num_sounds_)
                     else:
                         envelope_shape = envelope
-
 
                     # envelope_shape = cell.parameters['envelope']
                     # plt.plot(envelope_shape[1].detach().numpy())
@@ -431,6 +460,18 @@ class SynthModular:
                     cell.signal = synth_module.batch_filter(input_signal,
                                                             filter_freq=cell.parameters['filter_freq'],
                                                             filter_type=cell.parameters['filter_type'])
+
+                elif operation == 'lowpass_filter':
+                    if len(cell.input_list) == 1:
+                        input_cell_index = cell.input_list[0]
+                        input_cell = self.architecture[input_cell_index[0]][input_cell_index[1]]
+                        input_signal = input_cell.signal
+                    else:
+                        input_signal = 0
+                        AttributeError("Illegal cell input")
+                    cell.signal = synth_module.lowpass_batch_filter(input_signal,
+                                                                    filter_freq=cell.parameters['filter_freq'],
+                                                                    resonance=cell.parameters['resonance'])
 
                 elif operation == 'env_adsr':
                     if len(cell.input_list) == 1:

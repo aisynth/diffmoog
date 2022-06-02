@@ -52,6 +52,7 @@ def create_dataset(train: bool, dataset_cfg: DatasetConfig, synth_cfg: SynthConf
 
         synth_obj.generate_random_params(synth_cfg=synth_cfg,
                                          num_sounds_=dataset_cfg.batch_size)
+
         synth_obj.generate_signal(num_sounds_=dataset_cfg.batch_size)
 
         audio = synth_obj.signal
