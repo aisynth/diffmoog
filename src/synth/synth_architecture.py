@@ -329,7 +329,7 @@ class SynthModular:
                     #                                             freq=440,
                     #                                             phase=0,
                     #                                             waveform='square')
-                elif operation == 'lfo':
+                elif operation in ['lfo', 'lfo_non_sine']:
                     cell.signal = synth_module.batch_oscillator(amp=1.0,
                                                                 freq=cell.parameters['freq'],
                                                                 phase=0,
