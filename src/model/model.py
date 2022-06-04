@@ -3,7 +3,6 @@ from typing import Sequence
 import torch
 from torch import nn
 from torchvision.models import resnet18, resnet34
-from torchsummary import summary
 from synth.synth_modular_presets import synth_presets_dict
 from config import SynthConfig, Config
 
@@ -363,6 +362,7 @@ class SimpleSynthNetwork(nn.Module):
             self.backbone.fc = nn.Linear(num_ftrs, LATENT_SPACE_SIZE)
 
         self.heads_module_dict = nn.ModuleDict({})
+        self.make_heads_from_preset()
 
         self.softmax = nn.Softmax(dim=1)
         self.sigmoid = nn.Sigmoid()
@@ -375,6 +375,9 @@ class SimpleSynthNetwork(nn.Module):
         for cell in self.preset:
             index = cell.get('index')
             operation = cell.get('operation')
+
+            if operation in ['None', 'mix'] or operation is None:
+                continue
 
             op_params = SynthConfig.modular_synth_params[operation]
             for param in op_params:
@@ -401,12 +404,15 @@ class SimpleSynthNetwork(nn.Module):
             index = cell.get('index')
             operation = cell.get('operation')
 
+            if operation in ['None', 'mix'] or operation is None:
+                continue
+
             output_dict[index] = {'operation': operation,
                                   'parameters': {}}
 
             for param in SynthConfig.modular_synth_params[operation]:
 
-                param_head = self.heads_module_dict[self.get_key(index, operation, 'amp')]
+                param_head = self.heads_module_dict[self.get_key(index, operation, param)]
                 model_output = param_head(latent)
 
                 if param in ['waveform', 'filter_type']:
@@ -522,8 +528,3 @@ class SimpleWeightLayer(nn.Module):
         self.weight = nn.Parameter(val, requires_grad=False)
         self.do_softmax = False
         self.do_sigmoid = False
-
-
-if __name__ == "__main__":
-    synth_net = BigSynthNetwork()
-    summary(synth_net.cuda(), (1, 64, 44))

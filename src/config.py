@@ -226,7 +226,8 @@ class SynthConfig:
                             'filter': ['filter_freq', 'filter_type'],
                             'lowpass_filter': ['filter_freq', 'resonance'],
                             'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t'],
-                            'amplitude_shape': ['envelope']}
+                            'amplitude_shape': ['envelope', 'attack_t', 'decay_t', 'sustain_t', 'sustain_level',
+                                                'release_t']}
 
     def __post_init__(self):
         self.wave_type_dic_inv = {v: k for k, v in self.wave_type_dict.items()}
@@ -251,16 +252,16 @@ def configure_experiment(exp_name: str, dataset_name: str):
 
     project_root = os.path.join(EXP_ROOT, 'current', exp_name, '')
 
-    # if os.path.isdir(project_root):
-    #     overwrite = input(colored(f"Folder {project_root} already exists. Overwrite previous experiment (Y/N)?"
-    #                               f"\n\tThis will delete all files related to the previous run!",
-    #                               'yellow'))
-    #     if overwrite.lower() != 'y':
-    #         print('Exiting...')
-    #         exit()
-
-    print("Deleting previous experiment...")
-    rmtree(project_root)
+    if os.path.isdir(project_root):
+        # overwrite = input(colored(f"Folder {project_root} already exists. Overwrite previous experiment (Y/N)?"
+        #                           f"\n\tThis will delete all files related to the previous run!",
+        #                           'yellow'))
+        # if overwrite.lower() != 'y':
+        #     print('Exiting...')
+        #     exit()
+        # else:
+            print("Deleting previous experiment...")
+            rmtree(project_root)
 
     cfg = Config(project_root)
     synth_cfg = SynthConfig()
