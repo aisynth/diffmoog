@@ -357,7 +357,7 @@ class Normalizer:
     def normalize(self, parameters_dict: dict):
         denormalized_params_dict = {}
         for key, val in parameters_dict.items():
-            operation = val['operation']
+            operation = val['operation'] if isinstance(val['operation'], str) else val['operation'][0]
             params = val['params'] if 'params' in val else val['parameters']
 
             if operation == 'osc':
@@ -375,6 +375,7 @@ class Normalizer:
                     {'operation': operation,
                      'parameters':
                          {
+                             'waveform': params['waveform'],
                              'freq': self.lfo_freq_normalizer.normalise(params['freq'])
                          }
                      }
@@ -408,6 +409,36 @@ class Normalizer:
                           'sustain_t': self.adsr_normalizer.normalise(params['sustain_t']),
                           'sustain_level': params['sustain_level'],
                           'release_t': self.filter_freq_normalizer.normalise(params['release_t'])
+                          }
+                     }
+            elif operation in ['fm_sine', 'fm_square', 'fm_saw']:
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'parameters':
+                         {'freq_c': self.oscillator_freq_normalizer.normalise(params['freq_c']),
+                          'mod_index': self.mod_index_normalizer.normalise(params['mod_index'])
+                          }
+                     }
+
+            elif operation == 'amplitude_shape':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'parameters':
+                         {'attack_t': params['attack_t'],
+                          'decay_t': params['decay_t'],
+                          'sustain_t': params['sustain_t'],
+                          'sustain_level': params['sustain_level'],
+                          'release_t': params['release_t'],
+                          'envelope': params['envelope']
+                          }
+                     }
+
+            elif operation == 'lowpass_filter':
+                denormalized_params_dict[key] = \
+                    {'operation': operation,
+                     'parameters':
+                         {'resonance': self.lowpass_filter_resonance_normalizer.normalise(params['resonance']),
+                          'filter_freq': self.filter_freq_normalizer.normalise(params['filter_freq'])
                           }
                      }
 

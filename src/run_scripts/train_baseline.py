@@ -49,6 +49,8 @@ def train_single_epoch(model,
             model.zero_grad(set_to_none=True)
 
             target_param_dict = helper.move_to(target_param_dict, device)
+            denormalized_target_params = normalizer.normalize(target_param_dict.copy())
+
             target_signal = target_signal.to(device)
             transformed_signal = transform(target_signal)
 
@@ -78,21 +80,8 @@ def train_single_epoch(model,
                 else:
                     epoch_param_diffs[op_idx].append(diff_vals)
 
-            # -------------Generate Signal-------------------------------
-            # --------------Target-------------------------------------
-            modular_synth.update_cells_from_dict(target_param_dict)
-            target_final_signal, target_signals_through_chain = \
-                modular_synth.generate_signal(num_sounds_=num_sounds)
-
-            # --------------Predicted-------------------------------------
-            params_for_pred_signal_generation = copy.copy(target_param_dict)
-            params_for_pred_signal_generation.update(predicted_param_dict)
-            modular_synth.update_cells_from_dict(params_for_pred_signal_generation)
-            pred_final_signal, pred_signals_through_chain = \
-                modular_synth.generate_signal(num_sounds_=num_sounds)
-
-            parameters_loss = loss_handler['parameters_loss'].call(predicted_parameters_dict=predicted_param_dict,
-                                                                   target_parameters_dict=target_param_dict,
+            parameters_loss = loss_handler['parameters_loss'].call(predicted_parameters_dict=output_params,
+                                                                   target_parameters_dict=denormalized_target_params,
                                                                    summary_writer=summary_writer,
                                                                    global_step=step)
 
@@ -109,6 +98,20 @@ def train_single_epoch(model,
             summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
 
             if num_of_mini_batches == 1:
+
+                # -------------Generate Signal-------------------------------
+                # --------------Target-------------------------------------
+                modular_synth.update_cells_from_dict(target_param_dict)
+                target_final_signal, target_signals_through_chain = \
+                    modular_synth.generate_signal(num_sounds_=num_sounds)
+
+                # --------------Predicted-------------------------------------
+                params_for_pred_signal_generation = copy.copy(target_param_dict)
+                params_for_pred_signal_generation.update(predicted_param_dict)
+                modular_synth.update_cells_from_dict(params_for_pred_signal_generation)
+                pred_final_signal, pred_signals_through_chain = \
+                    modular_synth.generate_signal(num_sounds_=num_sounds)
+
                 if num_sounds == 1:
                     sample_params_orig, sample_params_pred = parse_synth_params(target_param_dict,
                                                                                 predicted_param_dict,
