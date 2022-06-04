@@ -106,9 +106,6 @@ class ParametersLoss:
                         loss_dict[f"{key}_{operation}_{param}_smoothness"] = smoothness_loss
                         total_loss += smoothness_loss
 
-                # elif param in ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']:
-                #     continue
-
                 # move_to(target_parameters[param], self.device)
                 target_parameters[param] = target_parameters[param].type(torch.FloatTensor).to(self.device)
                 if predicted_parameters[param].dim() > 1 and predicted_parameters[param].shape[0] == 1:
