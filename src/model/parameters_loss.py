@@ -50,8 +50,8 @@ class ParametersLoss:
 
             for param in predicted_parameters.keys():
                 if param == 'waveform':
-                    waveform_list = target_parameters['waveform']
-                    for idx, waveform in enumerate(waveform_list):
+                    waveform_list = []
+                    for idx, waveform in enumerate(target_parameters['waveform']):
                         if waveform == 'sine':
                             probabilities = [1., 0., 0.]
                         elif waveform == 'square':
@@ -62,12 +62,13 @@ class ParametersLoss:
                             probabilities = -1
                             KeyError("Unknown waveform type")
 
-                        waveform_list[idx] = probabilities
+                        waveform_list.append(probabilities)
 
                     target_parameters['waveform'] = torch.tensor(waveform_list)
+
                 elif param == 'filter_type':
-                    filter_type_list = target_parameters['filter_type']
-                    for idx, filter_type in enumerate(filter_type_list):
+                    filter_type_list = []
+                    for idx, filter_type in enumerate(target_parameters['filter_type']):
                         if filter_type == 'low_pass':
                             probabilities = [1., 0.]
                         elif filter_type == 'high_pass':
@@ -75,9 +76,10 @@ class ParametersLoss:
                         else:
                             probabilities = -1
                             KeyError("Unknown filter_type")
-                        filter_type_list[idx] = probabilities
+                        filter_type_list.append(probabilities)
 
                     target_parameters['filter_type'] = torch.tensor(filter_type_list)
+
                 elif param == 'envelope':
                     attack_t = target_parameters['attack_t']
                     decay_t = target_parameters['decay_t']

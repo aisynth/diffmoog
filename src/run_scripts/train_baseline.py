@@ -72,7 +72,7 @@ def train_single_epoch(model,
                                                                 cfg,
                                                                 device)
 
-            batch_param_diffs = get_param_diffs(predicted_param_dict, target_param_dict)
+            batch_param_diffs = get_param_diffs(predicted_param_dict.copy(), target_param_dict.copy())
             for op_idx, diff_vals in batch_param_diffs.items():
                 # print(op_idx, diff_vals)
                 if isinstance(diff_vals, Iterable):

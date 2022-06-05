@@ -88,11 +88,11 @@ def log_dict_recursive(tag: str, data_to_log, writer: SummaryWriter, step: int):
 def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
 
     all_diffs = {}
-    predicted_params = to_numpy_recursive(predicted_params)
-    target_params = to_numpy_recursive(target_params)
+    predicted_params_np = to_numpy_recursive(predicted_params)
+    target_params_np = to_numpy_recursive(target_params)
 
-    for op_index, pred_op_dict in predicted_params.items():
-        target_op_dict = target_params[op_index]
+    for op_index, pred_op_dict in predicted_params_np.items():
+        target_op_dict = target_params_np[op_index]
         for param_name, pred_vals in pred_op_dict['parameters'].items():
 
             target_vals = target_op_dict['parameters'][param_name]
