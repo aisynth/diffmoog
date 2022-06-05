@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 from config import Config, ModelConfig, configure_experiment
 from dataset.ai_synth_dataset import AiSynthDataset
-from inference import visualize_signal_prediction
+from run_scripts.inference.inference import visualize_signal_prediction
 from model.model import DecoderOnlyNetwork
 from synth.synth_architecture import SynthModular
 from model import helper

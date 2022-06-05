@@ -12,7 +12,7 @@ def log_gradients_in_model(model, writer: SummaryWriter, step):
         if value.grad is not None:
             grad_val = value.grad.cpu()
             writer.add_histogram(tag + "/grad", grad_val, step)
-            if np.linalg.norm(grad_val) < 1e-4 and 'bias' not in tag:
+            if np.linalg.norm(grad_val) < 1e-5 and 'bias' not in tag:
                 print(f"Op {tag} gradient approaching 0")
 
 

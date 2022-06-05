@@ -4,10 +4,9 @@ from collections import defaultdict
 
 from config import Config, ModelConfig, configure_experiment
 from dataset.ai_synth_dataset import AiSynthDataset, create_data_loader
-from inference import visualize_signal_prediction
-from model.model import SimpleSynthNetwork, ConditionalSynthNetwork
+from run_scripts.inference.inference import visualize_signal_prediction
+from model.model import ConditionalSynthNetwork
 from model.spectral_loss import SpectralLoss
-from model.spectral_loss_presets import loss_presets
 from synth.synth_architecture import SynthModular
 from model import helper
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
