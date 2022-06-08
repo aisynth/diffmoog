@@ -84,7 +84,37 @@ def train_single_epoch(model,
                                                                    summary_writer=summary_writer,
                                                                    global_step=step)
 
-            loss_total = cfg.parameters_loss_weight * parameters_loss
+            # -------------Generate Signal-------------------------------
+            # --------------Target-------------------------------------
+            modular_synth.update_cells_from_dict(target_param_dict)
+            target_final_signal, target_signals_through_chain = \
+                modular_synth.generate_signal(num_sounds_=num_sounds)
+
+            # --------------Predicted-------------------------------------
+            params_for_pred_signal_generation = copy.copy(target_param_dict)
+            params_for_pred_signal_generation.update(predicted_param_dict)
+            modular_synth.update_cells_from_dict(params_for_pred_signal_generation)
+            pred_final_signal, pred_signals_through_chain = \
+                modular_synth.generate_signal(num_sounds_=num_sounds)
+
+            spectrogram_loss = 0
+            for op_index in output_params.keys():
+                op_index = str(op_index)
+
+                pred_signal = pred_signals_through_chain[op_index]
+                if pred_signal is None:
+                    continue
+
+                target_signal = target_signals_through_chain[op_index]
+                loss, ret_spectrograms = loss_handler['spectrogram_loss'].call(target_signal,
+                                                                               pred_signal,
+                                                                               summary_writer,
+                                                                               op_index,
+                                                                               step,
+                                                                               return_spectrogram=True)
+                spectrogram_loss += loss
+
+            loss_total = cfg.parameters_loss_weight * parameters_loss + cfg.spectrogram_loss_weight * spectrogram_loss
 
             num_of_mini_batches += 1
             sum_epoch_loss += loss_total.item()
@@ -93,27 +123,11 @@ def train_single_epoch(model,
             scheduler.step()
 
             # Log step stats
-            summary_writer.add_scalar('loss/train_parameters_loss', loss_total, step)
+            summary_writer.add_scalar('loss/train_parameters_loss', cfg.parameters_loss_weight * parameters_loss, step)
+            summary_writer.add_scalar('loss/train_spectral_loss', cfg.spectrogram_loss_weight * spectrogram_loss, step)
             summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
 
             if num_of_mini_batches == 1:
-
-                # -------------Generate Signal-------------------------------
-                # --------------Target-------------------------------------
-                modular_synth.update_cells_from_dict(target_param_dict)
-                target_final_signal, target_signals_through_chain = \
-                    modular_synth.generate_signal(num_sounds_=num_sounds)
-
-                # --------------Predicted-------------------------------------
-                params_for_pred_signal_generation = copy.copy(target_param_dict)
-                params_for_pred_signal_generation.update(predicted_param_dict)
-
-                modular_synth.reset_signal()
-                modular_synth.update_cells_from_dict(params_for_pred_signal_generation)
-
-                pred_final_signal, pred_signals_through_chain = \
-                    modular_synth.generate_signal(num_sounds_=num_sounds)
-
                 if num_sounds == 1:
                     sample_params_orig, sample_params_pred = parse_synth_params(target_param_dict,
                                                                                 predicted_param_dict,
@@ -163,7 +177,7 @@ def train_single_epoch(model,
 
     # Log epoch stats
     avg_epoch_loss = sum_epoch_loss / num_of_mini_batches
-    summary_writer.add_scalar('loss/train_parameters_loss_epoch', avg_epoch_loss, epoch)
+    summary_writer.add_scalar('loss/train_loss_epoch', avg_epoch_loss, epoch)
     log_dict_recursive('param_diff', epoch_param_diffs, summary_writer, epoch)
     log_dict_recursive('param_values_raw', epoch_param_vals_raw, summary_writer, epoch)
     log_dict_recursive('param_values_normalized', epoch_param_vals, summary_writer, epoch)

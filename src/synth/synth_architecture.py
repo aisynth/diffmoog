@@ -139,6 +139,13 @@ class SynthModular:
         for cell_index, cell_params in params_dict.items():
             self.update_cell(index=cell_index, parameters=cell_params['parameters'], synth_config=self.synth_cfg)
 
+    def reset_signal(self):
+        self.signal = torch.zeros((1, int(self.sample_rate * self.signal_duration_sec)), requires_grad=True)
+        for c in range(self.num_channels):
+            for l in range(self.num_layers):
+                self.architecture[c][l].signal = torch.zeros((1, int(self.sample_rate * self.signal_duration_sec)),
+                                                             requires_grad=True)
+
     def update_cell(self,
                     index: tuple,
                     input_list=None,

@@ -77,12 +77,12 @@ class Config:
     freq_reinforce_loss_factor: float = 1e5
 
     multi_spectral_loss_spec_type: str = 'BOTH'
-    multi_spectral_loss_preset: str = 'cumsum_freq'
+    multi_spectral_loss_preset: str = 'cumsum_time'
 
     add_parameters_loss = True
     parameters_loss_type = 'L2'
     parameters_loss_weight = 1/100
-    spectrogram_loss_weight = 0
+    spectrogram_loss_weight = 1 / 3500
     smoothness_loss_weight = 0
 
     # Debug
