@@ -38,6 +38,6 @@ model.load_state_dict(torch.load(model_ckpt_path))
 
 model.eval()
 
-res = inference_loop(synth_cfg, test_dataloader, transform, model, normalizer.denormalize, device)
+res = inference_loop(cfg, synth_cfg, test_dataloader, transform, model, normalizer.denormalize, device)
 
 print(res)

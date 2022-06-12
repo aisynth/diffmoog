@@ -10,21 +10,41 @@ from librosa.feature import mfcc
 from scipy.stats import pearsonr
 from scipy.fft import fft
 
-from config import SynthConfig
+from config import SynthConfig, Config
+from model import helper
+from synth.synth_architecture import SynthModular
 
 
-def inference_loop(synth_cfg: SynthConfig, test_dataloader: DataLoader, preprocess_fn: callable, eval_fn: callable,
+def inference_loop(cfg: Config, synth_cfg: SynthConfig, synth: SynthModular, test_dataloader: DataLoader, preprocess_fn: callable, eval_fn: callable,
                    post_process_fn: callable, device: str = 'cuda:0'):
 
     step, n_samples = 0, 0
     results = defaultdict(float)
     for raw_target_signal, target_param_dict, signal_index in test_dataloader:
 
+        num_sounds = len(signal_index)
+
         # -----------Run Model-----------------
         raw_target_signal = raw_target_signal.to(device)
-        processed_signal = preprocess_fn(raw_target_signal)
-        model_output = eval_fn(processed_signal)
+        target_signal_spectrogram = preprocess_fn(raw_target_signal)
+        model_output = eval_fn(target_signal_spectrogram)
         processed_output = post_process_fn(model_output) if post_process_fn is not None else model_output
+        predicted_param_dict = helper.clamp_adsr_params(processed_output, synth_cfg, cfg)
+
+        synth.update_cells_from_dict(predicted_param_dict)
+        pred_final_signal, pred_signals_through_chain = \
+            synth.generate_signal(num_sounds_=num_sounds)
+
+        predicted_signal_spectrograms = preprocess_fn(pred_final_signal)
+        results['lsd_value'] += np.sum(lsd(target_signal_spectrogram, predicted_signal_spectrograms))
+        results['pearson_stft'] += np.sum(pearsonr_dist(target_signal_spectrogram,
+                                                        predicted_signal_spectrograms,
+                                                        input_type='spec'))
+        results['pearson_fft'] += np.sum(pearsonr_dist(raw_target_signal, pred_final_signal, input_type='audio'))
+        results['mean_average_error'] += np.sum(mae(target_signal_spectrogram, predicted_signal_spectrograms))
+        results['mfcc_mae'] += np.sum(mfcc_distance(raw_target_signal, pred_final_signal, sample_rate=cfg.sample_rate))
+        results['spectral_convergence_value'] += np.sum(spectral_convergence(target_signal_spectrogram,
+                                                                             predicted_signal_spectrograms))
 
         # -----------Discretize output-----------------
         denormalized_discrete_output_params = {cell_idx: {'operation': cell_params['operation'],
@@ -132,9 +152,9 @@ def lsd(spec1, spec2):
     """ spec1, spec2 one channel - positive values"""
 
     diff = np.log10(spec1) - np.log10(spec2)
-    lsd = np.linalg.norm(diff, ord='fro')
+    lsd_val = np.linalg.norm(diff, ord='fro')
 
-    return lsd
+    return lsd_val
 
 
 def pearsonr_dist(x1, x2, input_type='spec'):
@@ -142,9 +162,11 @@ def pearsonr_dist(x1, x2, input_type='spec'):
     if input_type == 'spec':
         x1 = x1.flatten()
         x2 = x2.flatten()
-    else:
+    elif input_type == 'audio':
         x1 = np.abs(fft(x1))
         x2 = np.abs(fft(x2))
+    else:
+        AttributeError("Unknown input_type")
 
     pearson_r, _ = pearsonr(x1, x2)
 
