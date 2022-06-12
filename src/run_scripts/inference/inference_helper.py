@@ -131,8 +131,10 @@ def compare_params(target_params, predicted_params):
 def lsd(spec1, spec2):
     """ spec1, spec2 one channel - positive values"""
 
-    diff = np.log10(spec1) - np.log10(spec2)
-    lsd = np.linalg.norm(diff, ord='fro')
+    assert spec1.ndim == 3 and spec2.ndim == 3, "Input must be a batch of 2d spectrograms"
+
+    batch_diff = np.log10(spec1) - np.log10(spec2)
+    lsd = [np.linalg.norm(x, ord='fro') for x in batch_diff]
 
     return lsd
 
@@ -140,46 +142,62 @@ def lsd(spec1, spec2):
 def pearsonr_dist(x1, x2, input_type='spec'):
 
     if input_type == 'spec':
+        assert x1.ndim == 3 and x2.ndim == 3, "Input must be a batch of 2d spectrograms"
         x1 = x1.flatten()
         x2 = x2.flatten()
     else:
+        assert x1.ndim == 2 and x2.ndim == 2, "Input must be a batch of 1d wavelet"
         x1 = np.abs(fft(x1))
         x2 = np.abs(fft(x2))
 
-    pearson_r, _ = pearsonr(x1, x2)
+    pearson_r = [pearsonr(c_x1, c_x2)[0] for c_x1, c_x2 in zip(x1, x2)]
 
     return pearson_r
 
 
 def mae(spec1, spec2):
 
+    assert spec1.ndim == 3 and spec2.ndim == 3, "Input must be a batch of 2d spectrograms"
+
     abs_diff = np.abs(np.log10(spec1) - np.log10(spec2))
-    mae_val = abs_diff.mean()
+    mae_val = [sample_diff.mean() for sample_diff in abs_diff]
 
     return mae_val
 
 
-def mfcc_distance(sound1, sound2, sample_rate):
+def mfcc_distance(sound_batch1, sound_batch2, sample_rate):
 
-    mfcc1 = mfcc(sound1, sr=sample_rate, n_mfcc=40)
-    mfcc2 = mfcc(sound2, sr=sample_rate, n_mfcc=40)
+    assert sound_batch1.ndim == 2 and sound_batch2.ndim == 2, "Input must be a batch of 1d wavelet"
 
-    abs_diff = np.abs(mfcc1 - mfcc2)
-    mfcc_dist = abs_diff.mean()
+    res = []
+    for sound1, sound2 in zip(sound_batch1, sound_batch2):
+        mfcc1 = mfcc(sound1, sr=sample_rate, n_mfcc=40)
+        mfcc2 = mfcc(sound2, sr=sample_rate, n_mfcc=40)
 
-    return mfcc_dist
+        abs_diff = np.abs(mfcc1 - mfcc2)
+        mfcc_dist = abs_diff.mean()
+        res.append(mfcc_dist)
+
+    return res
 
 
-def spectral_convergence(target_spec, pred_spec):
+def spectral_convergence(target_spec_batch, pred_spec_batch):
 
-    abs_diff = np.abs(target_spec) - np.abs(pred_spec)
-    nom = np.linalg.norm(abs_diff, ord='fro')
+    assert target_spec_batch.ndim == 3 and pred_spec_batch.ndim == 3, "Input must be a batch of 2d spectrograms"
 
-    denom = np.linalg.norm(np.abs(target_spec), ord='fro')
+    res = []
+    for target_spec, pred_spec in zip(target_spec_batch, pred_spec_batch):
 
-    sc_val = nom / denom
+        abs_diff = np.abs(target_spec) - np.abs(pred_spec)
+        nom = np.linalg.norm(abs_diff, ord='fro')
 
-    return sc_val
+        denom = np.linalg.norm(np.abs(target_spec), ord='fro')
+
+        sc_val = nom / denom
+
+        res.append(sc_val)
+
+    return res
 
 
 
