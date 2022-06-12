@@ -22,48 +22,31 @@ def inference_loop(cfg: Config, synth_cfg: SynthConfig, synth: SynthModular, tes
     results = defaultdict(float)
     for raw_target_signal, target_param_dict, signal_index in test_dataloader:
 
-        num_sounds = len(signal_index)
+        input_batch = (raw_target_signal, target_param_dict, signal_index)
 
-        # -----------Run Model-----------------
-        raw_target_signal = raw_target_signal.to(device)
-        target_signal_spectrogram = preprocess_fn(raw_target_signal)
-        model_output = eval_fn(target_signal_spectrogram)
-        processed_output = post_process_fn(model_output) if post_process_fn is not None else model_output
-        predicted_param_dict = helper.clamp_adsr_params(processed_output, synth_cfg, cfg)
+        _, metrics = process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn, synth, device, cfg)
+        for k, val in metrics.items():
+            results[k] += val
 
-        synth.update_cells_from_dict(predicted_param_dict)
-        pred_final_signal, pred_signals_through_chain = \
-            synth.generate_signal(num_sounds_=num_sounds)
-
-        predicted_signal_spectrograms = preprocess_fn(pred_final_signal)
-        results['lsd_value'] += np.sum(lsd(target_signal_spectrogram, predicted_signal_spectrograms))
-        results['pearson_stft'] += np.sum(pearsonr_dist(target_signal_spectrogram,
-                                                        predicted_signal_spectrograms,
-                                                        input_type='spec'))
-        results['pearson_fft'] += np.sum(pearsonr_dist(raw_target_signal, pred_final_signal, input_type='audio'))
-        results['mean_average_error'] += np.sum(mae(target_signal_spectrogram, predicted_signal_spectrograms))
-        results['mfcc_mae'] += np.sum(mfcc_distance(raw_target_signal, pred_final_signal, sample_rate=cfg.sample_rate))
-        results['spectral_convergence_value'] += np.sum(spectral_convergence(target_signal_spectrogram,
-                                                                             predicted_signal_spectrograms))
-
-        # -----------Discretize output-----------------
-        denormalized_discrete_output_params = {cell_idx: {'operation': cell_params['operation'],
-                                                          'parameters': discretize_params(cell_params['operation'],
-                                                                                          cell_params['parameters'],
-                                                                                          synth_cfg)}
-                                               for cell_idx, cell_params in processed_output.items()}
-
-        discrete_target_params = {cell_idx: {'operation': cell_params['operation'],
-                                             'parameters': discretize_params(cell_params['operation'][0],
-                                                                             cell_params['parameters'], synth_cfg)}
-                                  for cell_idx, cell_params in target_param_dict.items() if
-                                  cell_params['operation'][0] != 'None'}
-
-        # -----------Compare results-----------------
-        correct_preds = compare_params(discrete_target_params, denormalized_discrete_output_params)
-        for cell_idx, cell_data in correct_preds.items():
-            for param_name, correct_preds in cell_data.items():
-                results[f'{cell_idx}_{param_name}'] += correct_preds
+        # # Add Accuracy measures for inference
+        # # -----------Discretize output-----------------
+        # denormalized_discrete_output_params = {cell_idx: {'operation': cell_params['operation'],
+        #                                                   'parameters': discretize_params(cell_params['operation'],
+        #                                                                                   cell_params['parameters'],
+        #                                                                                   synth_cfg)}
+        #                                        for cell_idx, cell_params in processed_output.items()}
+        #
+        # discrete_target_params = {cell_idx: {'operation': cell_params['operation'],
+        #                                      'parameters': discretize_params(cell_params['operation'][0],
+        #                                                                      cell_params['parameters'], synth_cfg)}
+        #                           for cell_idx, cell_params in target_param_dict.items() if
+        #                           cell_params['operation'][0] != 'None'}
+        #
+        # # -----------Compare results-----------------
+        # correct_preds = compare_params(discrete_target_params, denormalized_discrete_output_params)
+        # for cell_idx, cell_data in correct_preds.items():
+        #     for param_name, correct_preds in cell_data.items():
+        #         results[f'{cell_idx}_{param_name}'] += correct_preds
 
         n_samples += len(raw_target_signal)
         step += 1
@@ -75,6 +58,48 @@ def inference_loop(cfg: Config, synth_cfg: SynthConfig, synth: SynthModular, tes
         results[k] = v / n_samples
 
     return results
+
+
+def process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn, synth, device, cfg):
+
+    results, metrics = {}, defaultdict(float)
+
+    raw_target_signal, target_param_dict, signal_index = input_batch
+    num_sounds = len(signal_index)
+
+    # -----------Run Model-----------------
+    raw_target_signal = raw_target_signal.to(device)
+    target_signal_spectrogram = preprocess_fn(raw_target_signal)
+    model_output = eval_fn(target_signal_spectrogram)
+    processed_output = post_process_fn(model_output) if post_process_fn is not None else model_output
+
+    synth.update_cells_from_dict(processed_output)
+    pred_final_signal, pred_signals_through_chain = \
+        synth.generate_signal(num_sounds_=num_sounds)
+
+    predicted_signal_spectrograms = preprocess_fn(pred_final_signal).squeeze().detach().cpu().numpy()
+    target_signal_spectrogram = target_signal_spectrogram.squeeze().detach().cpu().numpy()
+
+    raw_target_signal = raw_target_signal.squeeze().detach().cpu().numpy()
+    pred_final_signal = pred_final_signal.squeeze().detach().cpu().numpy()
+
+    metrics['lsd_value'] += np.sum(lsd(target_signal_spectrogram, predicted_signal_spectrograms))
+    metrics['pearson_stft'] += np.sum(pearsonr_dist(target_signal_spectrogram,
+                                                    predicted_signal_spectrograms,
+                                                    input_type='spec'))
+    metrics['pearson_fft'] += np.sum(pearsonr_dist(raw_target_signal, pred_final_signal, input_type='audio'))
+    metrics['mean_average_error'] += np.sum(mae(target_signal_spectrogram, predicted_signal_spectrograms))
+    metrics['mfcc_mae'] += np.sum(mfcc_distance(raw_target_signal, pred_final_signal, sample_rate=cfg.sample_rate))
+    metrics['spectral_convergence_value'] += np.sum(spectral_convergence(target_signal_spectrogram,
+                                                                         predicted_signal_spectrograms))
+
+    results['target_audio'] = raw_target_signal
+    results['predicted_audio'] = pred_final_signal
+
+    results['target_spectrograms'] = target_signal_spectrogram
+    results['predicted_spectrograms'] = predicted_signal_spectrograms
+
+    return results, metrics
 
 
 def discretize_params(operation: str, input_params: dict, synth_cfg):
@@ -163,8 +188,8 @@ def pearsonr_dist(x1, x2, input_type='spec'):
 
     if input_type == 'spec':
         assert x1.ndim == 3 and x2.ndim == 3, "Input must be a batch of 2d spectrograms"
-        x1 = x1.flatten()
-        x2 = x2.flatten()
+        x1 = [x.flatten() for x in x1]
+        x2 = [x.flatten() for x in x2]
     elif input_type == 'audio':
         assert x1.ndim == 2 and x2.ndim == 2, "Input must be a batch of 1d wavelet"
         x1 = np.abs(fft(x1))
