@@ -55,7 +55,7 @@ class Config:
     model_frequency_output: str = 'SINGLE'
     transform: str = 'MEL_SPECTROGRAM'  # MEL_SPECTROGRAM or SPECTROGRAM- to be used in the data loader and at the synth output
 
-    use_loaded_model = False
+    use_loaded_model = True
 
     project_root: str = None
     tensorboard_logdir: str = None
@@ -77,12 +77,12 @@ class Config:
     freq_reinforce_loss_factor: float = 1e5
 
     multi_spectral_loss_spec_type: str = 'BOTH'
-    multi_spectral_loss_preset: str = 'cumsum_time'
+    multi_spectral_loss_preset: str = 'cumsum_time_freq_mag'
 
     add_parameters_loss = True
     parameters_loss_type = 'L2'
     parameters_loss_weight = 1/100
-    spectrogram_loss_weight = 1 / 3500
+    spectrogram_loss_weight = 1 / 50000
     smoothness_loss_weight = 0
 
     # Debug
@@ -109,7 +109,7 @@ class Config:
 
         self.save_model_path = os.path.join(project_root, 'ckpts', 'trained_synth_net.pt')
         # load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'trained_synth_net.pt')
-        self.load_model_path = os.path.join(project_root, 'ckpts', 'synth_net_epoch19.pt')
+        self.load_model_path = '/home/almogelharar/almog/ai_synth/experiments/current/basic_flow_test/ckpts/synth_net_epoch10.pt'
 
         self.artifacts_dir = os.path.join(project_root, 'artifacts', '')
         os.makedirs(self.artifacts_dir, exist_ok=True)
@@ -171,7 +171,7 @@ class ModelConfig:
     model_type: str = 'simple'
     backbone: str = 'resnet'
     batch_size: int = 256
-    num_epochs: int = 25
+    num_epochs: int = 40
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0

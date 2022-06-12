@@ -1,5 +1,8 @@
 import copy
 import os.path
+import sys
+sys.path.append("..")
+
 from collections import defaultdict
 
 from config import Config, ModelConfig, configure_experiment
@@ -16,6 +19,7 @@ from collections.abc import Iterable
 
 from train_helper import *
 
+sys.path.append(".")
 
 def train_single_epoch(model,
                        epoch,
@@ -299,7 +303,7 @@ def run(args):
     print(f"Training model start")
 
     if cfg.use_loaded_model:
-        print(f"Use Loaded model {cfg.load_model_path.name}")
+        print(f"Use Loaded model {cfg.load_model_path}")
         checkpoint = torch.load(cfg.load_model_path)
         synth_net.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

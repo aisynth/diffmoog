@@ -5,6 +5,11 @@ import numpy as np
 
 from torch.utils.data.dataloader import DataLoader
 
+from librosa.feature import mfcc
+
+from scipy.stats import pearsonr
+from scipy.fft import fft
+
 from config import SynthConfig
 
 
@@ -121,3 +126,60 @@ def compare_params(target_params, predicted_params):
             res[cell_idx][param_name] = correct_preds
 
     return res
+
+
+def lsd(spec1, spec2):
+    """ spec1, spec2 one channel - positive values"""
+
+    diff = np.log10(spec1) - np.log10(spec2)
+    lsd = np.linalg.norm(diff, ord='fro')
+
+    return lsd
+
+
+def pearsonr_dist(x1, x2, input_type='spec'):
+
+    if input_type == 'spec':
+        x1 = x1.flatten()
+        x2 = x2.flatten()
+    else:
+        x1 = np.abs(fft(x1))
+        x2 = np.abs(fft(x2))
+
+    pearson_r, _ = pearsonr(x1, x2)
+
+    return pearson_r
+
+
+def mae(spec1, spec2):
+
+    abs_diff = np.abs(np.log10(spec1) - np.log10(spec2))
+    mae_val = abs_diff.mean()
+
+    return mae_val
+
+
+def mfcc_distance(sound1, sound2, sample_rate):
+
+    mfcc1 = mfcc(sound1, sr=sample_rate, n_mfcc=40)
+    mfcc2 = mfcc(sound2, sr=sample_rate, n_mfcc=40)
+
+    abs_diff = np.abs(mfcc1 - mfcc2)
+    mfcc_dist = abs_diff.mean()
+
+    return mfcc_dist
+
+
+def spectral_convergence(target_spec, pred_spec):
+
+    abs_diff = np.abs(target_spec) - np.abs(pred_spec)
+    nom = np.linalg.norm(abs_diff, ord='fro')
+
+    denom = np.linalg.norm(np.abs(target_spec), ord='fro')
+
+    sc_val = nom / denom
+
+    return sc_val
+
+
+

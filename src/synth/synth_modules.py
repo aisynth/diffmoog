@@ -15,6 +15,7 @@ from torchaudio.transforms import Spectrogram, GriffinLim
 import matplotlib.pyplot as plt
 from model import helper
 import julius
+from julius.lowpass import lowpass_filter_new
 from config import SynthConfig
 
 try:
@@ -794,7 +795,7 @@ class SynthModules:
         if cutoff_freq == 0:
             return input_signal
         else:
-            filtered_waveform_new = julius.lowpass_filter_new(input_signal, cutoff_freq / self.sample_rate)
+            filtered_waveform_new = lowpass_filter_new(input_signal, cutoff_freq / self.sample_rate)
             return filtered_waveform_new
 
     def high_pass(self, input_signal, cutoff_freq, q=0.707, index=0):
