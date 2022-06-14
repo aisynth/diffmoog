@@ -55,7 +55,7 @@ class Config:
     model_frequency_output: str = 'SINGLE'
     transform: str = 'MEL_SPECTROGRAM'  # MEL_SPECTROGRAM or SPECTROGRAM- to be used in the data loader and at the synth output
 
-    use_loaded_model = True
+    use_loaded_model = False
 
     project_root: str = None
     tensorboard_logdir: str = None
@@ -77,12 +77,15 @@ class Config:
     freq_reinforce_loss_factor: float = 1e5
 
     multi_spectral_loss_spec_type: str = 'BOTH'
-    multi_spectral_loss_preset: str = 'cumsum_time_freq_mag'
+    multi_spectral_loss_preset: str = 'cumsum_time'
 
     add_parameters_loss = True
-    parameters_loss_type = 'L2'
+    parameters_loss_type = 'L1'
     parameters_loss_weight = 1/100
     spectrogram_loss_weight = 1 / 50000
+
+    spectrogram_loss_warmup = 10
+
     smoothness_loss_weight = 0
 
     # Debug
@@ -109,7 +112,7 @@ class Config:
 
         self.save_model_path = os.path.join(project_root, 'ckpts', 'trained_synth_net.pt')
         # load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'trained_synth_net.pt')
-        self.load_model_path = '/home/almogelharar/almog/ai_synth/experiments/current/basic_flow_test/ckpts/synth_net_epoch10.pt'
+        self.load_model_path = '' #'/home/almogelharar/almog/ai_synth/experiments/current/basic_flow_test/ckpts/synth_net_epoch10.pt'
 
         self.artifacts_dir = os.path.join(project_root, 'artifacts', '')
         os.makedirs(self.artifacts_dir, exist_ok=True)
@@ -139,17 +142,20 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 1000
+    dataset_size: int = 5000
     batch_size: int = 100
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
     train_audio_dir: str = None
+    val_parameters_file: str = None
+    val_audio_dir: str = None
     test_parameters_file: str = None
     test_audio_dir: str = None
     inference_audio_dir: str = None
     inference_plots_dir: str = None
     train_dataset_dir_path: str = None
     test_dataset_dir_path: str = None
+    val_dataset_dir_path: str = None
 
     def __init__(self, dataset_name):
 
@@ -157,12 +163,15 @@ class DatasetConfig:
 
         self.train_parameters_file: str = os.path.join(dataset_dir, 'train', 'params_dataset.pkl')
         self.train_audio_dir: str = os.path.join(dataset_dir, 'train', 'wav_files')
+        self.val_parameters_file: str = os.path.join(dataset_dir, 'val', 'params_dataset.pkl')
+        self.val_audio_dir: str = os.path.join(dataset_dir, 'val', 'wav_files')
         self.test_parameters_file: str = os.path.join(dataset_dir, 'test', 'params_dataset.pkl')
         self.test_audio_dir: str = os.path.join(dataset_dir, 'test', 'wav_files')
         self.inference_audio_dir: str = os.path.join(dataset_dir, 'test', 'inference_wav_files')
         self.inference_plots_dir: str = os.path.join(dataset_dir, 'test', 'inference_plots')
         self.train_dataset_dir_path: str = os.path.join(dataset_dir, 'train')
         self.test_dataset_dir_path: str = os.path.join(dataset_dir, 'test')
+        self.val_dataset_dir_path: str = os.path.join(dataset_dir, 'val')
 
 
 @dataclass

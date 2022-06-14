@@ -1,6 +1,9 @@
 import copy
 import os.path
 import sys
+
+from run_scripts.inference.inference_helper import lsd, inference_loop
+
 sys.path.append("..")
 
 from collections import defaultdict
@@ -23,7 +26,7 @@ sys.path.append(".")
 
 def train_single_epoch(model,
                        epoch,
-                       data_loader,
+                       train_data_loader,
                        transform,
                        optimizer,
                        scheduler,
@@ -39,11 +42,11 @@ def train_single_epoch(model,
     num_of_mini_batches = 0
     epoch_param_diffs = defaultdict(list)
     epoch_param_vals_raw, epoch_param_vals = defaultdict(list), defaultdict(list)
-    with tqdm(data_loader, unit="batch") as tepoch:
+    with tqdm(train_data_loader, unit="batch") as tepoch:
         for target_signal, target_param_dict, signal_index in tepoch:
 
             num_sounds = len(signal_index)
-            step = epoch * len(data_loader) + num_of_mini_batches
+            step = epoch * len(train_data_loader) + num_of_mini_batches
 
             tepoch.set_description(f"Epoch {epoch}")
 
@@ -119,6 +122,7 @@ def train_single_epoch(model,
                 spectrogram_loss += loss
 
             loss_total = cfg.parameters_loss_weight * parameters_loss + cfg.spectrogram_loss_weight * spectrogram_loss
+            lsd_value = lsd(transformed_signal, transform(pred_final_signal))
 
             num_of_mini_batches += 1
             sum_epoch_loss += loss_total.item()
@@ -129,6 +133,7 @@ def train_single_epoch(model,
             # Log step stats
             summary_writer.add_scalar('loss/train_parameters_loss', cfg.parameters_loss_weight * parameters_loss, step)
             summary_writer.add_scalar('loss/train_spectral_loss', cfg.spectrogram_loss_weight * spectrogram_loss, step)
+            summary_writer.add_scalar('metrics/lsd', lsd_value, step)
             summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
 
             if num_of_mini_batches == 1:
@@ -190,7 +195,8 @@ def train_single_epoch(model,
 
 
 def train(model,
-          data_loader,
+          train_data_loader,
+          val_dataloader,
           transform,
           optimizer,
           device,
@@ -208,7 +214,7 @@ def train(model,
     loss_list = []
 
     # scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer=optimizer, factor=1)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=num_epochs * len(data_loader))
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=num_epochs * len(train_data_loader))
     # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, model_cfg.learning_rate / 10, model_cfg.learning_rate,
     #                                               mode='triangular2', cycle_momentum=False)
     normalizer = helper.Normalizer(cfg.signal_duration_sec, synth_cfg)
@@ -216,7 +222,7 @@ def train(model,
     loss_handler = {}
     if cfg.spectrogram_loss_type == 'MULTI-SPECTRAL':
         loss_preset = cfg.multi_spectral_loss_preset
-        total_train_steps = num_epochs * len(data_loader)
+        total_train_steps = num_epochs * len(train_data_loader)
         loss_handler['spectrogram_loss'] = SpectralLoss(cfg=cfg,
                                                         preset_name=loss_preset,
                                                         device=device,
@@ -242,7 +248,7 @@ def train(model,
         avg_epoch_loss = \
             train_single_epoch(model=model,
                                epoch=cur_epoch,
-                               data_loader=data_loader,
+                               train_data_loader=train_data_loader,
                                transform=transform,
                                optimizer=optimizer,
                                scheduler=scheduler,
@@ -253,6 +259,12 @@ def train(model,
                                synth_cfg=synth_cfg,
                                cfg=cfg,
                                summary_writer=summary_writer)
+
+        epoch_val_metrics = inference_loop(cfg=cfg, synth_cfg=synth_cfg, synth=modular_synth,
+                                           test_dataloader=val_dataloader, preprocess_fn=transform, eval_fn=model,
+                                           post_process_fn=normalizer.denormalize, device=device)
+        
+        summary_writer.add_scalars('val_metrics', epoch_val_metrics, epoch)
 
         # Sum stats over multiple epochs
         loss_list.append(avg_epoch_loss)
@@ -284,8 +296,11 @@ def run(args):
                   'spec': helper.spectrogram_transform().to(device)}
     transform = transforms[args.transform]
 
-    ai_synth_dataset = AiSynthDataset(dataset_cfg.train_parameters_file, dataset_cfg.train_audio_dir, device)
-    train_dataloader = create_data_loader(ai_synth_dataset, model_cfg.batch_size, ModelConfig.num_workers)
+    train_dataset = AiSynthDataset(dataset_cfg.train_parameters_file, dataset_cfg.train_audio_dir, device)
+    train_dataloader = create_data_loader(train_dataset, model_cfg.batch_size, ModelConfig.num_workers)
+    
+    val_dataset = AiSynthDataset(dataset_cfg.val_parameters_file, dataset_cfg.val_audio_dir, device)
+    val_dataloader = create_data_loader(val_dataset, model_cfg.batch_size, ModelConfig.num_workers)
 
     # construct model and assign it to device
     if model_cfg.model_type == 'simple':
@@ -314,7 +329,8 @@ def run(args):
 
     # train model
     train(model=synth_net,
-          data_loader=train_dataloader,
+          train_data_loader=train_dataloader,
+          val_dataloader=val_dataloader,
           transform=transform,
           optimizer=optimizer,
           device=device,

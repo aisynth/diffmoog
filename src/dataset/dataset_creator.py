@@ -23,16 +23,21 @@ Configurations settings are inside config file.
 """
 
 
-def create_dataset(train: bool, dataset_cfg: DatasetConfig, synth_cfg: SynthConfig, cfg: Config, device: torch.device):
+def create_dataset(split: str, dataset_cfg: DatasetConfig, synth_cfg: SynthConfig, cfg: Config, device: torch.device):
     dataset_parameters = []
     print(f"Creating dataset \n Size = {dataset_cfg.dataset_size}")
-    print(" Type = Train \n") if train else print(" Type = Test \n")
+    print(f" Type = {split} \n")
 
     # init paths
-    if train:
+    if split.lower() == 'train':
         dataset_dir_path = dataset_cfg.train_dataset_dir_path
-    else:
+    elif split.lower() == 'test':
         dataset_dir_path = dataset_cfg.test_dataset_dir_path
+    elif split.lower() in ['val', 'validation']:
+        dataset_dir_path = dataset_cfg.val_dataset_dir_path
+    else:
+        raise ValueError(f"Requested dataset split {split} which is not supported."
+                         f" Please choose from [train, test, val]")
 
     wav_files_dir = os.path.join(dataset_dir_path, 'wav_files', '')
     os.makedirs(wav_files_dir, exist_ok=True)
@@ -99,7 +104,7 @@ if __name__ == '__main__':
     parser = ArgumentParser(formatter_class=ArgumentDefaultsHelpFormatter, description='Train AI Synth')
     parser.add_argument('-g', '--gpu_index', help='index of gpu (if exist, torch indexing) -1 for cpu',
                         type=int, default=-1)
-    parser.add_argument('-t', '--train', action='store_true', default=False)
+    parser.add_argument('-s', '--split', required=True)
     parser.add_argument('-n', '--name', required=True, help='name of dataset')
     args = parser.parse_args()
 
@@ -108,6 +113,6 @@ if __name__ == '__main__':
     dataset_cfg = DatasetConfig(args.name)
 
     device = helper.get_device(args.gpu_index)
-    create_dataset(train=args.train, dataset_cfg=dataset_cfg, synth_cfg=synth_cfg, cfg=cfg, device=device)
+    create_dataset(split=args.split, dataset_cfg=dataset_cfg, synth_cfg=synth_cfg, cfg=cfg, device=device)
 
 
