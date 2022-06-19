@@ -2,12 +2,11 @@ import copy
 import os.path
 import sys
 
-from run_scripts.inference.inference_helper import lsd, inference_loop
+from collections import defaultdict
 
 sys.path.append("..")
 
-from collections import defaultdict
-
+from run_scripts.inference.inference_helper import lsd, inference_loop
 from config import Config, ModelConfig, configure_experiment
 from dataset.ai_synth_dataset import AiSynthDataset, create_data_loader
 from run_scripts.inference.inference import visualize_signal_prediction
@@ -24,6 +23,7 @@ from train_helper import *
 
 sys.path.append(".")
 
+
 def train_single_epoch(model,
                        epoch,
                        train_data_loader,
@@ -37,7 +37,6 @@ def train_single_epoch(model,
                        synth_cfg,
                        cfg,
                        summary_writer: SummaryWriter):
-
     sum_epoch_loss = 0
     num_of_mini_batches = 0
     epoch_param_diffs = defaultdict(list)
@@ -108,22 +107,38 @@ def train_single_epoch(model,
             for op_index in output_params.keys():
                 op_index = str(op_index)
 
-                pred_signal = pred_signals_through_chain[op_index]
-                if pred_signal is None:
+                c_pred_signal = pred_signals_through_chain[op_index]
+                if c_pred_signal is None:
                     continue
 
-                target_signal = target_signals_through_chain[op_index]
-                loss, ret_spectrograms = loss_handler['spectrogram_loss'].call(target_signal,
-                                                                               pred_signal,
+                c_target_signal = target_signals_through_chain[op_index]
+                loss, ret_spectrograms = loss_handler['spectrogram_loss'].call(c_target_signal,
+                                                                               c_pred_signal,
                                                                                summary_writer,
                                                                                op_index,
                                                                                step,
                                                                                return_spectrogram=True)
                 spectrogram_loss += loss
 
-            loss_total = cfg.parameters_loss_weight * parameters_loss + cfg.spectrogram_loss_weight * spectrogram_loss
+            parameters_loss_decay_factor = 1
+            spec_loss_increase_factor = 0
+            if step < cfg.spectrogram_loss_warmup:
+                weighted_params_loss = parameters_loss * cfg.parameters_loss_weight
+                weighted_spec_loss = 0
+            elif step < (cfg.spectrogram_loss_warmup + cfg.loss_switch_steps):
+                parameters_loss_decay_factor = 1 - ((step - cfg.loss_switch_steps) / cfg.loss_switch_steps)
+                spec_loss_increase_factor = ((step - cfg.loss_switch_steps) / cfg.loss_switch_steps)
+
+                weighted_params_loss = parameters_loss * cfg.parameters_loss_weight * parameters_loss_decay_factor
+                weighted_spec_loss = cfg.spectrogram_loss_weight * spectrogram_loss * spec_loss_increase_factor
+            else:
+                weighted_params_loss = 0
+                weighted_spec_loss = cfg.spectrogram_loss_weight * spectrogram_loss
+
+            loss_total =  weighted_params_loss + weighted_spec_loss
+
             lsd_value = np.mean(lsd(transformed_signal.squeeze().detach().cpu().numpy(),
-                            transform(pred_final_signal).detach().cpu().numpy()))
+                                    transform(pred_final_signal).detach().cpu().numpy()))
 
             num_of_mini_batches += 1
             sum_epoch_loss += loss_total.item()
@@ -132,8 +147,11 @@ def train_single_epoch(model,
             scheduler.step()
 
             # Log step stats
-            summary_writer.add_scalar('loss/train_parameters_loss', cfg.parameters_loss_weight * parameters_loss, step)
-            summary_writer.add_scalar('loss/train_spectral_loss', cfg.spectrogram_loss_weight * spectrogram_loss, step)
+            summary_writer.add_scalar('loss/parameters_decay_factor', parameters_loss_decay_factor, step)
+            summary_writer.add_scalar('loss/spec_loss_rampup_factor', spec_loss_increase_factor, step)
+            summary_writer.add_scalar('loss/train_parameters_loss_raw', parameters_loss, step)
+            summary_writer.add_scalar('loss/train_parameters_loss_weighted', weighted_params_loss, step)
+            summary_writer.add_scalar('loss/train_spectral_loss_weighted', weighted_spec_loss, step)
             summary_writer.add_scalar('metrics/lsd', lsd_value, step)
             summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
 
@@ -207,7 +225,6 @@ def train(model,
           model_cfg: ModelConfig,
           synth_cfg: SynthConfig,
           summary_writer: SummaryWriter):
-
     # Initializations
     model.train()
     torch.autograd.set_detect_anomaly(True)
@@ -215,7 +232,8 @@ def train(model,
     loss_list = []
 
     # scheduler = torch.optim.lr_scheduler.ConstantLR(optimizer=optimizer, factor=1)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=num_epochs * len(train_data_loader))
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,
+                                                           T_max=num_epochs * len(train_data_loader))
     # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, model_cfg.learning_rate / 10, model_cfg.learning_rate,
     #                                               mode='triangular2', cycle_momentum=False)
     normalizer = helper.Normalizer(cfg.signal_duration_sec, synth_cfg)
@@ -264,8 +282,8 @@ def train(model,
         epoch_val_metrics = inference_loop(cfg=cfg, synth_cfg=synth_cfg, synth=modular_synth,
                                            test_dataloader=val_dataloader, preprocess_fn=transform, eval_fn=model,
                                            post_process_fn=normalizer.denormalize, device=device)
-        
-        summary_writer.add_scalars('val_metrics', epoch_val_metrics, epoch)
+
+        log_dict_recursive('val_metrics', epoch_val_metrics, summary_writer, epoch)
 
         # Sum stats over multiple epochs
         loss_list.append(avg_epoch_loss)
@@ -299,7 +317,7 @@ def run(args):
 
     train_dataset = AiSynthDataset(dataset_cfg.train_parameters_file, dataset_cfg.train_audio_dir, device)
     train_dataloader = create_data_loader(train_dataset, model_cfg.batch_size, ModelConfig.num_workers)
-    
+
     val_dataset = AiSynthDataset(dataset_cfg.val_parameters_file, dataset_cfg.val_audio_dir, device)
     val_dataloader = create_data_loader(val_dataset, model_cfg.batch_size, ModelConfig.num_workers)
 

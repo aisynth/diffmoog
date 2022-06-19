@@ -13,8 +13,9 @@ from typing import Dict, List
 
 from torch.utils.tensorboard import SummaryWriter
 
-EXP_ROOT = Path(__file__).parent.parent.joinpath('experiments')
-DATA_ROOT = Path(__file__).parent.parent.joinpath('data')
+
+EXP_ROOT = r'/home/almogelharar/almog/ai_synth/experiments'
+DATA_ROOT = r'/home/almogelharar/almog/ai_synth/data'
 
 
 @dataclass
@@ -77,14 +78,15 @@ class Config:
     freq_reinforce_loss_factor: float = 1e5
 
     multi_spectral_loss_spec_type: str = 'BOTH'
-    multi_spectral_loss_preset: str = 'cumsum_time'
+    multi_spectral_loss_preset: str = 'mag_logmag'
 
     add_parameters_loss = True
     parameters_loss_type = 'L1'
-    parameters_loss_weight = 1/100
+    parameters_loss_weight = 1 / 100
     spectrogram_loss_weight = 1 / 50000
 
-    spectrogram_loss_warmup = 10
+    spectrogram_loss_warmup = 50 * 250
+    loss_switch_steps = 0 * 250
 
     smoothness_loss_weight = 0
 
@@ -142,7 +144,7 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 5000
+    dataset_size: int = 50000
     batch_size: int = 100
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
@@ -179,8 +181,8 @@ class ModelConfig:
     preset: str = 'BASIC_FLOW'
     model_type: str = 'simple'
     backbone: str = 'resnet'
-    batch_size: int = 256
-    num_epochs: int = 40
+    batch_size: int = 200
+    num_epochs: int = 200
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0

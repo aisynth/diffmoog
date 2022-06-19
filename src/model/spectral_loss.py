@@ -69,7 +69,7 @@ class SpectralLoss:
         self.spectrogram_ops = {}
         for size in self.preset['fft_sizes']:
             if cfg.multi_spectral_loss_spec_type == 'BOTH' or cfg.multi_spectral_loss_spec_type == 'SPECTROGRAM':
-                spec_transform = torchaudio.transforms.Spectrogram(n_fft=size, power=2.0).to(self.device)
+                spec_transform = torchaudio.transforms.Spectrogram(n_fft=size, hop_length=int(size / 4), power=2.0).to(self.device)
                 self.spectrogram_ops[f'{size}_spectrogram'] = spec_transform
 
             if cfg.multi_spectral_loss_spec_type == 'BOTH' or cfg.multi_spectral_loss_spec_type == 'MEL_SPECTROGRAM':
