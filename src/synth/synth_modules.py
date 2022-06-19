@@ -448,8 +448,8 @@ class SynthModules:
             raise ValueError("AM modulation resulted amplitude out of range [-1, 1].")
         self.signal = modulated_amplitude * carrier.signal
 
-    def adsr_envelope(self, input_signal, attack_t, decay_t, sustain_t, sustain_level, release_t, num_sounds=1):
-        """Apply an ADSR envelope to the signal
+    def non_diff_adsr_envelope(self, input_signal, attack_t, decay_t, sustain_t, sustain_level, release_t, num_sounds=1):
+        """Apply an ADSR envelope to the signal. Non-differential operation
 
             builds the ADSR shape and multiply by the signal
 
@@ -524,6 +524,88 @@ class SynthModules:
             envelope = helper.move_to(envelope, self.device)
 
             # envelope = torch.cat((attack_mod, decay_mod, sustain_mod, release_mod))
+
+            envelope_len = envelope.shape[0]
+            signal_len = self.time_samples.shape[0]
+            if envelope_len <= signal_len:
+                padding = torch.zeros((signal_len - envelope_len), device=helper.get_device())
+                envelope = torch.cat((envelope, padding))
+            else:
+                raise ValueError("Envelope length exceeds signal duration")
+
+            if torch.is_tensor(input_signal) and num_sounds > 1:
+                signal_to_shape = input_signal[i]
+            else:
+                signal_to_shape = input_signal
+
+            enveloped_signal = signal_to_shape * envelope
+
+            if first_time:
+                if num_sounds == 1:
+                    enveloped_signal_tensor = enveloped_signal
+                else:
+                    enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped_signal), dim=0).unsqueeze(
+                        dim=0)
+                    first_time = False
+            else:
+                enveloped = enveloped_signal.unsqueeze(dim=0)
+                enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped), dim=0)
+
+        return enveloped_signal_tensor
+
+    def adsr_envelope(self, input_signal, attack_t, decay_t, sustain_t, sustain_level, release_t, num_sounds=1):
+        """Apply an ADSR envelope to the signal. Differential operation
+
+            builds the ADSR shape and multiply by the signal
+
+            Args:
+                self: Self object
+                input_signal: target signal to apply adsr
+                attack_t: Length of attack in seconds. Time to go from 0 to 1 amplitude.
+                decay_t: Length of decay in seconds. Time to go from 1 amplitude to sustain level.
+                sustain_t: Length of sustain in seconds, with sustain level amplitude
+                sustain_level: Sustain volume level
+                release_t: Length of release in seconds. Time to go ftom sustain level to 0 amplitude
+                num_sounds: number of sounds to process
+
+            Raises:
+                ValueError: Provided ADSR timings are not the same as the signal length
+            """
+        check_adsr_timings(attack_t, decay_t, sustain_t, sustain_level, release_t, self.sig_duration, num_sounds)
+
+        if num_sounds > 1:
+            if torch.is_tensor(sustain_level[0]):
+                sustain_level = [sustain_level[i] for i in range(num_sounds)]
+                sustain_level = torch.stack(sustain_level)
+            else:
+                sustain_level = [sustain_level[i] for i in range(num_sounds)]
+
+        enveloped_signal_tensor = torch.tensor((), requires_grad=True).to(helper.get_device())
+        first_time = True
+        x = torch.linspace(0, 1.0, self.sample_rate, device=self.device)
+        for i in range(num_sounds):
+            if num_sounds == 1:
+                note_off = attack_t + decay_t + sustain_t
+                attack = x / attack_t
+                attack = torch.clamp(attack, max=1.0)
+                decay = (x - attack_t) * (sustain_level - 1) / (decay_t + 1e-5)
+                decay = torch.clamp(decay, max=0.0)
+                sustain = (x - note_off) * (-sustain_level / (release_t + 1e-5))
+
+                envelope = (attack + decay + sustain)
+                envelope = torch.clamp(envelope, min=0.0, max=1.0)
+            else:
+                note_off = attack_t[i] + decay_t[i] + sustain_t[i]
+                attack = x / attack_t[i]
+                attack = torch.clamp(attack, max=1.0)
+                decay = (x - attack_t[i]) * (sustain_level[i] - 1) / (decay_t[i] + 1e-5)
+                decay = torch.clamp(decay, max=0.0)
+                sustain = (x - note_off) * (-sustain_level[i] / (release_t[i] + 1e-5))
+
+                envelope = (attack + decay + sustain)
+                envelope = torch.clamp(envelope, min=0.0, max=1.0)
+
+            envelope = helper.move_to(envelope, self.device)
 
             envelope_len = envelope.shape[0]
             signal_len = self.time_samples.shape[0]

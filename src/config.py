@@ -142,7 +142,7 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 5000
+    dataset_size: int = 100
     batch_size: int = 100
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
@@ -179,7 +179,7 @@ class ModelConfig:
     preset: str = 'BASIC_FLOW'
     model_type: str = 'simple'
     backbone: str = 'resnet'
-    batch_size: int = 256
+    batch_size: int = 8
     num_epochs: int = 40
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0

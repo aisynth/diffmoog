@@ -12,7 +12,7 @@ BASIC_FLOW_LFO_DECOUPLING = [
     {'index': (2, 2), 'operation': None, 'input_list': None, 'synth_config': synth_cfg},
     {'index': (0, 2), 'operation': 'mix', 'input_list': [[0, 1], [1, 1]], 'synth_config': synth_cfg},
     {'index': (0, 3), 'operation': 'filter', 'default_connection': True, 'synth_config': synth_cfg},
-    {'index': (0, 4), 'operation': 'amplitude_shape', 'default_connection': True, 'synth_config': synth_cfg}
+    {'index': (0, 4), 'operation': 'env_adsr', 'default_connection': True, 'synth_config': synth_cfg}
 ]
 
 # BASIC_FLOW = [
