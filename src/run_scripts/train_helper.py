@@ -60,6 +60,10 @@ def _np_to_str(val: np.ndarray, precision=2) -> str:
 
 def log_dict_recursive(tag: str, data_to_log, writer: SummaryWriter, step: int):
 
+    if isinstance(data_to_log, np.float) or isinstance(data_to_log, np.int):
+        writer.add_scalar(tag, data_to_log, step)
+        return
+
     if type(data_to_log) == list:
         data_to_log = np.asarray(data_to_log)
 

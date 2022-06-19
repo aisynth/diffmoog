@@ -218,8 +218,8 @@ def mfcc_distance(sound_batch1, sound_batch2, sample_rate):
 
     res = []
     for sound1, sound2 in zip(sound_batch1, sound_batch2):
-        mfcc1 = mfcc(sound1, sr=sample_rate, n_mfcc=40)
-        mfcc2 = mfcc(sound2, sr=sample_rate, n_mfcc=40)
+        mfcc1 = mfcc(y=sound1, sr=sample_rate, n_mfcc=40)
+        mfcc2 = mfcc(y=sound2, sr=sample_rate, n_mfcc=40)
 
         abs_diff = np.abs(mfcc1 - mfcc2)
         mfcc_dist = abs_diff.mean()

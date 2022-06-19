@@ -77,14 +77,15 @@ class Config:
     freq_reinforce_loss_factor: float = 1e5
 
     multi_spectral_loss_spec_type: str = 'BOTH'
-    multi_spectral_loss_preset: str = 'cumsum_time'
+    multi_spectral_loss_preset: str = 'mag_logmag'
 
     add_parameters_loss = True
     parameters_loss_type = 'L1'
-    parameters_loss_weight = 1/100
+    parameters_loss_weight = 1 / 100
     spectrogram_loss_weight = 1 / 50000
 
-    spectrogram_loss_warmup = 10
+    spectrogram_loss_warmup = 50 * 250
+    loss_switch_steps = 0 * 250
 
     smoothness_loss_weight = 0
 
@@ -142,7 +143,7 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 100
+    dataset_size: int = 5000
     batch_size: int = 100
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
@@ -179,7 +180,7 @@ class ModelConfig:
     preset: str = 'BASIC_FLOW'
     model_type: str = 'simple'
     backbone: str = 'resnet'
-    batch_size: int = 8
+    batch_size: int = 256
     num_epochs: int = 40
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
