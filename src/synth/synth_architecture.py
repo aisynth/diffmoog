@@ -19,13 +19,13 @@ class SynthModularCell:
                  operation=None,
                  parameters=None,
                  signal=None,
-                 output=None,
+                 output_list=None,
                  default_connection=False,
                  num_channels=4,
                  num_layers=5,
                  synth_config: SynthConfig = None):
 
-        self.check_cell(index, input_list, output, operation, parameters, num_channels, num_layers, synth_config)
+        self.check_cell(index, input_list, output_list, operation, parameters, num_channels, num_layers, synth_config)
 
         self.index = index
         channel = self.index[0]
@@ -42,20 +42,20 @@ class SynthModularCell:
 
         # if last layer
         if layer == num_layers - 1:
-            self.output = None
+            self.output_list = None
         elif default_connection:
             self.output = [-1, -1]
             self.output[0] = channel
             self.output[1] = layer + 1
         else:
-            self.output = output
+            self.output_list = output_list
 
         self.operation = operation
         self.parameters = parameters
         self.signal = signal
 
     @staticmethod
-    def check_cell(index, input_list, output, operation, parameters, num_channels, num_layers,
+    def check_cell(index, input_list, output_list, operation, parameters, num_channels, num_layers,
                    synth_config: SynthConfig):
         channel = index[0]
         layer = index[1]
@@ -78,13 +78,16 @@ class SynthModularCell:
                 if input_layer >= layer:
                     ValueError("Illegal input chain")
 
-        if output is not None:
-            if len(output) != 2:
-                ValueError("Illegal input index")
-            output_layer = output[1]
+        if output_list is not None:
+            if type(output_list) is not list:
+                ValueError("Illegal input_list - not a list")
+            for output_ in output_list:
+                if len(output_list) != 2:
+                    ValueError("Illegal output index")
+                output_layer = output_[1]
 
-            if output_layer <= layer:
-                ValueError("Illegal output chain")
+                if output_layer <= layer:
+                    ValueError("Illegal output chain. Output must be chained to a layer > cell.layer")
 
         if operation is not None:
             if operation not in synth_config.modular_synth_operations:
@@ -106,7 +109,10 @@ class SynthModular:
                  preset: str = None
                  ):
 
-        self.architecture = [[SynthModularCell(index=(channel, layer), default_connection=True)
+        self.architecture = [[SynthModularCell(index=(channel, layer),
+                                               default_connection=True,
+                                               num_channels=synth_cfg.num_channels,
+                                               num_layers=synth_cfg.num_layers)
                               for layer in range(synth_cfg.num_layers)]
                              for channel in range(synth_cfg.num_channels)]
         self.num_channels = synth_cfg.num_channels
@@ -117,7 +123,7 @@ class SynthModular:
         self.signal = torch.zeros((1, int(sample_rate * signal_duration_sec)), requires_grad=True)
         self.synth_cfg = synth_cfg
         self.device = device
-        self.preset = self.get_preset(preset)
+        self.preset = self.get_preset(preset, synth_cfg)
 
         if preset is not None:
             self.apply_architecture()
@@ -199,6 +205,7 @@ class SynthModular:
             for channel in range(synth_cfg.num_channels):
                 cell = self.architecture[channel][layer]
                 operation = cell.operation
+                output_list = cell.output_list
 
                 if operation == 'osc':
                     params = {'amp': np.random.random_sample(size=num_sounds_),
@@ -216,7 +223,13 @@ class SynthModular:
                                                          k=num_sounds_)}
 
                 elif operation == 'lfo_sine':
-                    params = {'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds_)}
+                    params['active'] = np.random.choice([True, False], size=num_sounds_)
+                    params['freq'] = np.random.uniform(low=synth_cfg.min_lfo_freq,
+                                                       high=synth_cfg.max_lfo_freq,
+                                                       size=num_sounds_) * params['active'].astype(int)
+                    rng = np.random.default_rng()
+                    #todo: put None or [-1,1] in output of non-active operation
+                    params['output'] = rng.choice(output_list, size=num_sounds_, axis=0)
 
                 elif operation == 'fm':
                     params = {'freq_c': self._sample_c_freq(synth_cfg, num_sounds_),
@@ -275,6 +288,9 @@ class SynthModular:
                               'sustain_t': sustain_t,
                               'sustain_level': sustain_level,
                               'release_t': release_t}
+
+                elif operation == 'tremolo':
+                    pass
 
                 elif operation is None:
                     params = None
@@ -523,7 +539,7 @@ class SynthModular:
         return final_signal, output_signals
 
     @staticmethod
-    def get_preset(preset: str):
+    def get_preset(preset: str, synth_cfg: SynthConfig):
 
         preset_list = synth_modular_presets.synth_presets_dict.get(preset, None)
         if preset_list is None:
@@ -534,8 +550,10 @@ class SynthModular:
                                                   operation=cell.get('operation'),
                                                   parameters=cell.get('parameters'),
                                                   signal=cell.get('signal'),
-                                                  output=cell.get('output'),
+                                                  output_list=cell.get('output_list'),
                                                   default_connection=cell.get('default_connection'),
+                                                  num_channels=synth_cfg.num_channels,
+                                                  num_layers=synth_cfg.num_layers,
                                                   synth_config=cell.get('synth_config'))
                                  for cell in preset_list]
 

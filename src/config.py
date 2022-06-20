@@ -143,7 +143,7 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 5000
+    dataset_size: int = 100
     batch_size: int = 100
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
@@ -192,7 +192,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'BASIC_FLOW'
+    preset: str = 'MODULAR'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}
@@ -204,6 +204,7 @@ class SynthConfig:
     middle_c_freq: float = 261.6255653005985
     max_amp: float = 1
     max_mod_index: float = 0.3
+    min_lfo_freq: float = 0.5
     max_lfo_freq: float = 20
     min_filter_freq: float = 0
     max_filter_freq: float = 8000
@@ -216,8 +217,8 @@ class SynthConfig:
     # -----------Modular Synth--------------
     # --------------------------------------
     # Modular Synth attributes:
-    num_channels: int = 4
-    num_layers: int = 5
+    num_channels: int = 3
+    num_layers: int = 7
 
     # Seed for random parameters generator
     seed = 2

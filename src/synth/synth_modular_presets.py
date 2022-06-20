@@ -42,6 +42,24 @@ BASIC_FLOW = [
     {'index': (0, 4), 'operation': 'lowpass_filter', 'default_connection': True, 'synth_config': synth_cfg}
 ]
 
+MODULAR = [
+    {'index': (0, 0), 'operation': 'lfo_sine', 'input_list': None, 'output_list': [[0, 6], [1, 1]], 'synth_config': synth_cfg},
+    {'index': (1, 1), 'operation': 'lfo', 'input_list': [[0, 0]], 'output_list': [[0, 2], [1, 2], [2, 2]], 'synth_config': synth_cfg},
+    {'index': (0, 2), 'operation': 'fm_sine', 'input_list': [[1, 1]], 'output_list': [[0, 3]], 'synth_config': synth_cfg},
+    {'index': (1, 2), 'operation': 'fm_saw', 'input_list': [[1, 1]], 'output_list': [[0, 3]], 'synth_config': synth_cfg},
+    {'index': (2, 2), 'operation': 'fm_square', 'input_list': [[1, 1]], 'output_list': [[0, 3]], 'synth_config': synth_cfg},
+    {'index': (0, 1), 'operation': None, 'input_list': None, 'output_list': None, 'synth_config': synth_cfg},
+    {'index': (1, 0), 'operation': None, 'input_list': None, 'output_list': None, 'synth_config': synth_cfg},
+    {'index': (2, 0), 'operation': None, 'input_list': None, 'output_list': None, 'synth_config': synth_cfg},
+    {'index': (2, 1), 'operation': None, 'input_list': None, 'output_list': None, 'synth_config': synth_cfg},
+    {'index': (1, 3), 'operation': None, 'input_list': None, 'output_list': None, 'synth_config': synth_cfg},
+    {'index': (2, 3), 'operation': None, 'input_list': None, 'output_list': None, 'synth_config': synth_cfg},
+    {'index': (0, 3), 'operation': 'mix', 'input_list': [[0, 2], [1, 2], [2, 2]], 'output_list': [[0, 4]], 'synth_config': synth_cfg},
+    {'index': (0, 4), 'operation': 'env_adsr', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (0, 5), 'operation': 'lowpass_filter', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (0, 5), 'operation': 'tremolo', 'default_connection': True, 'synth_config': synth_cfg}
+]
+
 
 BASIC_FLOW_NO_ADSR = [
     {'index': (0, 0), 'operation': 'lfo_sine', 'default_connection': True, 'synth_config': synth_cfg},
@@ -157,4 +175,5 @@ synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW, 'LFO': LFO, 'OSC': OSC, 'FM': FM
                       'BASIC_FLOW_NO_FILTER': BASIC_FLOW_NO_FILTER,
                       'DOUBLE_FM_ONLY': DOUBLE_FM_ONLY,
                       'NON_SINE_LFO': NON_SINE_LFO,
-                      'SINE_LFO': SINE_LFO}
+                      'SINE_LFO': SINE_LFO,
+                      'MODULAR': MODULAR}
