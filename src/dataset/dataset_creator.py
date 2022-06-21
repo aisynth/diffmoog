@@ -55,6 +55,8 @@ def create_dataset(split: str, dataset_cfg: DatasetConfig, synth_cfg: SynthConfi
     num_batches = dataset_cfg.dataset_size // dataset_cfg.batch_size
     for batch_idx in range(num_batches):
 
+        if synth_cfg.preset == 'MODULAR':
+            synth_obj.generate_activations_and_chains(synth_cfg=synth_cfg, num_sounds_=dataset_cfg.batch_size)
         synth_obj.generate_random_params(synth_cfg=synth_cfg,
                                          num_sounds_=dataset_cfg.batch_size)
 

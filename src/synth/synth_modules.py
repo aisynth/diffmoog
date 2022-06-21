@@ -990,7 +990,7 @@ class SynthModules:
             if freq < 0 or freq > 20000:
                 raise ValueError("Provided frequency is not in range [0, 20000]")
         elif isinstance(freq, list):
-            if any(element < 0 or element > 2000 for element in freq):
+            if any(element is not None and (element < 0 or element > 2000) for element in freq):
                 raise ValueError("Provided frequency is not in range [0, 20000]")
         if isinstance(amp, int):
             if amp < 0 or amp > 1:
