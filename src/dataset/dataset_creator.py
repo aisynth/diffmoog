@@ -6,6 +6,7 @@ from model import helper
 from config import SynthConfig, DatasetConfig, Config
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from synth.synth_architecture import SynthModular
+import numpy as np
 
 """
 Create a dataset by randomizing synthesizer parameters and generating sound.
@@ -69,7 +70,7 @@ def create_dataset(split: str, dataset_cfg: DatasetConfig, synth_cfg: SynthConfi
             params_dict = {}
             for layer in range(synth_cfg.num_layers):
                 for channel in range(synth_cfg.num_channels):
-                    cell = synth_obj.architecture[channel][layer]
+                    cell = synth_obj.synth_matrix[channel][layer]
                     if cell.operation is not None:
                         operation = cell.operation
                     else:
@@ -93,6 +94,9 @@ def create_dataset(split: str, dataset_cfg: DatasetConfig, synth_cfg: SynthConfi
                 c_audio = audio
             c_audio = torch.squeeze(c_audio)
             c_audio = c_audio.detach().cpu().numpy()
+
+            if c_audio.dtype == 'float64':
+                c_audio = np.float32(c_audio)
 
             scipy.io.wavfile.write(audio_path, cfg.sample_rate, c_audio)
             print(f"Generated {file_name}")

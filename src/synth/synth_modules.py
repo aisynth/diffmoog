@@ -582,7 +582,7 @@ class SynthModules:
             else:
                 sustain_level = [sustain_level[i] for i in range(num_sounds)]
 
-        enveloped_signal_tensor = torch.tensor((), requires_grad=True).to(helper.get_device())
+        enveloped_signal_tensor = torch.tensor((), requires_grad=True).to(self.device)
         first_time = True
         x = torch.linspace(0, 1.0, self.sample_rate, device=self.device)
         for i in range(num_sounds):
@@ -612,7 +612,7 @@ class SynthModules:
             envelope_len = envelope.shape[0]
             signal_len = self.time_samples.shape[0]
             if envelope_len <= signal_len:
-                padding = torch.zeros((signal_len - envelope_len), device=helper.get_device())
+                padding = torch.zeros((signal_len - envelope_len), device=self.device)
                 envelope = torch.cat((envelope, padding))
             else:
                 raise ValueError("Envelope length exceeds signal duration")
@@ -945,14 +945,18 @@ class SynthModules:
                 ValueError: Provided variables are inappropriate
                 ValueError: Amount is out of range [-1, 1]
             """
-        if amount > 1 or amount < 0:
-            ValueError("amount is out of range [0, 1]")
-        modulator = SynthModules()
-        modulator.signal = amount * (modulator_signal + 1) / 2 + (1 - amount)
+        if isinstance(amount, int):
+            if amount > 1 or amount < 0:
+                ValueError("amount is out of range [0, 1]")
+        if isinstance(amount, list):
+            if max(amount) > 1 or min(amount) < 0:
+                ValueError("amount is out of range [0, 1]")
+        amount = torch.tensor(amount, device=self.device).unsqueeze(dim=1)
+        tremolo = torch.add(torch.mul(amount, (modulator_signal + 1) / 2), (1 - amount))
 
-        am_signal = input_signal * modulator.signal
+        tremolo_signal = input_signal * tremolo
 
-        return am_signal
+        return tremolo_signal
 
     def _standardize_batch_input(self, input_val, requested_dtype, requested_dims):
 

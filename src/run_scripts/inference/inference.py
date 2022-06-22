@@ -118,7 +118,7 @@ def predict(model,
                     params_dict = {}
                     for layer in range(synth_cfg.num_layers):
                         for channel in range(synth_cfg.num_channels):
-                            cell = modular_synth.architecture[channel][layer]
+                            cell = modular_synth.synth_matrix[channel][layer]
                             if cell.operation is not None:
                                 operation = cell.operation
                             else:
