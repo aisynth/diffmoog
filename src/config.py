@@ -230,7 +230,7 @@ class SynthConfig:
     num_layers: int = 7
 
     # Seed for random parameters generator
-    seed = 2
+    seed = 2345124
 
     # Modular synth possible modules from synth_modules.py
     modular_synth_operations = ['osc', 'fm', 'lfo', 'mix', 'filter', 'env_adsr']
