@@ -112,6 +112,8 @@ class SynthModules:
                     oscillator = triangle_wave
                 elif waveform_current == 'sawtooth':
                     oscillator = sawtooth_wave
+                else:
+                    AssertionError("Unknown waveform")
 
             else:
                 waveform_probabilities = waveform[i]
@@ -580,7 +582,7 @@ class SynthModules:
             else:
                 sustain_level = [sustain_level[i] for i in range(num_sounds)]
 
-        enveloped_signal_tensor = torch.tensor((), requires_grad=True).to(helper.get_device())
+        enveloped_signal_tensor = torch.tensor((), requires_grad=True).to(self.device)
         first_time = True
         x = torch.linspace(0, 1.0, self.sample_rate, device=self.device)
         for i in range(num_sounds):
@@ -610,7 +612,7 @@ class SynthModules:
             envelope_len = envelope.shape[0]
             signal_len = self.time_samples.shape[0]
             if envelope_len <= signal_len:
-                padding = torch.zeros((signal_len - envelope_len), device=helper.get_device())
+                padding = torch.zeros((signal_len - envelope_len), device=self.device)
                 envelope = torch.cat((envelope, padding))
             else:
                 raise ValueError("Envelope length exceeds signal duration")
@@ -722,8 +724,8 @@ class SynthModules:
 
         return filtered_signal.to(self.device)
 
-        enveloped_signal = input_signal * envelope_shape
-        return enveloped_signal
+        # enveloped_signal = input_signal * envelope_shape
+        # return enveloped_signal
 
     def filter(self, input_signal, filter_freq, filter_type, num_sounds=1):
         """Apply an ADSR envelope to the signal
@@ -838,7 +840,6 @@ class SynthModules:
             Args:
                 self: Self object
                 :param input_signal: 1D or 2D array or tensor to apply filter along rows
-                :param filter_type: one of ['low_pass', 'high_pass', 'band_pass']
                 :param filter_freq: corner or central frequency
                 :param num_sounds: number of sounds in the input
 
@@ -889,7 +890,7 @@ class SynthModules:
             filtered_waveform_new = julius.highpass_filter_new(input_signal, cutoff_freq / self.sample_rate)
             return filtered_waveform_new
 
-    def tremolo_for_input_signal(self, input_signal, amount, freq_m, waveform_m):
+    def tremolo_by_modulator_params(self, input_signal, amount, freq_m, waveform_m):
         """tremolo effect for an input signal
 
             This is a kind of AM modulation, where the signal is multiplied as a whole by a given modulator.
@@ -921,6 +922,41 @@ class SynthModules:
         am_signal = input_signal * modulator.signal
 
         return am_signal
+
+    def tremolo_by_modulator_signal(self, input_signal, modulator_signal, amount):
+        """tremolo effect for an input signal
+
+            This is a kind of AM modulation, where the signal is multiplied as a whole by a given modulator.
+            The modulator is shifted such that it resides in range [start, 1], where start is <1 - amount>.
+            so start is > 0, such that the original amplitude of the input audio is preserved and there is no phase
+            shift due to multiplication by negative number.
+
+            Args:
+                self: Self object
+                input_signal: Input signal to be used as carrier
+                modulator_signal: modulator signal to modulate the input
+                amount: amount of effect, in range [0, 1]
+
+
+            Returns:
+                A torch with the constructed AM signal
+
+            Raises:
+                ValueError: Provided variables are inappropriate
+                ValueError: Amount is out of range [-1, 1]
+            """
+        if isinstance(amount, int):
+            if amount > 1 or amount < 0:
+                ValueError("amount is out of range [0, 1]")
+        if isinstance(amount, list):
+            if max(amount) > 1 or min(amount) < 0:
+                ValueError("amount is out of range [0, 1]")
+        amount = torch.tensor(amount, device=self.device).unsqueeze(dim=1)
+        tremolo = torch.add(torch.mul(amount, (modulator_signal + 1) / 2), (1 - amount))
+
+        tremolo_signal = input_signal * tremolo
+
+        return tremolo_signal
 
     def _standardize_batch_input(self, input_val, requested_dtype, requested_dims):
 
@@ -958,7 +994,7 @@ class SynthModules:
             if freq < 0 or freq > 20000:
                 raise ValueError("Provided frequency is not in range [0, 20000]")
         elif isinstance(freq, list):
-            if any(element < 0 or element > 2000 for element in freq):
+            if any(element is not None and (element < 0 or element > 2000) for element in freq):
                 raise ValueError("Provided frequency is not in range [0, 20000]")
         if isinstance(amp, int):
             if amp < 0 or amp > 1:
@@ -1171,7 +1207,7 @@ So it is not used
 if __name__ == "__main__":
     a = SynthModules()
     b = SynthModules()
-    b.oscillator(1, 5, 0, 'sine')
+    # b.oscillator(1, 5, 0, 'sine')
     a.oscillator_fm(amp_c=1, freq_c=440, waveform='sine', mod_index=10, modulator=b.signal)
     # a.oscillator(amp=1, freq=100, phase=0, waveform='sine')
     # a.adsr_envelope(attack_t=0.5, decay_t=0, sustain_t=0.5, sustain_level=0.5, release_t=0)

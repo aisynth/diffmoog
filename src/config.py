@@ -143,7 +143,7 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 5000
+    dataset_size: int = 1000
     batch_size: int = 100
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
@@ -192,7 +192,7 @@ class ModelConfig:
 
 @dataclass
 class SynthConfig:
-    preset: str = 'BASIC_FLOW'
+    preset: str = 'MODULAR'
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}
@@ -203,12 +203,22 @@ class SynthConfig:
     semitones_max_offset: int = 24
     middle_c_freq: float = 261.6255653005985
     max_amp: float = 1
+    min_mod_index: float = 0.01
     max_mod_index: float = 0.3
+    min_lfo_freq: float = 0.5
     max_lfo_freq: float = 20
     min_filter_freq: float = 0
     max_filter_freq: float = 8000
     min_resonance_val: float = 0.01
     max_resonance_val: float = 10
+    min_amount_tremolo = 0.05
+    max_amount_tremolo = 1
+
+    # non-active operation defaults
+    non_active_waveform_default = 'sine'
+    non_active_freq_default = 0
+    non_active_mod_index_default = 0
+    non_active_tremolo_amount_default = 0
 
     # When predicting oscillator frequency by regression, the defines are used to normalize the output from the model
     margin: float = 200
@@ -216,11 +226,11 @@ class SynthConfig:
     # -----------Modular Synth--------------
     # --------------------------------------
     # Modular Synth attributes:
-    num_channels: int = 4
-    num_layers: int = 5
+    num_channels: int = 3
+    num_layers: int = 7
 
     # Seed for random parameters generator
-    seed = 2
+    seed = 2345124
 
     # Modular synth possible modules from synth_modules.py
     modular_synth_operations = ['osc', 'fm', 'lfo', 'mix', 'filter', 'env_adsr']

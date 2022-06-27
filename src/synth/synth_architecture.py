@@ -15,47 +15,37 @@ class SynthModularCell:
 
     def __init__(self,
                  index: tuple,
-                 input_list=None,
+                 audio_input=None,
+                 control_input=None,
                  operation=None,
                  parameters=None,
                  signal=None,
-                 output=None,
+                 outputs=None,
                  default_connection=False,
                  num_channels=4,
                  num_layers=5,
                  synth_config: SynthConfig = None):
 
-        self.check_cell(index, input_list, output, operation, parameters, num_channels, num_layers, synth_config)
+        self.check_cell(index, audio_input, outputs, operation, parameters, num_channels, num_layers, synth_config)
 
         self.index = index
-        channel = self.index[0]
-        layer = self.index[1]
 
-        if layer == 0:
-            self.input_list = None
-        elif default_connection:
-            self.input_list = [[-1, -1]]
-            self.input_list[0][0] = channel
-            self.input_list[0][1] = layer - 1
-        else:
-            self.input_list = input_list
+        if default_connection:
+            self.audio_input = None
+            self.control_input = None
+            self.outputs = None
 
-        # if last layer
-        if layer == num_layers - 1:
-            self.output = None
-        elif default_connection:
-            self.output = [-1, -1]
-            self.output[0] = channel
-            self.output[1] = layer + 1
         else:
-            self.output = output
+            self.audio_input = audio_input
+            self.control_input = control_input
+            self.outputs = outputs
 
         self.operation = operation
         self.parameters = parameters
         self.signal = signal
 
     @staticmethod
-    def check_cell(index, input_list, output, operation, parameters, num_channels, num_layers,
+    def check_cell(index, audio_input, outputs, operation, parameters, num_channels, num_layers,
                    synth_config: SynthConfig):
         channel = index[0]
         layer = index[1]
@@ -67,10 +57,10 @@ class SynthModularCell:
                 or layer > num_layers:
             ValueError("Illegal cell index")
 
-        if input_list is not None:
-            if type(input_list) is not list:
+        if audio_input is not None:
+            if type(audio_input) is not list:
                 ValueError("Illegal input_list")
-            for input_ in input_list:
+            for input_ in audio_input:
                 if len(input_) != 2:
                     ValueError("Illegal input index")
                 input_layer = input_[1]
@@ -78,13 +68,16 @@ class SynthModularCell:
                 if input_layer >= layer:
                     ValueError("Illegal input chain")
 
-        if output is not None:
-            if len(output) != 2:
-                ValueError("Illegal input index")
-            output_layer = output[1]
+        if outputs is not None:
+            if type(outputs) is not list:
+                ValueError("Illegal input_list - not a list")
+            for output_ in outputs:
+                if len(outputs) != 2:
+                    ValueError("Illegal output index")
+                output_layer = output_[1]
 
-            if output_layer <= layer:
-                ValueError("Illegal output chain")
+                if output_layer <= layer:
+                    ValueError("Illegal output chain. Output must be chained to a layer > cell.layer")
 
         if operation is not None:
             if operation not in synth_config.modular_synth_operations:
@@ -106,7 +99,10 @@ class SynthModular:
                  preset: str = None
                  ):
 
-        self.architecture = [[SynthModularCell(index=(channel, layer), default_connection=True)
+        self.synth_matrix = [[SynthModularCell(index=(channel, layer),
+                                               default_connection=True,
+                                               num_channels=synth_cfg.num_channels,
+                                               num_layers=synth_cfg.num_layers)
                               for layer in range(synth_cfg.num_layers)]
                              for channel in range(synth_cfg.num_channels)]
         self.num_channels = synth_cfg.num_channels
@@ -117,7 +113,7 @@ class SynthModular:
         self.signal = torch.zeros((1, int(sample_rate * signal_duration_sec)), requires_grad=True)
         self.synth_cfg = synth_cfg
         self.device = device
-        self.preset = self.get_preset(preset)
+        self.preset = self.get_preset(preset, synth_cfg)
 
         if preset is not None:
             self.apply_architecture()
@@ -128,7 +124,7 @@ class SynthModular:
 
     def apply_cell(self, modular_synth_cell):
         index = modular_synth_cell.index
-        self.architecture[index[0]][index[1]] = modular_synth_cell
+        self.synth_matrix[index[0]][index[1]] = modular_synth_cell
 
     def update_cells(self, cell_list):
         for cell in cell_list:
@@ -143,7 +139,7 @@ class SynthModular:
         self.signal = torch.zeros((1, int(self.sample_rate * self.signal_duration_sec)), requires_grad=True)
         for c in range(self.num_channels):
             for l in range(self.num_layers):
-                self.architecture[c][l].signal = torch.zeros((1, int(self.sample_rate * self.signal_duration_sec)),
+                self.synth_matrix[c][l].signal = torch.zeros((1, int(self.sample_rate * self.signal_duration_sec)),
                                                              requires_grad=True)
 
     def update_cell(self,
@@ -154,11 +150,11 @@ class SynthModular:
                     signal=None,
                     output=None,
                     synth_config: SynthConfig = None):
-        cell = self.architecture[index[0]][index[1]]
+        cell = self.synth_matrix[index[0]][index[1]]
         if input_list is not None:
             cell.input_list = input_list
             for input_ in input_list:
-                input_cell = self.architecture[input_[0]][input_[1]]
+                input_cell = self.synth_matrix[input_[0]][input_[1]]
                 input_cell.output = cell.index
         if operation is not None:
             if operation == 'osc' or operation[:3] == 'lfo' and len(cell.input_list) != 0:
@@ -180,66 +176,106 @@ class SynthModular:
             cell.signal = signal
         if output is not None:
             output_cell_index = cell.output
-            output_cell = self.architecture[output_cell_index[0]][output_cell_index[1]]
+            output_cell = self.synth_matrix[output_cell_index[0]][output_cell_index[1]]
             if output_cell_index in output_cell.input_list:
                 output_cell.input_list.remove(output_cell_index)
             cell.output = output
 
     def update_cell_parameters(self, index: tuple, parameters: dict):
-        cell = self.architecture[index[0]][index[1]]
+        cell = self.synth_matrix[index[0]][index[1]]
         for key in parameters:
             if key not in [cell.operation]:
                 ValueError("Illegal parameter for the provided operation")
         cell.parameters = parameters
 
     def generate_random_params(self, synth_cfg: SynthConfig = None, num_sounds_=1):
-        params = {}
         np.random.seed(synth_cfg.seed)
         for layer in range(synth_cfg.num_layers):
             for channel in range(synth_cfg.num_channels):
-                cell = self.architecture[channel][layer]
+                cell = self.synth_matrix[channel][layer]
                 operation = cell.operation
-
+                parameters = cell.parameters
+                if parameters is None:
+                    continue
+                audio_input = cell.audio_input
+                outputs = cell.outputs
+                rng = np.random.default_rng()
+                activity_flags = parameters['active']
+                if 'fm_active' in parameters.keys():
+                    fm_activity_flags = parameters['fm_active']
+                operation_params = {}
                 if operation == 'osc':
-                    params = {'amp': np.random.random_sample(size=num_sounds_),
-                              'freq': random.choices(synth_cfg.osc_freq_list, k=num_sounds_),
-                              'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds_)}
+                    operation_params = {'amp': np.random.random_sample(size=num_sounds_),
+                                        'freq': random.choices(synth_cfg.osc_freq_list, k=num_sounds_),
+                                        'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds_)}
 
                 elif operation == 'lfo':
-                    params = {'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds_),
-                              'waveform': random.choices([k for k in synth_cfg.wave_type_dict.keys()],
-                                                         k=num_sounds_)}
+                    operation_params = {'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds_),
+                                        'waveform': random.choices([k for k in synth_cfg.wave_type_dict.keys()],
+                                                                   k=num_sounds_)}
 
                 elif operation == 'lfo_non_sine':
-                    params = {'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds_),
-                              'waveform': random.choices([k for k in synth_cfg.wave_type_dict.keys() if k != 'sine'],
-                                                         k=num_sounds_)}
+                    operation_params = {'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds_),
+                                        'waveform': random.choices(
+                                            [k for k in synth_cfg.wave_type_dict.keys() if k != 'sine'],
+                                            k=num_sounds_)}
 
                 elif operation == 'lfo_sine':
-                    params = {'freq': np.random.uniform(low=0, high=synth_cfg.max_lfo_freq, size=num_sounds_)}
+                    freq = np.random.uniform(low=synth_cfg.min_lfo_freq,
+                                             high=synth_cfg.max_lfo_freq,
+                                             size=num_sounds_)
+
+                    operation_params['freq'] = [freq[k] if activity_flags[k] else synth_cfg.non_active_freq_default
+                                                for k in range(num_sounds_)]
 
                 elif operation == 'fm':
-                    params = {'freq_c': self._sample_c_freq(synth_cfg, num_sounds_),
-                              'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds_),
-                              'mod_index': np.random.uniform(low=0, high=synth_cfg.max_mod_index, size=num_sounds_)}
+                    operation_params = {'freq_c': self._sample_c_freq(synth_cfg, num_sounds_),
+                                        'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds_),
+                                        'mod_index': np.random.uniform(low=0, high=synth_cfg.max_mod_index,
+                                                                       size=num_sounds_)}
+
+                elif operation == 'fm_lfo':
+                    freq_c = np.random.uniform(low=synth_cfg.min_lfo_freq,
+                                               high=synth_cfg.max_lfo_freq,
+                                               size=num_sounds_)
+                    waveform = random.choices(list(synth_cfg.wave_type_dict), k=num_sounds_)
+                    mod_index = np.random.uniform(low=synth_cfg.min_mod_index,
+                                                  high=synth_cfg.max_mod_index,
+                                                  size=num_sounds_)
+
+                    operation_params['freq_c'] = [freq_c[k] if activity_flags[k] else synth_cfg.non_active_freq_default
+                                                  for k in range(num_sounds_)]
+                    operation_params['waveform'] = [waveform[k] if activity_flags[k]
+                                                    else synth_cfg.non_active_waveform_default
+                                                    for k in range(num_sounds_)]
+                    operation_params['mod_index'] = [mod_index[k] if fm_activity_flags[k]
+                                                     else synth_cfg.non_active_mod_index_default
+                                                     for k in range(num_sounds_)]
 
                 elif operation in ['fm_sine', 'fm_square', 'fm_saw']:
-                    params = {'freq_c': self._sample_c_freq(synth_cfg, num_sounds_),
-                              'mod_index': np.random.uniform(low=0, high=synth_cfg.max_mod_index, size=num_sounds_)}
+                    freq_c = self._sample_c_freq(synth_cfg, num_sounds_)
+                    mod_index = np.random.uniform(low=0, high=synth_cfg.max_mod_index, size=num_sounds_)
+                    #todo: add amplitude parameter
+                    operation_params['freq_c'] = [freq_c[k] if activity_flags[k] else synth_cfg.non_active_freq_default
+                                                  for k in range(num_sounds_)]
+                    operation_params['mod_index'] = [mod_index[k] if fm_activity_flags[k]
+                                                     else synth_cfg.non_active_mod_index_default
+                                                     for k in range(num_sounds_)]
 
                 elif operation == 'mix':
-                    params = None
+                    operation_params = None
+                    continue
 
                 elif operation == 'amplitude_shape':
                     attack_t, decay_t, sustain_t, sustain_level, release_t = \
                         self.generate_random_adsr_values(num_sounds_=num_sounds_)
 
-                    params = {'attack_t': attack_t,
-                              'decay_t': decay_t,
-                              'sustain_t': sustain_t,
-                              'sustain_level': sustain_level,
-                              'release_t': release_t,
-                              'envelope': torch.full([num_sounds_], -1)}
+                    operation_params = {'attack_t': attack_t,
+                                        'decay_t': decay_t,
+                                        'sustain_t': sustain_t,
+                                        'sustain_level': sustain_level,
+                                        'release_t': release_t,
+                                        'envelope': torch.full([num_sounds_], -1)}
 
                     # attack_t, decay_t, sustain_t, sustain_level, release_t = \
                     #     self.generate_random_adsr_values(num_sounds_=num_sounds_)
@@ -253,42 +289,139 @@ class SynthModular:
                     # params = {'envelope': envelope}
 
                 elif operation == 'filter':
-                    params = {'filter_type': random.choices(list(synth_cfg.filter_type_dict), k=num_sounds_),
-                              'filter_freq': np.random.uniform(low=synth_cfg.min_filter_freq,
-                                                               high=synth_cfg.max_filter_freq,
-                                                               size=num_sounds_)}
+                    operation_params = {'filter_type': random.choices(list(synth_cfg.filter_type_dict), k=num_sounds_),
+                                        'filter_freq': np.random.uniform(low=synth_cfg.min_filter_freq,
+                                                                         high=synth_cfg.max_filter_freq,
+                                                                         size=num_sounds_)}
 
                 elif operation == 'lowpass_filter':
-                    params = {'filter_freq': np.random.uniform(low=synth_cfg.min_filter_freq,
-                                                               high=synth_cfg.max_filter_freq,
-                                                               size=num_sounds_),
-                              'resonance': np.random.uniform(low=synth_cfg.min_resonance_val,
-                                                             high=synth_cfg.max_resonance_val,
-                                                             size=num_sounds_)}
+                    operation_params = {'filter_freq': np.random.uniform(low=synth_cfg.min_filter_freq,
+                                                                         high=synth_cfg.max_filter_freq,
+                                                                         size=num_sounds_),
+                                        'resonance': np.random.uniform(low=synth_cfg.min_resonance_val,
+                                                                       high=synth_cfg.max_resonance_val,
+                                                                       size=num_sounds_)}
                 elif operation == 'env_adsr':
-
                     attack_t, decay_t, sustain_t, sustain_level, release_t = \
                         self.generate_random_adsr_values(num_sounds_=num_sounds_)
 
-                    params = {'attack_t': attack_t,
-                              'decay_t': decay_t,
-                              'sustain_t': sustain_t,
-                              'sustain_level': sustain_level,
-                              'release_t': release_t}
+                    operation_params = {'attack_t': attack_t,
+                                        'decay_t': decay_t,
+                                        'sustain_t': sustain_t,
+                                        'sustain_level': sustain_level,
+                                        'release_t': release_t}
+
+                elif operation == 'tremolo':
+                    amount = np.random.uniform(low=synth_cfg.min_amount_tremolo,
+                                               high=synth_cfg.max_amount_tremolo,
+                                               size=num_sounds_)
+
+                    operation_params['amount'] = [
+                        amount[k] if activity_flags[k] else synth_cfg.non_active_tremolo_amount_default for k in
+                        range(num_sounds_)]
 
                 elif operation is None:
-                    params = None
+                    operation_params = None
 
-                if params is not None:
-                    for key, val in params.items():
+                if operation_params is not None:
+                    for key, val in operation_params.items():
                         if isinstance(val, numpy.ndarray):
-                            params[key] = val.tolist()
+                            operation_params[key] = val.tolist()
 
                     if num_sounds_ == 1:
-                        for key, value in params.items():
-                            params[key] = value[0]
+                        for key, value in operation_params.items():
+                            operation_params[key] = value[0]
 
-                cell.parameters = params
+                cell.parameters.update(operation_params)
+
+    def generate_activations_and_chains(self, synth_cfg: SynthConfig = None, num_sounds_=1):
+        # todo: generalize code to go over all cells
+        np.random.seed(synth_cfg.seed)
+        rng = np.random.default_rng()
+
+        # lfo-sine
+        lfo_sine_cell = self.synth_matrix[0][0]
+        operation = lfo_sine_cell.operation
+        audio_input = lfo_sine_cell.audio_input
+        lfo_sine_outputs = lfo_sine_cell.outputs
+
+        lfo_sine_output = rng.choice(lfo_sine_outputs, size=num_sounds_, axis=0).tolist()
+        #todo: check p! it determines also the lfo sine frequency and i dont know why!!
+        lfo_sine_params = {'active': np.random.choice([True, False], size=num_sounds_, p=[0.25, 0.75])}
+        lfo_sine_params['output'] = [lfo_sine_output[k] if lfo_sine_params['active'][k] else None for k in
+                                     range(num_sounds_)]
+        lfo_sine_cell.parameters = lfo_sine_params
+
+        # tremolo
+        tremolo_cell = self.synth_matrix[0][6]
+        tremolo_params = {
+            'active': [True if (lfo_sine_params['active'][k] and lfo_sine_params['output'][k] == [0, 6]) else False for
+                       k in range(num_sounds_)]}
+        tremolo_cell.parameters = tremolo_params
+
+        # fm_lfo
+        fm_lfo_cell = self.synth_matrix[1][1]
+        fm_lfo_outputs = fm_lfo_cell.outputs
+
+        fm_lfo_random_activeness = np.random.choice([True, False], size=num_sounds_)
+        fm_lfo_output = rng.choice(fm_lfo_outputs, size=num_sounds_, axis=0).tolist()
+
+        fm_lfo_params = {'fm_active': [True if (lfo_sine_params['active'][k] and lfo_sine_params['output'][k] == [1, 1])
+                                       else False
+                                       for k in range(num_sounds_)]}
+        fm_lfo_params['active'] = [True if fm_lfo_params['fm_active'][k] or fm_lfo_random_activeness[k] else False for k
+                                   in range(num_sounds_)]
+        fm_lfo_params['output'] = [fm_lfo_output[k] if fm_lfo_params['active'][k] else None for k in range(num_sounds_)]
+        fm_lfo_cell.parameters = fm_lfo_params
+
+        oscillator_options = [['sine'], ['saw'], ['square'], ['sine', 'saw'], ['sine', 'square'], ['saw', 'square'],
+                              ['sine', 'saw', 'square']]
+        oscillator_activeness = rng.choice(oscillator_options, size=num_sounds_, axis=0).tolist()
+
+        # sine oscillator
+        sine_cell = self.synth_matrix[0][2]
+        sine_params = {
+            'fm_active': [True if (fm_lfo_params['active'][k] and fm_lfo_params['output'][k] == [0, 2]) else False for
+                          k in range(num_sounds_)]}
+        sine_params['active'] = [True if sine_params['fm_active'][k] or 'sine' in oscillator_activeness[k] else False
+                                 for k in range(num_sounds_)]
+
+        sine_cell.parameters = sine_params
+
+        # saw oscillator
+        saw_cell = self.synth_matrix[1][2]
+        saw_params = {
+            'fm_active': [True if (fm_lfo_params['active'][k] and fm_lfo_params['output'][k] == [1, 2]) else False for
+                          k in range(num_sounds_)]}
+        saw_params['active'] = [True if saw_params['fm_active'][k] or 'saw' in oscillator_activeness[k] else False
+                                for k in range(num_sounds_)]
+
+        saw_cell.parameters = saw_params
+
+        # square oscillator
+        square_cell = self.synth_matrix[2][2]
+        square_params = {
+            'fm_active': [True if (fm_lfo_params['active'][k] and fm_lfo_params['output'][k] == [2, 2]) else False for
+                          k in range(num_sounds_)]}
+        square_params['active'] = [True if square_params['fm_active'][k] or 'square' in oscillator_activeness[k]
+                                   else
+                                   False
+                                   for k
+                                   in range(num_sounds_)]
+
+        square_cell.parameters = square_params
+
+        mix_cell = self.synth_matrix[0][3]
+        mix_params = {'active': np.random.choice([True], size=num_sounds_)}
+        mix_cell.parameters = mix_params
+
+        adsr_cell = self.synth_matrix[0][4]
+        adsr_params = {'active': np.random.choice([True], size=num_sounds_)}
+        adsr_cell.parameters = adsr_params
+
+        filter_cell = self.synth_matrix[0][5]
+        filters_params = {'active': np.random.choice([True], size=num_sounds_)}
+        filter_cell.parameters = filters_params
 
     def generate_random_adsr_values(self, num_sounds_=1):
         attack_t = np.random.random(size=num_sounds_)
@@ -323,15 +456,15 @@ class SynthModular:
         output_signals = {}
         for layer in range(self.num_layers):
             for channel in range(self.num_channels):
-                cell = self.architecture[channel][layer]
+                cell = self.synth_matrix[channel][layer]
                 operation = cell.operation
 
                 if operation is None:
-                    if cell.input_list is None:
+                    if cell.audio_input is None:
                         signal = None
-                    elif len(cell.input_list) == 1:
-                        input_cell_index = cell.input_list[0]
-                        input_cell = self.architecture[input_cell_index[0]][input_cell_index[1]]
+                    elif len(cell.audio_input) == 1:
+                        input_cell_index = cell.audio_input[0]
+                        input_cell = self.synth_matrix[input_cell_index[0]][input_cell_index[1]]
                         signal = input_cell.signal
                     else:
                         signal = None
@@ -354,23 +487,33 @@ class SynthModular:
                                                                 phase=0,
                                                                 waveform=cell.parameters['waveform'])
                 elif operation == 'lfo_sine':
+                    #todo add conditional where not-active, zerorize freq.
                     cell.signal = synth_module.batch_oscillator(amp=1.0,
                                                                 freq=cell.parameters['freq'],
                                                                 phase=0,
                                                                 waveform='sine')
 
-                elif operation in ['fm', 'fm_sine', 'fm_square', 'fm_saw']:
-                    if len(cell.input_list) == 1:
-                        input_cell_index = cell.input_list[0]
-                        input_cell = self.architecture[input_cell_index[0]][input_cell_index[1]]
-                        modulator = input_cell.signal
-                    elif cell.input_list is None:
+                elif operation in ['fm', 'fm_lfo', 'fm_sine', 'fm_square', 'fm_saw']:
+                    if cell.control_input is not None and len(cell.control_input) == 1:
+                        control_input_cell_index = cell.control_input[0]
+                        control_input_cell = self.synth_matrix[control_input_cell_index[0]][control_input_cell_index[1]]
+                        control_input_cell_signal = control_input_cell.signal
+                        zeros_tensor = torch.zeros_like(control_input_cell_signal)
+                        fm_active_list_broadcast = [cell.parameters['fm_active'] for k in
+                                                    range(control_input_cell.signal.shape[1])]
+                        fm_active_torch_broadcast = torch.tensor(fm_active_list_broadcast).T.to(self.device)
+                        modulator = torch.where(fm_active_torch_broadcast, control_input_cell_signal, zeros_tensor)
+                        # todo add conditional where fm_not-active, zerorize mod_index.
+                        # todo add conditional where not-active, zerorize freq_c.
+
+                        # modulator = input_cell.signal
+                    elif cell.control_input is None:
                         modulator = 0
                     else:
                         modulator = 0
                         AttributeError("Illegal cell input")
 
-                    if operation == 'fm':
+                    if operation in ['fm', 'fm_lfo']:
                         cell.signal = synth_module.batch_oscillator_fm(amp_c=1.0,
                                                                        freq_c=cell.parameters['freq_c'],
                                                                        waveform=cell.parameters['waveform'],
@@ -385,21 +528,20 @@ class SynthModular:
                             waveform = 'sawtooth'
                         else:
                             ValueError("Unsupported waveform")
-                        cell.signal = synth_module.batch_specific_waveform_oscillator_fm(amp_c=1.0,
-                                                                                         freq_c=cell.parameters[
-                                                                                             'freq_c'],
-                                                                                         waveform=waveform,
-                                                                                         mod_index=cell.parameters[
-                                                                                             'mod_index'],
-                                                                                         modulator=modulator)
+                        cell.signal = \
+                            synth_module.batch_specific_waveform_oscillator_fm(amp_c=1.0,
+                                                                               freq_c=cell.parameters['freq_c'],
+                                                                               waveform=waveform,
+                                                                               mod_index=cell.parameters['mod_index'],
+                                                                               modulator=modulator)
 
 
                 elif operation == 'mix':
                     signal = 0
-                    num_inputs = len(cell.input_list)
+                    num_inputs = len(cell.audio_input)
                     for input_num in range(num_inputs):
-                        input_index = cell.input_list[input_num]
-                        input_sound = self.architecture[input_index[0]][input_index[1]].signal
+                        input_index = cell.audio_input[input_num]
+                        input_sound = self.synth_matrix[input_index[0]][input_index[1]].signal
                         signal += input_sound
 
                     cell.signal = signal / num_inputs
@@ -407,7 +549,7 @@ class SynthModular:
                 elif operation == 'amplitude_shape':
                     if len(cell.input_list) == 1:
                         input_cell_index = cell.input_list[0]
-                        input_cell = self.architecture[input_cell_index[0]][input_cell_index[1]]
+                        input_cell = self.synth_matrix[input_cell_index[0]][input_cell_index[1]]
                         input_signal = input_cell.signal
                     else:
                         input_signal = 0
@@ -446,7 +588,7 @@ class SynthModular:
                 elif operation == 'filter_shape':
                     if len(cell.input_list) == 1:
                         input_cell_index = cell.input_list[0]
-                        input_cell = self.architecture[input_cell_index[0]][input_cell_index[1]]
+                        input_cell = self.synth_matrix[input_cell_index[0]][input_cell_index[1]]
                         input_signal = input_cell.signal
                     else:
                         input_signal = 0
@@ -459,7 +601,7 @@ class SynthModular:
                 elif operation == 'filter':
                     if len(cell.input_list) == 1:
                         input_cell_index = cell.input_list[0]
-                        input_cell = self.architecture[input_cell_index[0]][input_cell_index[1]]
+                        input_cell = self.synth_matrix[input_cell_index[0]][input_cell_index[1]]
                         input_signal = input_cell.signal
                     else:
                         input_signal = 0
@@ -469,9 +611,9 @@ class SynthModular:
                                                             filter_type=cell.parameters['filter_type'])
 
                 elif operation == 'lowpass_filter':
-                    if len(cell.input_list) == 1:
-                        input_cell_index = cell.input_list[0]
-                        input_cell = self.architecture[input_cell_index[0]][input_cell_index[1]]
+                    if len(cell.audio_input) == 1:
+                        input_cell_index = cell.audio_input[0]
+                        input_cell = self.synth_matrix[input_cell_index[0]][input_cell_index[1]]
                         input_signal = input_cell.signal
                     else:
                         input_signal = 0
@@ -481,9 +623,9 @@ class SynthModular:
                                                                     resonance=cell.parameters['resonance'])
 
                 elif operation == 'env_adsr':
-                    if len(cell.input_list) == 1:
-                        input_cell_index = cell.input_list[0]
-                        input_cell = self.architecture[input_cell_index[0]][input_cell_index[1]]
+                    if len(cell.audio_input) == 1:
+                        input_cell_index = cell.audio_input[0]
+                        input_cell = self.synth_matrix[input_cell_index[0]][input_cell_index[1]]
                         input_signal = input_cell.signal
                     else:
                         input_signal = 0
@@ -502,6 +644,36 @@ class SynthModular:
                     #                                                sustain_t=cell.parameters['sustain_t'],
                     #                                                sustain_level=cell.parameters['sustain_level'],
                     #                                                release_t=cell.parameters['release_t'])
+
+                elif operation == 'tremolo':
+                    if len(cell.audio_input) == 1:
+                        input_cell_index = cell.audio_input[0]
+                        input_cell = self.synth_matrix[input_cell_index[0]][input_cell_index[1]]
+                        input_signal = input_cell.signal
+                    else:
+                        input_signal = 0
+                        AttributeError("Illegal cell input")
+
+                    if len(cell.control_input) == 1:
+                        control_input_cell_index = cell.control_input[0]
+                        control_input_cell = self.synth_matrix[control_input_cell_index[0]][control_input_cell_index[1]]
+                        control_input_cell_signal = control_input_cell.signal
+
+                        zeros_tensor = torch.zeros_like(control_input_cell_signal)
+                        active_list_broadcast = [cell.parameters['active'] for k in
+                                                 range(control_input_cell.signal.shape[1])]
+                        fm_active_torch_broadcast = torch.tensor(active_list_broadcast).T.to(self.device)
+                        modulator = torch.where(fm_active_torch_broadcast, control_input_cell_signal, zeros_tensor)
+                        #todo add conditional where not-active, zerorize amount.
+
+                    else:
+                        modulator = 0
+                        AttributeError("Illegal cell control input")
+
+                    cell.signal = synth_module.tremolo_by_modulator_signal(input_signal=input_signal,
+                                                                           modulator_signal=modulator,
+                                                                           amount=cell.parameters['amount'])
+
                 output_signals[f"({channel}, {layer})"] = cell.signal
 
         # Final signal summing from all channels in the last layer
@@ -510,7 +682,7 @@ class SynthModular:
                                    device=self.device)
         num_active_channels = 0
         for channel in range(self.num_channels):
-            signal = self.architecture[channel][self.num_layers - 1].signal
+            signal = self.synth_matrix[channel][self.num_layers - 1].signal
             if signal is not None:
                 final_signal = final_signal + signal
                 num_active_channels += 1
@@ -523,19 +695,22 @@ class SynthModular:
         return final_signal, output_signals
 
     @staticmethod
-    def get_preset(preset: str):
+    def get_preset(preset: str, synth_cfg: SynthConfig):
 
         preset_list = synth_modular_presets.synth_presets_dict.get(preset, None)
         if preset_list is None:
             ValueError("Unknown PRESET")
 
         preset_as_synth_input = [SynthModularCell(index=cell.get('index'),
-                                                  input_list=cell.get('input_list'),
+                                                  audio_input=cell.get('audio_input'),
+                                                  control_input=cell.get('control_input'),
                                                   operation=cell.get('operation'),
                                                   parameters=cell.get('parameters'),
                                                   signal=cell.get('signal'),
-                                                  output=cell.get('output'),
+                                                  outputs=cell.get('outputs'),
                                                   default_connection=cell.get('default_connection'),
+                                                  num_channels=synth_cfg.num_channels,
+                                                  num_layers=synth_cfg.num_layers,
                                                   synth_config=cell.get('synth_config'))
                                  for cell in preset_list]
 
@@ -545,7 +720,7 @@ class SynthModular:
         params_dict = {}
         for layer in range(self.num_layers):
             for channel in range(self.num_channels):
-                cell = self.architecture[channel][layer]
+                cell = self.synth_matrix[channel][layer]
                 if cell.operation is not None:
                     operation = cell.operation
                 else:
