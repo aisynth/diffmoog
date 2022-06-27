@@ -178,8 +178,8 @@ def lsd(spec1, spec2):
 
     assert spec1.ndim == 3 and spec2.ndim == 3, "Input must be a batch of 2d spectrograms"
 
-    batch_diff = np.log10(spec1) - np.log10(spec2)
-    lsd_val = [np.linalg.norm(x, ord='fro') for x in batch_diff]
+    batch_diff = np.log10(spec1 + 1e-5) - np.log10(spec2 + 1e-5)
+    lsd_val = [np.linalg.norm(10 * x, ord='fro') / x.shape[-1] for x in batch_diff]
 
     return lsd_val
 

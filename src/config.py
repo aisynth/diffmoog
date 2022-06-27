@@ -12,9 +12,9 @@ import numpy as np
 from typing import Dict, List
 
 from torch.utils.tensorboard import SummaryWriter
-
-EXP_ROOT = Path(__file__).parent.parent.joinpath('experiments')
-DATA_ROOT = Path(__file__).parent.parent.joinpath('data')
+root = r'/home/almogelharar/almog/ai_synth/'
+EXP_ROOT = os.path.join(root, 'experiments')
+DATA_ROOT = os.path.join(root, 'data')
 
 
 @dataclass
@@ -84,8 +84,8 @@ class Config:
     parameters_loss_weight = 1 / 100
     spectrogram_loss_weight = 1 / 50000
 
-    spectrogram_loss_warmup = 50 * 250
-    loss_switch_steps = 0 * 250
+    spectrogram_loss_warmup = 200 * 334
+    loss_switch_steps = 100 * 334
 
     smoothness_loss_weight = 0
 
@@ -180,8 +180,8 @@ class ModelConfig:
     preset: str = 'BASIC_FLOW'
     model_type: str = 'simple'
     backbone: str = 'resnet'
-    batch_size: int = 256
-    num_epochs: int = 40
+    batch_size: int = 150
+    num_epochs: int = 400
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0

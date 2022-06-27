@@ -135,7 +135,7 @@ def train_single_epoch(model,
                 weighted_params_loss = 0
                 weighted_spec_loss = cfg.spectrogram_loss_weight * spectrogram_loss
 
-            loss_total =  weighted_params_loss + weighted_spec_loss
+            loss_total = weighted_params_loss + weighted_spec_loss
 
             lsd_value = np.mean(lsd(transformed_signal.squeeze().detach().cpu().numpy(),
                                     transform(pred_final_signal).detach().cpu().numpy()))
