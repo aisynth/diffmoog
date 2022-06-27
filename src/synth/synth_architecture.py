@@ -189,7 +189,6 @@ class SynthModular:
         cell.parameters = parameters
 
     def generate_random_params(self, synth_cfg: SynthConfig = None, num_sounds_=1):
-        np.random.seed(synth_cfg.seed)
         for layer in range(synth_cfg.num_layers):
             for channel in range(synth_cfg.num_channels):
                 cell = self.synth_matrix[channel][layer]
@@ -197,9 +196,7 @@ class SynthModular:
                 parameters = cell.parameters
                 if parameters is None:
                     continue
-                audio_input = cell.audio_input
-                outputs = cell.outputs
-                rng = np.random.default_rng()
+
                 activity_flags = parameters['active']
                 if 'fm_active' in parameters.keys():
                     fm_activity_flags = parameters['fm_active']
@@ -253,9 +250,11 @@ class SynthModular:
                                                      for k in range(num_sounds_)]
 
                 elif operation in ['fm_sine', 'fm_square', 'fm_saw']:
+                    amp_c = np.random.uniform(low=synth_cfg.min_amp, high=synth_cfg.max_amp, size=num_sounds_)
                     freq_c = self._sample_c_freq(synth_cfg, num_sounds_)
                     mod_index = np.random.uniform(low=0, high=synth_cfg.max_mod_index, size=num_sounds_)
-                    #todo: add amplitude parameter
+                    operation_params['amp_c'] = [amp_c[k] if activity_flags[k] else synth_cfg.non_active_amp_default
+                                                 for k in range(num_sounds_)]
                     operation_params['freq_c'] = [freq_c[k] if activity_flags[k] else synth_cfg.non_active_freq_default
                                                   for k in range(num_sounds_)]
                     operation_params['mod_index'] = [mod_index[k] if fm_activity_flags[k]
@@ -336,7 +335,6 @@ class SynthModular:
 
     def generate_activations_and_chains(self, synth_cfg: SynthConfig = None, num_sounds_=1):
         # todo: generalize code to go over all cells
-        np.random.seed(synth_cfg.seed)
         rng = np.random.default_rng()
 
         # lfo-sine
@@ -346,9 +344,8 @@ class SynthModular:
         lfo_sine_outputs = lfo_sine_cell.outputs
 
         lfo_sine_output = rng.choice(lfo_sine_outputs, size=num_sounds_, axis=0).tolist()
-        #todo: check p! it determines also the lfo sine frequency and i dont know why!!
         lfo_sine_params = {'active': np.random.choice([True, False], size=num_sounds_, p=[0.25, 0.75])}
-        lfo_sine_params['output'] = [lfo_sine_output[k] if lfo_sine_params['active'][k] else None for k in
+        lfo_sine_params['output'] = [lfo_sine_output[k] if lfo_sine_params['active'][k] else [-1, -1] for k in
                                      range(num_sounds_)]
         lfo_sine_cell.parameters = lfo_sine_params
 
@@ -367,11 +364,10 @@ class SynthModular:
         fm_lfo_output = rng.choice(fm_lfo_outputs, size=num_sounds_, axis=0).tolist()
 
         fm_lfo_params = {'fm_active': [True if (lfo_sine_params['active'][k] and lfo_sine_params['output'][k] == [1, 1])
-                                       else False
-                                       for k in range(num_sounds_)]}
+                                       else False for k in range(num_sounds_)]}
         fm_lfo_params['active'] = [True if fm_lfo_params['fm_active'][k] or fm_lfo_random_activeness[k] else False for k
                                    in range(num_sounds_)]
-        fm_lfo_params['output'] = [fm_lfo_output[k] if fm_lfo_params['active'][k] else None for k in range(num_sounds_)]
+        fm_lfo_params['output'] = [fm_lfo_output[k] if fm_lfo_params['active'][k] else [-1, -1] for k in range(num_sounds_)]
         fm_lfo_cell.parameters = fm_lfo_params
 
         oscillator_options = [['sine'], ['saw'], ['square'], ['sine', 'saw'], ['sine', 'square'], ['saw', 'square'],
@@ -428,11 +424,20 @@ class SynthModular:
         decay_t = np.random.random(size=num_sounds_)
         sustain_t = np.random.random(size=num_sounds_)
         release_t = np.random.random(size=num_sounds_)
-        adsr_sum = attack_t + decay_t + sustain_t + release_t
-        attack_t = attack_t / adsr_sum
-        decay_t = decay_t / adsr_sum
-        sustain_t = sustain_t / adsr_sum
-        release_t = release_t / adsr_sum
+
+        if self.synth_cfg.fixed_note_off:
+            adsr_sum = attack_t + decay_t + sustain_t
+
+            ads_time = self.synth_cfg.note_off_time
+            release_t = release_t * (self.signal_duration_sec - self.synth_cfg.note_off_time)
+        else:
+            adsr_sum = attack_t + decay_t + sustain_t + release_t
+            ads_time = self.signal_duration_sec
+            release_t = (release_t / adsr_sum) * ads_time
+
+        attack_t = (attack_t / adsr_sum) * ads_time
+        decay_t = (decay_t / adsr_sum) * ads_time
+        sustain_t = (sustain_t / adsr_sum) * ads_time
 
         # fixing a numerical issue in case the ADSR times exceeds signal length
         adsr_aggregated_time = attack_t + decay_t + sustain_t + release_t
@@ -499,9 +504,8 @@ class SynthModular:
                         control_input_cell = self.synth_matrix[control_input_cell_index[0]][control_input_cell_index[1]]
                         control_input_cell_signal = control_input_cell.signal
                         zeros_tensor = torch.zeros_like(control_input_cell_signal)
-                        fm_active_list_broadcast = [cell.parameters['fm_active'] for k in
-                                                    range(control_input_cell.signal.shape[1])]
-                        fm_active_torch_broadcast = torch.tensor(fm_active_list_broadcast).T.to(self.device)
+                        fm_active_list_broadcast = cell.parameters['fm_active']
+                        fm_active_torch_broadcast = torch.unsqueeze(torch.tensor(fm_active_list_broadcast).T.to(self.device), dim=1)
                         modulator = torch.where(fm_active_torch_broadcast, control_input_cell_signal, zeros_tensor)
                         # todo add conditional where fm_not-active, zerorize mod_index.
                         # todo add conditional where not-active, zerorize freq_c.
@@ -529,12 +533,11 @@ class SynthModular:
                         else:
                             ValueError("Unsupported waveform")
                         cell.signal = \
-                            synth_module.batch_specific_waveform_oscillator_fm(amp_c=1.0,
+                            synth_module.batch_specific_waveform_oscillator_fm(amp_c=cell.parameters['amp_c'],
                                                                                freq_c=cell.parameters['freq_c'],
                                                                                waveform=waveform,
                                                                                mod_index=cell.parameters['mod_index'],
                                                                                modulator=modulator)
-
 
                 elif operation == 'mix':
                     signal = 0
@@ -744,6 +747,10 @@ class SynthModular:
         idx = np.searchsorted(synth_cfg.osc_freq_list, base_freqs, side="left")
         idx = idx - (np.abs(base_freqs - osc_freq_list[idx - 1]) < np.abs(base_freqs - osc_freq_list[idx]))
         return osc_freq_list[idx]
+
+    def process_active_signal(self, active_vector):
+        # TODO: implement
+        pass
 
 
 if __name__ == "__main__":

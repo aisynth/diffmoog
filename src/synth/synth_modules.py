@@ -471,15 +471,15 @@ class SynthModules:
         check_adsr_timings(attack_t, decay_t, sustain_t, sustain_level, release_t, self.sig_duration, num_sounds)
 
         if num_sounds == 1:
-            attack_num_samples = int(self.sample_rate * attack_t)
-            decay_num_samples = int(self.sample_rate * decay_t)
-            sustain_num_samples = int(self.sample_rate * sustain_t)
-            release_num_samples = int(self.sample_rate * release_t)
+            attack_num_samples = int(self.sig_duration * self.sample_rate * attack_t)
+            decay_num_samples = int(self.sig_duration * self.sample_rate * decay_t)
+            sustain_num_samples = int(self.sig_duration * self.sample_rate * sustain_t)
+            release_num_samples = int(self.sig_duration * self.sample_rate * release_t)
         else:
-            attack_num_samples = [torch.floor(self.sample_rate * attack_t[k]) for k in range(num_sounds)]
-            decay_num_samples = [torch.floor(self.sample_rate * decay_t[k]) for k in range(num_sounds)]
-            sustain_num_samples = [torch.floor(self.sample_rate * sustain_t[k]) for k in range(num_sounds)]
-            release_num_samples = [torch.floor(self.sample_rate * release_t[k]) for k in range(num_sounds)]
+            attack_num_samples = [torch.floor(self.sig_duration * self.sample_rate * attack_t[k]) for k in range(num_sounds)]
+            decay_num_samples = [torch.floor(self.sig_duration * self.sample_rate * decay_t[k]) for k in range(num_sounds)]
+            sustain_num_samples = [torch.floor(self.sig_duration * self.sample_rate * sustain_t[k]) for k in range(num_sounds)]
+            release_num_samples = [torch.floor(self.sig_duration * self.sample_rate * release_t[k]) for k in range(num_sounds)]
             attack_num_samples = torch.stack(attack_num_samples)
             decay_num_samples = torch.stack(decay_num_samples)
             sustain_num_samples = torch.stack(sustain_num_samples)
@@ -584,9 +584,10 @@ class SynthModules:
 
         enveloped_signal_tensor = torch.tensor((), requires_grad=True).to(self.device)
         first_time = True
-        x = torch.linspace(0, 1.0, self.sample_rate, device=self.device)
+        x = torch.linspace(0, 1.0, int(self.sample_rate * self.sig_duration), device=self.device)
         for i in range(num_sounds):
             if num_sounds == 1:
+                #todo fix according to note off time
                 note_off = attack_t + decay_t + sustain_t
                 attack = x / attack_t
                 attack = torch.clamp(attack, max=1.0)
@@ -598,11 +599,21 @@ class SynthModules:
                 envelope = torch.clamp(envelope, min=0.0, max=1.0)
             else:
                 note_off = attack_t[i] + decay_t[i] + sustain_t[i]
-                attack = x / attack_t[i]
+                attack = x / (attack_t[i] / note_off)
                 attack = torch.clamp(attack, max=1.0)
-                decay = (x - attack_t[i]) * (sustain_level[i] - 1) / (decay_t[i] + 1e-5)
-                decay = torch.clamp(decay, max=0.0)
-                sustain = (x - note_off) * (-sustain_level[i] / (release_t[i] + 1e-5))
+                decay = (x - (attack_t[i] / note_off)) * (sustain_level[i] - 1) / ((decay_t[i] / note_off) + 1e-5)
+                decay = torch.clamp(decay, max=0.0, min=sustain_level[i] - 1)
+                sustain = (x - (note_off / self.sig_duration)) * (-sustain_level[i] / ((release_t[i] / note_off) + 1e-5))
+                sustain = torch.clamp(sustain, max=0.0)
+
+                # A = x / (attack)
+                # A = torch.clamp(A, max=1.0)
+                # D = (x - attack) * (sus_level - 1) / (decay + 1e-5)
+                # D = torch.clamp(D, max=0.0)
+                # D = soft_clamp_min(D, sus_level - 1)
+                # S = (x - note_off) * (-sus_level / (release + 1e-5))
+                # S = torch.clamp(S, max=0.0)
+                # S = soft_clamp_min(S, -sus_level)
 
                 envelope = (attack + decay + sustain)
                 envelope = torch.clamp(envelope, min=0.0, max=1.0)
@@ -664,10 +675,10 @@ class SynthModules:
         if torch.any(attack_t + decay_t + sustain_t + release_t > self.sig_duration):
             raise ValueError("Provided ADSR durations exceeds signal duration")
 
-        attack_num_samples = torch.floor(self.sample_rate * attack_t)
-        decay_num_samples = torch.floor(self.sample_rate * decay_t)
-        sustain_num_samples = torch.floor(self.sample_rate * sustain_t)
-        release_num_samples = torch.floor(self.sample_rate * release_t)
+        attack_num_samples = torch.floor(self.sig_duration * self.sample_rate * attack_t)
+        decay_num_samples = torch.floor(self.sig_duration * self.sample_rate * decay_t)
+        sustain_num_samples = torch.floor(self.sig_duration * self.sample_rate * sustain_t)
+        release_num_samples = torch.floor(self.sig_duration * self.sample_rate * release_t)
 
         attack = torch.cat([torch.linspace(0, 1, int(attack_steps.item()), device=helper.get_device()) for attack_steps
                             in attack_num_samples])
@@ -1062,15 +1073,15 @@ def make_envelope_shape(attack_t,
                        num_sounds)
 
     if num_sounds == 1:
-        attack_num_samples = int(sample_rate * attack_t)
-        decay_num_samples = int(sample_rate * decay_t)
-        sustain_num_samples = int(sample_rate * sustain_t)
-        release_num_samples = int(sample_rate * release_t)
+        attack_num_samples = int(signal_duration * sample_rate * attack_t)
+        decay_num_samples = int(signal_duration * sample_rate * decay_t)
+        sustain_num_samples = int(signal_duration * sample_rate * sustain_t)
+        release_num_samples = int(signal_duration * sample_rate * release_t)
     else:
-        attack_num_samples = [torch.floor(sample_rate * attack_t[k]) for k in range(num_sounds)]
-        decay_num_samples = [torch.floor(sample_rate * decay_t[k]) for k in range(num_sounds)]
-        sustain_num_samples = [torch.floor(sample_rate * sustain_t[k]) for k in range(num_sounds)]
-        release_num_samples = [torch.floor(sample_rate * release_t[k]) for k in range(num_sounds)]
+        attack_num_samples = [torch.floor(signal_duration * sample_rate * attack_t[k]) for k in range(num_sounds)]
+        decay_num_samples = [torch.floor(signal_duration * sample_rate * decay_t[k]) for k in range(num_sounds)]
+        sustain_num_samples = [torch.floor(signal_duration * sample_rate * sustain_t[k]) for k in range(num_sounds)]
+        release_num_samples = [torch.floor(signal_duration * sample_rate * release_t[k]) for k in range(num_sounds)]
         attack_num_samples = torch.stack(attack_num_samples)
         decay_num_samples = torch.stack(decay_num_samples)
         sustain_num_samples = torch.stack(sustain_num_samples)

@@ -318,7 +318,7 @@ def build_envelope_from_adsr(params_dict, cfg, device):
 class Normalizer:
     """ normalize/de-normalise regression parameters"""
 
-    def __init__(self, signal_duration_sec, synth_cfg: SynthConfig):
+    def __init__(self, note_off_time, synth_cfg: SynthConfig):
         self.mod_index_normalizer = MinMaxNormaliser(target_min_val=0,
                                                      target_max_val=1,
                                                      original_min_val=0,
@@ -337,7 +337,7 @@ class Normalizer:
         self.adsr_normalizer = MinMaxNormaliser(target_min_val=0,
                                                 target_max_val=1,
                                                 original_min_val=0,
-                                                original_max_val=signal_duration_sec)
+                                                original_max_val=note_off_time)
 
         self.filter_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                        target_max_val=1,
@@ -346,8 +346,13 @@ class Normalizer:
 
         self.lowpass_filter_resonance_normalizer = MinMaxNormaliser(target_min_val=0,
                                                                     target_max_val=1,
-                                                                    original_min_val=synth_cfg.min_resonance_val,
+                                                                    original_min_val=0,
                                                                     original_max_val=synth_cfg.max_resonance_val)
+
+        self.lowpass_filter_resonance_normalizer = MinMaxNormaliser(target_min_val=0,
+                                                                    target_max_val=1,
+                                                                    original_min_val=0,
+                                                                    original_max_val=synth_cfg.max_amount_tremolo)
 
         self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                            target_max_val=1,
@@ -360,87 +365,31 @@ class Normalizer:
             operation = val['operation'] if isinstance(val['operation'], str) else val['operation'][0]
             params = val['params'] if 'params' in val else val['parameters']
 
-            if operation == 'osc':
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {'amp': params['amp'],
-                          'freq': self.oscillator_freq_normalizer.normalise(params['freq']),
-                          'waveform': params['waveform']
-                          }
-                     }
+            if operation == "None":
+                continue
 
-            elif operation == 'lfo':
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {
-                             'waveform': params['waveform'],
-                             'freq': self.lfo_freq_normalizer.normalise(params['freq'])
-                         }
-                     }
-
-            elif operation == 'fm':
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {'amp_c': params['amp_c'],
-                          'freq_c': self.oscillator_freq_normalizer.normalise(params['freq_c']),
-                          'waveform': params['waveform'],
-                          'mod_index': self.mod_index_normalizer.normalise(params['mod_index'])
-                          }
-                     }
-
-            elif operation == 'filter':
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {'filter_type': params['filter_type'],
-                          'filter_freq': self.filter_freq_normalizer.normalise(params['filter_freq'])
-                          }
-                     }
-
-            elif operation == 'env_adsr':
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {'attack_t': self.adsr_normalizer.normalise(params['attack_t']),
-                          'decay_t': self.adsr_normalizer.normalise(params['decay_t']),
-                          'sustain_t': self.adsr_normalizer.normalise(params['sustain_t']),
-                          'sustain_level': params['sustain_level'],
-                          'release_t': self.filter_freq_normalizer.normalise(params['release_t'])
-                          }
-                     }
-            elif operation in ['fm_sine', 'fm_square', 'fm_saw']:
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {'freq_c': self.oscillator_freq_normalizer.normalise(params['freq_c']),
-                          'mod_index': self.mod_index_normalizer.normalise(params['mod_index'])
-                          }
-                     }
-
-            elif operation == 'amplitude_shape':
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {'attack_t': params['attack_t'],
-                          'decay_t': params['decay_t'],
-                          'sustain_t': params['sustain_t'],
-                          'sustain_level': params['sustain_level'],
-                          'release_t': params['release_t'],
-                          'envelope': params['envelope']
-                          }
-                     }
-
-            elif operation == 'lowpass_filter':
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {'resonance': self.lowpass_filter_resonance_normalizer.normalise(params['resonance']),
-                          'filter_freq': self.filter_freq_normalizer.normalise(params['filter_freq'])
-                          }
-                     }
+            denormalized_params_dict[key] = {'operation': operation, 'parameters': {}}
+            for param_name, param_val in params.items():
+                if (operation in ['osc'] and param_name in ['freq']) or param_name == 'freq_c':
+                    denormalized_params_dict[key]['parameters'][param_name] = \
+                        self.oscillator_freq_normalizer.normalise(params[param_name])
+                elif 'lfo' in operation and param_name in ['freq']:
+                    denormalized_params_dict[key]['parameters'][param_name] = \
+                        self.lfo_freq_normalizer.normalise(params[param_name])
+                elif param_name in ['mod_index']:
+                    denormalized_params_dict[key]['parameters'][param_name] = \
+                        self.mod_index_normalizer.normalise(params[param_name])
+                elif param_name in ['filter_freq']:
+                    denormalized_params_dict[key]['parameters'][param_name] = \
+                        self.filter_freq_normalizer.normalise(params[param_name])
+                elif operation == 'env_adsr' and param_name in ['attack_t', 'decay_t', 'sustain_t']:
+                    denormalized_params_dict[key]['parameters'][param_name] = \
+                        self.adsr_normalizer.normalise(params[param_name])
+                elif param_name in ['resonance']:
+                    denormalized_params_dict[key]['parameters'][param_name] = \
+                        self.lowpass_filter_resonance_normalizer.normalise(params[param_name])
+                else:
+                    denormalized_params_dict[key]['parameters'][param_name] = params[param_name]
 
         return denormalized_params_dict
 

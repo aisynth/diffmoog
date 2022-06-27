@@ -236,7 +236,7 @@ def train(model,
                                                            T_max=num_epochs * len(train_data_loader))
     # scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, model_cfg.learning_rate / 10, model_cfg.learning_rate,
     #                                               mode='triangular2', cycle_momentum=False)
-    normalizer = helper.Normalizer(cfg.signal_duration_sec, synth_cfg)
+    normalizer = helper.Normalizer(synth_cfg.note_off_time, synth_cfg)
 
     loss_handler = {}
     if cfg.spectrogram_loss_type == 'MULTI-SPECTRAL':

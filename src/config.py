@@ -21,7 +21,7 @@ DATA_ROOT = os.path.join(root, 'data')
 class Config:
 
     sample_rate: int = 16000
-    signal_duration_sec: float = 1.0
+    signal_duration_sec: float = 4.0
 
     " Mode - define a common configuration for the whole system     "
     "   0 -                     Use custom configurations           "
@@ -84,8 +84,8 @@ class Config:
     parameters_loss_weight = 1 / 100
     spectrogram_loss_weight = 1 / 50000
 
-    spectrogram_loss_warmup = 200 * 334
-    loss_switch_steps = 100 * 334
+    spectrogram_loss_warmup = 0
+    loss_switch_steps = 100
 
     smoothness_loss_weight = 0
 
@@ -144,7 +144,7 @@ class Config:
 @dataclass
 class DatasetConfig:
     dataset_size: int = 1000
-    batch_size: int = 100
+    batch_size: int = 10
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
     train_audio_dir: str = None
@@ -177,17 +177,17 @@ class DatasetConfig:
 
 @dataclass
 class ModelConfig:
-    preset: str = 'BASIC_FLOW'
+    preset: str = 'MODULAR'
     model_type: str = 'simple'
     backbone: str = 'resnet'
-    batch_size: int = 150
-    num_epochs: int = 400
+    batch_size: int = 10
+    num_epochs: int = 4
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
     optimizer_scheduler_gamma: float = 0.1
     reinforcement_epsilon: float = 0.15
-    num_workers: int = 2
+    num_workers: int = 0
 
 
 @dataclass
@@ -202,6 +202,7 @@ class SynthConfig:
 
     semitones_max_offset: int = 24
     middle_c_freq: float = 261.6255653005985
+    min_amp: float = 0.05
     max_amp: float = 1
     min_mod_index: float = 0.01
     max_mod_index: float = 0.3
@@ -211,12 +212,16 @@ class SynthConfig:
     max_filter_freq: float = 8000
     min_resonance_val: float = 0.01
     max_resonance_val: float = 10
-    min_amount_tremolo = 0.05
-    max_amount_tremolo = 1
+    min_amount_tremolo: float = 0.05
+    max_amount_tremolo: float = 1
+
+    fixed_note_off: bool = True
+    note_off_time: float = 3.0
 
     # non-active operation defaults
     non_active_waveform_default = 'sine'
     non_active_freq_default = 0
+    non_active_amp_default = 0
     non_active_mod_index_default = 0
     non_active_tremolo_amount_default = 0
 
@@ -233,21 +238,25 @@ class SynthConfig:
     seed = 2345124
 
     # Modular synth possible modules from synth_modules.py
-    modular_synth_operations = ['osc', 'fm', 'lfo', 'mix', 'filter', 'env_adsr']
+    modular_synth_operations = ['osc', 'fm', 'lfo', 'mix', 'filter', 'env_adsr', 'fm_lfo', 'lfo_sine', 'lfo_non_sine',
+                                'fm_sine', 'fm_square', 'fm_saw', 'lowpass_filter']
+
     modular_synth_params = {'osc': ['amp', 'freq', 'waveform'],
                             'lfo_sine': ['freq'],
                             'lfo_non_sine': ['freq', 'waveform'],
                             'lfo': ['freq', 'waveform'],
+                            'fm_lfo': ['active', 'fm_active', 'freq_c', 'waveform', 'mod_index'],
                             'fm': ['freq_c', 'waveform', 'mod_index'],
-                            'fm_sine': ['freq_c', 'mod_index'],
-                            'fm_square': ['freq_c', 'mod_index'],
-                            'fm_saw': ['freq_c', 'mod_index'],
-                            'mix': None,
+                            'fm_sine': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
+                            'fm_square': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
+                            'fm_saw': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
+                            'mix': ['active'],
                             'filter': ['filter_freq', 'filter_type'],
                             'lowpass_filter': ['filter_freq', 'resonance'],
                             'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t'],
                             'amplitude_shape': ['envelope', 'attack_t', 'decay_t', 'sustain_t', 'sustain_level',
-                                                'release_t']}
+                                                'release_t'],
+                            'tremolo': ['amount', 'active']}
 
     def __post_init__(self):
         self.wave_type_dic_inv = {v: k for k, v in self.wave_type_dict.items()}

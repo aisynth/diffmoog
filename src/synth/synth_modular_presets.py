@@ -38,7 +38,7 @@ BASIC_FLOW = [
     {'index': (1, 2), 'operation': None, 'audio_input': None, 'synth_config': synth_cfg},
     {'index': (2, 2), 'operation': None, 'audio_input': None, 'synth_config': synth_cfg},
     {'index': (0, 2), 'operation': 'mix', 'audio_input': [[0, 1], [1, 1], [2, 1]], 'synth_config': synth_cfg},
-    {'index': (0, 3), 'operation': 'amplitude_shape', 'default_connection': True, 'synth_config': synth_cfg},
+    {'index': (0, 3), 'operation': 'env_adsr', 'default_connection': True, 'synth_config': synth_cfg},
     {'index': (0, 4), 'operation': 'lowpass_filter', 'default_connection': True, 'synth_config': synth_cfg}
 ]
 

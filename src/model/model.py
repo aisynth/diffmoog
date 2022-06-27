@@ -389,7 +389,9 @@ class SimpleSynthNetwork(nn.Module):
                                            len(SynthConfig.filter_type_dict)])
                 elif param == 'envelope':
                     param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE * 4, LATENT_SPACE_SIZE * 8,
-                                           self.cfg.sample_rate])
+                                           self.cfg.sample_rate * self.cfg.signal_duration_sec])
+                elif param in ['active', 'fm_active']:
+                    param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 2])
                 else:
                     param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
 

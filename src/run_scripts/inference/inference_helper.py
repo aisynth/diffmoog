@@ -64,8 +64,13 @@ def process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn
 
     results, metrics = {}, defaultdict(float)
 
-    raw_target_signal, target_param_dict, signal_index = input_batch
-    num_sounds = len(signal_index)
+    if isinstance(input_batch, tuple):
+        raw_target_signal, _, _ = input_batch
+    else:
+        raw_target_signal = input_batch
+
+    assert raw_target_signal.ndim >= 2, f"Expected input to be of shape (batch, ..., signal_length) but got {raw_target_signal.shape} instead"
+    num_sounds = len(raw_target_signal)
 
     # -----------Run Model-----------------
     raw_target_signal = raw_target_signal.to(device)

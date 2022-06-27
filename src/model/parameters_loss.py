@@ -80,6 +80,17 @@ class ParametersLoss:
 
                     target_parameters['filter_type'] = torch.tensor(filter_type_list)
 
+                elif param in ['active', 'fm_active']:
+                    active_list = []
+                    for idx, is_active in enumerate(target_parameters[param]):
+                        if is_active:
+                            probabilities = [1., 0.]
+                        else:
+                            probabilities = [0., 1.]
+                        active_list.append(probabilities)
+
+                    target_parameters[param] = torch.tensor(active_list)
+
                 elif param == 'envelope':
                     attack_t = target_parameters['attack_t']
                     decay_t = target_parameters['decay_t']

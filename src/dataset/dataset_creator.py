@@ -1,4 +1,6 @@
-import os
+import os, sys
+sys.path.append("..")
+
 import pandas as pd
 import scipy.io.wavfile
 import torch
@@ -7,6 +9,7 @@ from config import SynthConfig, DatasetConfig, Config
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from synth.synth_architecture import SynthModular
 import numpy as np
+
 
 """
 Create a dataset by randomizing synthesizer parameters and generating sound.
@@ -52,6 +55,8 @@ def create_dataset(split: str, dataset_cfg: DatasetConfig, synth_cfg: SynthConfi
                              num_sounds_=dataset_cfg.dataset_size,
                              device=device,
                              preset=synth_cfg.preset)
+
+    np.random.seed(synth_cfg.seed)
 
     num_batches = dataset_cfg.dataset_size // dataset_cfg.batch_size
     for batch_idx in range(num_batches):
