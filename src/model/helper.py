@@ -400,95 +400,31 @@ class Normalizer:
             operation = val['operation']
             params = val['params'] if 'params' in val else val['parameters']
 
-            if operation == 'osc':
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {'amp': params['amp'],
-                          'freq': self.oscillator_freq_normalizer.denormalise(params['freq']),
-                          'waveform': params['waveform']
-                          }
-                     }
+            if operation == "None":
+                continue
 
-            elif operation in ['lfo', 'lfo_non_sine']:
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {
-                             'freq': self.lfo_freq_normalizer.denormalise(params['freq']),
-                             'waveform': params['waveform']
-                         }
-                     }
-            elif operation == 'lfo_sine':
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {
-                             'freq': self.lfo_freq_normalizer.denormalise(params['freq']),
-                         }
-                     }
-
-            elif operation == 'fm':
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {'freq_c': self.oscillator_freq_normalizer.denormalise(params['freq_c']),
-                          'waveform': params['waveform'],
-                          'mod_index': self.mod_index_normalizer.denormalise(params['mod_index'])
-                          }
-                     }
-
-            elif operation in ['fm_sine', 'fm_square', 'fm_saw']:
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {'freq_c': self.oscillator_freq_normalizer.denormalise(params['freq_c']),
-                          'mod_index': self.mod_index_normalizer.denormalise(params['mod_index'])
-                          }
-                     }
-
-            elif operation == 'filter':
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {'filter_type': params['filter_type'],
-                          'filter_freq': self.filter_freq_normalizer.denormalise(params['filter_freq'])
-                          }
-                     }
-
-            elif operation == 'lowpass_filter':
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {'resonance': self.lowpass_filter_resonance_normalizer.denormalise(params['resonance']),
-                          'filter_freq': self.filter_freq_normalizer.denormalise(params['filter_freq'])
-                          }
-                     }
-
-            elif operation == 'env_adsr':
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {'attack_t': self.adsr_normalizer.denormalise(params['attack_t']),
-                          'decay_t': self.adsr_normalizer.denormalise(params['decay_t']),
-                          'sustain_t': self.adsr_normalizer.denormalise(params['sustain_t']),
-                          'sustain_level': params['sustain_level'],
-                          'release_t': self.filter_freq_normalizer.denormalise(params['release_t'])
-                          }
-                     }
-
-            elif operation == 'amplitude_shape':
-                denormalized_params_dict[key] = \
-                    {'operation': operation,
-                     'parameters':
-                         {'attack_t': params['attack_t'],
-                          'decay_t': params['decay_t'],
-                          'sustain_t': params['sustain_t'],
-                          'sustain_level': params['sustain_level'],
-                          'release_t': params['release_t'],
-                          'envelope': params['envelope']
-                          }
-                     }
+            denormalized_params_dict[key] = {'operation': operation, 'parameters': {}}
+            for param_name, param_val in params.items():
+                if (operation in ['osc'] and param_name in ['freq']) or param_name == 'freq_c':
+                    denormalized_params_dict[key]['parameters'][param_name] = \
+                        self.oscillator_freq_normalizer.denormalise(params[param_name])
+                elif 'lfo' in operation and param_name in ['freq']:
+                    denormalized_params_dict[key]['parameters'][param_name] = \
+                        self.lfo_freq_normalizer.denormalise(params[param_name])
+                elif param_name in ['mod_index']:
+                    denormalized_params_dict[key]['parameters'][param_name] = \
+                        self.mod_index_normalizer.denormalise(params[param_name])
+                elif param_name in ['filter_freq']:
+                    denormalized_params_dict[key]['parameters'][param_name] = \
+                        self.filter_freq_normalizer.denormalise(params[param_name])
+                elif operation == 'env_adsr' and param_name in ['attack_t', 'decay_t', 'sustain_t']:
+                    denormalized_params_dict[key]['parameters'][param_name] = \
+                        self.adsr_normalizer.denormalise(params[param_name])
+                elif param_name in ['resonance']:
+                    denormalized_params_dict[key]['parameters'][param_name] = \
+                        self.lowpass_filter_resonance_normalizer.denormalise(params[param_name])
+                else:
+                    denormalized_params_dict[key]['parameters'][param_name] = params[param_name]
 
         return denormalized_params_dict
 

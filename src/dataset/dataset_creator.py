@@ -27,9 +27,10 @@ Configurations settings are inside config file.
 """
 
 
-def create_dataset(split: str, dataset_cfg: DatasetConfig, synth_cfg: SynthConfig, cfg: Config, device: torch.device):
+def create_dataset(split: str, size: int, dataset_cfg: DatasetConfig, synth_cfg: SynthConfig, cfg: Config,
+                   device: torch.device):
     dataset_parameters = []
-    print(f"Creating dataset \n Size = {dataset_cfg.dataset_size}")
+    print(f"Creating dataset \n Size = {size}")
     print(f" Type = {split} \n")
 
     # init paths
@@ -58,7 +59,7 @@ def create_dataset(split: str, dataset_cfg: DatasetConfig, synth_cfg: SynthConfi
 
     np.random.seed(synth_cfg.seed)
 
-    num_batches = dataset_cfg.dataset_size // dataset_cfg.batch_size
+    num_batches = size // dataset_cfg.batch_size
     for batch_idx in range(num_batches):
 
         if synth_cfg.preset == 'MODULAR':
@@ -116,6 +117,7 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--gpu_index', help='index of gpu (if exist, torch indexing) -1 for cpu',
                         type=int, default=-1)
     parser.add_argument('-s', '--split', required=True)
+    parser.add_argument('-k', '--size', required=True)
     parser.add_argument('-n', '--name', required=True, help='name of dataset')
     args = parser.parse_args()
 
@@ -124,6 +126,7 @@ if __name__ == '__main__':
     dataset_cfg = DatasetConfig(args.name)
 
     device = helper.get_device(args.gpu_index)
-    create_dataset(split=args.split, dataset_cfg=dataset_cfg, synth_cfg=synth_cfg, cfg=cfg, device=device)
+    create_dataset(split=args.split, size=args.size, dataset_cfg=dataset_cfg, synth_cfg=synth_cfg, cfg=cfg,
+                   device=device)
 
 

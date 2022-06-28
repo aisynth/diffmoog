@@ -2,25 +2,23 @@ import torch
 import torch.nn.functional as F
 
 
-def sample_gumbel(shape, is_cuda=True, eps=1e-20):
-    U = torch.rand(shape)
-    if is_cuda:
-        U = U.cuda()
+def sample_gumbel(shape, device, eps=1e-20):
+    U = torch.rand(shape, device=device)
     return -torch.log(-torch.log(U + eps) + eps)
 
 
-def gumbel_softmax_sample(logits, temperature):
-    y = logits + sample_gumbel(logits.size())
+def gumbel_softmax_sample(logits, temperature, device):
+    y = logits + sample_gumbel(logits.size(), device)
     return F.softmax(y / temperature, dim=-1)
 
 
-def gumbel_softmax(logits, temperature=1, hard=False):
+def gumbel_softmax(logits, temperature=1, hard=False, device='cuda:0'):
     """
     ST-gumple-softmax
     input: [*, n_class]
     return: flatten --> [*, n_class] an one-hot vector
     """
-    y = gumbel_softmax_sample(logits, temperature)
+    y = gumbel_softmax_sample(logits, temperature, device)
 
     if not hard:
         return y

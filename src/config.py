@@ -84,8 +84,8 @@ class Config:
     parameters_loss_weight = 1 / 100
     spectrogram_loss_weight = 1 / 50000
 
-    spectrogram_loss_warmup = 0
-    loss_switch_steps = 100
+    spectrogram_loss_warmup = 50 * 400
+    loss_switch_steps = 30 * 400
 
     smoothness_loss_weight = 0
 
@@ -143,8 +143,7 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    dataset_size: int = 1000
-    batch_size: int = 10
+    batch_size: int = 100
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
     train_audio_dir: str = None
@@ -180,14 +179,14 @@ class ModelConfig:
     preset: str = 'MODULAR'
     model_type: str = 'simple'
     backbone: str = 'resnet'
-    batch_size: int = 10
-    num_epochs: int = 4
+    batch_size: int = 50
+    num_epochs: int = 100
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
     optimizer_scheduler_gamma: float = 0.1
     reinforcement_epsilon: float = 0.15
-    num_workers: int = 0
+    num_workers: int = 2
 
 
 @dataclass
@@ -208,7 +207,7 @@ class SynthConfig:
     max_mod_index: float = 0.3
     min_lfo_freq: float = 0.5
     max_lfo_freq: float = 20
-    min_filter_freq: float = 0
+    min_filter_freq: float = 100
     max_filter_freq: float = 8000
     min_resonance_val: float = 0.01
     max_resonance_val: float = 10
@@ -242,7 +241,7 @@ class SynthConfig:
                                 'fm_sine', 'fm_square', 'fm_saw', 'lowpass_filter']
 
     modular_synth_params = {'osc': ['amp', 'freq', 'waveform'],
-                            'lfo_sine': ['freq'],
+                            'lfo_sine': ['active', 'freq'],
                             'lfo_non_sine': ['freq', 'waveform'],
                             'lfo': ['freq', 'waveform'],
                             'fm_lfo': ['active', 'fm_active', 'freq_c', 'waveform', 'mod_index'],

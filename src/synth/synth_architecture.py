@@ -10,6 +10,8 @@ from torch import nn
 from model import helper
 from synth.synth_modules import SynthModules, make_envelope_shape
 
+from model.gumble_softmax import gumbel_softmax
+
 
 class SynthModularCell:
 
@@ -203,7 +205,7 @@ class SynthModular:
                 operation_params = {}
                 if operation == 'osc':
                     operation_params = {'amp': np.random.random_sample(size=num_sounds_),
-                                        'freq': random.choices(synth_cfg.osc_freq_list, k=num_sounds_),
+                                        'freq': np.asarray(random.choices(synth_cfg.osc_freq_list, k=num_sounds_)),
                                         'waveform': random.choices(list(synth_cfg.wave_type_dict), k=num_sounds_)}
 
                 elif operation == 'lfo':
@@ -240,26 +242,26 @@ class SynthModular:
                                                   high=synth_cfg.max_mod_index,
                                                   size=num_sounds_)
 
-                    operation_params['freq_c'] = [freq_c[k] if activity_flags[k] else synth_cfg.non_active_freq_default
-                                                  for k in range(num_sounds_)]
+                    operation_params['freq_c'] = np.asarray([freq_c[k] if activity_flags[k] else synth_cfg.non_active_freq_default
+                                                  for k in range(num_sounds_)])
                     operation_params['waveform'] = [waveform[k] if activity_flags[k]
                                                     else synth_cfg.non_active_waveform_default
                                                     for k in range(num_sounds_)]
-                    operation_params['mod_index'] = [mod_index[k] if fm_activity_flags[k]
+                    operation_params['mod_index'] = np.asarray([mod_index[k] if fm_activity_flags[k]
                                                      else synth_cfg.non_active_mod_index_default
-                                                     for k in range(num_sounds_)]
+                                                     for k in range(num_sounds_)])
 
                 elif operation in ['fm_sine', 'fm_square', 'fm_saw']:
                     amp_c = np.random.uniform(low=synth_cfg.min_amp, high=synth_cfg.max_amp, size=num_sounds_)
                     freq_c = self._sample_c_freq(synth_cfg, num_sounds_)
                     mod_index = np.random.uniform(low=0, high=synth_cfg.max_mod_index, size=num_sounds_)
-                    operation_params['amp_c'] = [amp_c[k] if activity_flags[k] else synth_cfg.non_active_amp_default
-                                                 for k in range(num_sounds_)]
-                    operation_params['freq_c'] = [freq_c[k] if activity_flags[k] else synth_cfg.non_active_freq_default
-                                                  for k in range(num_sounds_)]
-                    operation_params['mod_index'] = [mod_index[k] if fm_activity_flags[k]
+                    operation_params['amp_c'] = np.asarray([amp_c[k] if activity_flags[k] else synth_cfg.non_active_amp_default
+                                                 for k in range(num_sounds_)])
+                    operation_params['freq_c'] = np.asarray([freq_c[k] if activity_flags[k] else synth_cfg.non_active_freq_default
+                                                  for k in range(num_sounds_)])
+                    operation_params['mod_index'] = np.asarray([mod_index[k] if fm_activity_flags[k]
                                                      else synth_cfg.non_active_mod_index_default
-                                                     for k in range(num_sounds_)]
+                                                     for k in range(num_sounds_)])
 
                 elif operation == 'mix':
                     operation_params = None
@@ -315,17 +317,17 @@ class SynthModular:
                                                high=synth_cfg.max_amount_tremolo,
                                                size=num_sounds_)
 
-                    operation_params['amount'] = [
+                    operation_params['amount'] = np.asarray([
                         amount[k] if activity_flags[k] else synth_cfg.non_active_tremolo_amount_default for k in
-                        range(num_sounds_)]
+                        range(num_sounds_)])
 
                 elif operation is None:
                     operation_params = None
-
-                if operation_params is not None:
-                    for key, val in operation_params.items():
-                        if isinstance(val, numpy.ndarray):
-                            operation_params[key] = val.tolist()
+                #
+                # if operation_params is not None:
+                #     for key, val in operation_params.items():
+                #         if isinstance(val, numpy.ndarray):
+                #             operation_params[key] = val.tolist()
 
                     if num_sounds_ == 1:
                         for key, value in operation_params.items():
@@ -492,36 +494,32 @@ class SynthModular:
                                                                 phase=0,
                                                                 waveform=cell.parameters['waveform'])
                 elif operation == 'lfo_sine':
-                    #todo add conditional where not-active, zerorize freq.
-                    cell.signal = synth_module.batch_oscillator(amp=1.0,
-                                                                freq=cell.parameters['freq'],
+                    active_signal = self.process_active_signal(cell.parameters['active']).to(self.device)
+                    activated_freq = active_signal.squeeze() * torch.tensor(cell.parameters['freq'], device=self.device).squeeze()
+                    cell.signal = synth_module.batch_oscillator(amp=active_signal.float().squeeze(),
+                                                                freq=activated_freq,
                                                                 phase=0,
                                                                 waveform='sine')
 
                 elif operation in ['fm', 'fm_lfo', 'fm_sine', 'fm_square', 'fm_saw']:
-                    if cell.control_input is not None and len(cell.control_input) == 1:
-                        control_input_cell_index = cell.control_input[0]
-                        control_input_cell = self.synth_matrix[control_input_cell_index[0]][control_input_cell_index[1]]
-                        control_input_cell_signal = control_input_cell.signal
-                        zeros_tensor = torch.zeros_like(control_input_cell_signal)
-                        fm_active_list_broadcast = cell.parameters['fm_active']
-                        fm_active_torch_broadcast = torch.unsqueeze(torch.tensor(fm_active_list_broadcast).T.to(self.device), dim=1)
-                        modulator = torch.where(fm_active_torch_broadcast, control_input_cell_signal, zeros_tensor)
-                        # todo add conditional where fm_not-active, zerorize mod_index.
-                        # todo add conditional where not-active, zerorize freq_c.
+                    fm_active_signal = self.process_active_signal(cell.parameters['fm_active']).to(self.device)
+                    active_signal = self.process_active_signal(cell.parameters['active']).to(self.device)
 
-                        # modulator = input_cell.signal
-                    elif cell.control_input is None:
-                        modulator = 0
-                    else:
-                        modulator = 0
-                        AttributeError("Illegal cell input")
+                    activated_freq_c = active_signal.squeeze() * torch.tensor(cell.parameters['freq_c'],
+                                                                              device=self.device).squeeze()
+                    activated_mod_index = fm_active_signal.squeeze() * torch.tensor(cell.parameters['mod_index'],
+                                                                                    device=self.device).squeeze()
+
+                    control_input_cell_index = cell.control_input[0]
+                    control_input_cell = self.synth_matrix[control_input_cell_index[0]][control_input_cell_index[1]]
+                    control_input_cell_signal = control_input_cell.signal
+                    modulator = fm_active_signal * control_input_cell_signal
 
                     if operation in ['fm', 'fm_lfo']:
                         cell.signal = synth_module.batch_oscillator_fm(amp_c=1.0,
-                                                                       freq_c=cell.parameters['freq_c'],
+                                                                       freq_c=activated_freq_c,
                                                                        waveform=cell.parameters['waveform'],
-                                                                       mod_index=cell.parameters['mod_index'],
+                                                                       mod_index=activated_mod_index,
                                                                        modulator=modulator)
                     else:
                         if operation == 'fm_sine':
@@ -531,12 +529,12 @@ class SynthModular:
                         elif operation == 'fm_saw':
                             waveform = 'sawtooth'
                         else:
-                            ValueError("Unsupported waveform")
+                            raise ValueError("Unsupported waveform")
                         cell.signal = \
                             synth_module.batch_specific_waveform_oscillator_fm(amp_c=cell.parameters['amp_c'],
-                                                                               freq_c=cell.parameters['freq_c'],
+                                                                               freq_c=activated_freq_c,
                                                                                waveform=waveform,
-                                                                               mod_index=cell.parameters['mod_index'],
+                                                                               mod_index=activated_mod_index,
                                                                                modulator=modulator)
 
                 elif operation == 'mix':
@@ -661,21 +659,15 @@ class SynthModular:
                         control_input_cell_index = cell.control_input[0]
                         control_input_cell = self.synth_matrix[control_input_cell_index[0]][control_input_cell_index[1]]
                         control_input_cell_signal = control_input_cell.signal
-
-                        zeros_tensor = torch.zeros_like(control_input_cell_signal)
-                        active_list_broadcast = [cell.parameters['active'] for k in
-                                                 range(control_input_cell.signal.shape[1])]
-                        fm_active_torch_broadcast = torch.tensor(active_list_broadcast).T.to(self.device)
-                        modulator = torch.where(fm_active_torch_broadcast, control_input_cell_signal, zeros_tensor)
-                        #todo add conditional where not-active, zerorize amount.
-
+                        active_signal = self.process_active_signal(cell.parameters['active']).to(self.device)
+                        modulator = active_signal * control_input_cell_signal
                     else:
                         modulator = 0
                         AttributeError("Illegal cell control input")
 
                     cell.signal = synth_module.tremolo_by_modulator_signal(input_signal=input_signal,
                                                                            modulator_signal=modulator,
-                                                                           amount=cell.parameters['amount'])
+                                                                           amount=cell.parameters['amount'].squeeze())
 
                 output_signals[f"({channel}, {layer})"] = cell.signal
 
@@ -749,8 +741,17 @@ class SynthModular:
         return osc_freq_list[idx]
 
     def process_active_signal(self, active_vector):
-        # TODO: implement
-        pass
+
+        if not isinstance(active_vector, torch.Tensor):
+            active_vector = torch.tensor(active_vector)
+
+        if active_vector.dtype == torch.bool:
+            ret_active_vector = active_vector.long().unsqueeze(1)
+            return ret_active_vector
+
+        active_vector_gumble = gumbel_softmax(active_vector, hard=True, device=self.device)
+        ret_active_vector = active_vector_gumble[:, :1]
+        return ret_active_vector
 
 
 if __name__ == "__main__":

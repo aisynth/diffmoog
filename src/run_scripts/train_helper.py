@@ -126,6 +126,9 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
                 # pdist = torch.nn.PairwiseDistance(p=2)
                 diff = [np.linalg.norm(pred_vals[k] - target_vals[k]) for k in range(pred_vals.shape[0])]
                 # diff = dist(pred_vals, target_vals)
+            elif param_name in ['active', 'fm_active']:
+                active_idx = [0 if f else 1 for f in target_vals]
+                diff = [1 - v[idx] for idx, v in zip(active_idx, pred_vals)]
             else:
                 diff = np.abs(target_vals.squeeze() - pred_vals.squeeze())
 
