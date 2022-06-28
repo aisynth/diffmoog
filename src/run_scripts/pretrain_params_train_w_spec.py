@@ -126,8 +126,8 @@ def train_single_epoch(model,
                 weighted_params_loss = parameters_loss * cfg.parameters_loss_weight
                 weighted_spec_loss = 0
             elif step < (cfg.spectrogram_loss_warmup + cfg.loss_switch_steps):
-                parameters_loss_decay_factor = 1 - ((step - cfg.loss_switch_steps) / cfg.loss_switch_steps)
-                spec_loss_increase_factor = ((step - cfg.loss_switch_steps) / cfg.loss_switch_steps)
+                parameters_loss_decay_factor = 1 - ((step - cfg.spectrogram_loss_warmup) / cfg.loss_switch_steps)
+                spec_loss_increase_factor = ((step - cfg.spectrogram_loss_warmup) / cfg.loss_switch_steps)
 
                 weighted_params_loss = parameters_loss * cfg.parameters_loss_weight * parameters_loss_decay_factor
                 weighted_spec_loss = cfg.spectrogram_loss_weight * spectrogram_loss * spec_loss_increase_factor

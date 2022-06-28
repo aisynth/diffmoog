@@ -211,7 +211,7 @@ def mae(spec1, spec2):
 
     assert spec1.ndim == 3 and spec2.ndim == 3, "Input must be a batch of 2d spectrograms"
 
-    abs_diff = np.abs(np.log10(spec1) - np.log10(spec2))
+    abs_diff = np.abs(np.log10(spec1 + 1e-5) - np.log10(spec2 + 1e-5))
     mae_val = [sample_diff.mean() for sample_diff in abs_diff]
 
     return mae_val

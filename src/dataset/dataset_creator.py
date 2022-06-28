@@ -53,7 +53,7 @@ def create_dataset(split: str, size: int, dataset_cfg: DatasetConfig, synth_cfg:
     synth_obj = SynthModular(synth_cfg=synth_cfg,
                              sample_rate=cfg.sample_rate,
                              signal_duration_sec=cfg.signal_duration_sec,
-                             num_sounds_=dataset_cfg.dataset_size,
+                             num_sounds_=size,
                              device=device,
                              preset=synth_cfg.preset)
 
@@ -117,7 +117,7 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--gpu_index', help='index of gpu (if exist, torch indexing) -1 for cpu',
                         type=int, default=-1)
     parser.add_argument('-s', '--split', required=True)
-    parser.add_argument('-k', '--size', required=True)
+    parser.add_argument('-k', '--size', required=True, type=int)
     parser.add_argument('-n', '--name', required=True, help='name of dataset')
     args = parser.parse_args()
 
