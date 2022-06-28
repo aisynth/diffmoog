@@ -24,7 +24,8 @@ def inference_loop(cfg: Config, synth_cfg: SynthConfig, synth: SynthModular, tes
 
         input_batch = (raw_target_signal, target_param_dict, signal_index)
 
-        _, metrics = process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn, synth, device, cfg)
+        _, metrics = process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn, synth, device, cfg,
+                                             synth_cfg)
         for k, val in metrics.items():
             results[k] += val
 
@@ -60,7 +61,7 @@ def inference_loop(cfg: Config, synth_cfg: SynthConfig, synth: SynthModular, tes
     return results
 
 
-def process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn, synth, device, cfg):
+def process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn, synth, device, cfg, synth_cfg):
 
     results, metrics = {}, defaultdict(float)
 
@@ -77,6 +78,8 @@ def process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn
     target_signal_spectrogram = preprocess_fn(raw_target_signal)
     model_output = eval_fn(target_signal_spectrogram)
     processed_output = post_process_fn(model_output) if post_process_fn is not None else model_output
+
+    processed_output = helper.clamp_adsr_params(processed_output, synth_cfg, cfg)
 
     synth.update_cells_from_dict(processed_output)
     pred_final_signal, pred_signals_through_chain = \
