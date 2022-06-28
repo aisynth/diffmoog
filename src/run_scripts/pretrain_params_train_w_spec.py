@@ -152,6 +152,7 @@ def train_single_epoch(model,
             summary_writer.add_scalar('loss/train_parameters_loss_raw', parameters_loss, step)
             summary_writer.add_scalar('loss/train_parameters_loss_weighted', weighted_params_loss, step)
             summary_writer.add_scalar('loss/train_spectral_loss_weighted', weighted_spec_loss, step)
+            summary_writer.add_scalar('loss/train_spectral_loss_raw', spectrogram_loss, step)
             summary_writer.add_scalar('metrics/lsd', lsd_value, step)
             summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
 

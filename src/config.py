@@ -84,8 +84,8 @@ class Config:
     parameters_loss_weight = 1 / 100
     spectrogram_loss_weight = 1 / 50000
 
-    spectrogram_loss_warmup = 10
-    loss_switch_steps = 50 * 100
+    spectrogram_loss_warmup = 40 * 100
+    loss_switch_steps = 20 * 100
 
     smoothness_loss_weight = 0
 
