@@ -591,25 +591,11 @@ class SynthModules:
         x = torch.linspace(0, 1.0, n_samples)[None, :].repeat(batch_size, 1)
 
         #todo: refactor dimensions and let synth get only tensors!
-        if torch.is_tensor(attack_t):
-            if attack_t.ndim == 1:
-                attack_time = attack_t.unsqueeze(-1)
-                decay_time = decay_t.unsqueeze(-1)
-                sustain_time = sustain_t.unsqueeze(-1)
-                release_time = release_t.unsqueeze(-1)
-                current_sustain_level = sustain_level.unsqueeze(-1)
-            else:
-                attack_time = attack_t
-                decay_time = decay_t
-                sustain_time = sustain_t
-                release_time = release_t
-                current_sustain_level = sustain_level
-        else:
-            attack_time = torch.tensor(attack_t).unsqueeze(-1)
-            decay_time = torch.tensor(decay_t).unsqueeze(-1)
-            sustain_time = torch.tensor(sustain_t).unsqueeze(-1)
-            release_time = torch.tensor(release_t).unsqueeze(-1)
-            current_sustain_level = torch.tensor(sustain_level).unsqueeze(-1)
+        attack_time = self._standardize_batch_input(attack_t, requested_dtype=torch.float32, requested_dims=2)
+        decay_time = self._standardize_batch_input(decay_t, requested_dtype=torch.float32, requested_dims=2)
+        sustain_time = self._standardize_batch_input(sustain_t, requested_dtype=torch.float32, requested_dims=2)
+        release_time = self._standardize_batch_input(release_t, requested_dtype=torch.float32, requested_dims=2)
+        current_sustain_level = self._standardize_batch_input(sustain_level, requested_dtype=torch.float32, requested_dims=2)
 
         relative_attack = attack_time / self.sig_duration
         relative_decay = decay_time / self.sig_duration
@@ -976,8 +962,9 @@ class SynthModules:
         if isinstance(amount, list):
             if max(amount) > 1 or min(amount) < 0:
                 ValueError("amount is out of range [0, 1]")
-        amount_unsqueezed = amount.unsqueeze(dim=1)
-        tremolo = torch.add(torch.mul(amount_unsqueezed, (modulator_signal + 1) / 2), (1 - amount_unsqueezed))
+
+        amount = self._standardize_batch_input(amount, requested_dtype=torch.float64, requested_dims=2)
+        tremolo = torch.add(torch.mul(amount, (modulator_signal + 1) / 2), (1 - amount))
 
         tremolo_signal = input_signal * tremolo
 

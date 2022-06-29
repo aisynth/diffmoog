@@ -495,7 +495,14 @@ class SynthModular:
                                                                 waveform=cell.parameters['waveform'])
                 elif operation == 'lfo_sine':
                     active_signal = self.process_active_signal(cell.parameters['active']).to(self.device)
-                    activated_freq = active_signal.squeeze() * torch.tensor(cell.parameters['freq'], device=self.device).squeeze()
+
+                    #todo: standartize input
+                    if torch.is_tensor(cell.parameters['freq']):
+                        activated_freq = active_signal.squeeze() * cell.parameters['freq'].squeeze()
+                    else:
+                        activated_freq = active_signal.squeeze() * torch.tensor(cell.parameters['freq'],
+                                                                              device=self.device).squeeze()
+
                     cell.signal = synth_module.batch_oscillator(amp=active_signal.float().squeeze(),
                                                                 freq=activated_freq,
                                                                 phase=0,
@@ -505,10 +512,19 @@ class SynthModular:
                     fm_active_signal = self.process_active_signal(cell.parameters['fm_active']).to(self.device)
                     active_signal = self.process_active_signal(cell.parameters['active']).to(self.device)
 
-                    activated_freq_c = active_signal.squeeze() * torch.tensor(cell.parameters['freq_c'],
+                    # todo: standartize input
+                    if torch.is_tensor(cell.parameters['freq_c']):
+                        activated_freq_c = active_signal.squeeze() * cell.parameters['freq_c'].squeeze()
+                    else:
+                        activated_freq_c = active_signal.squeeze() * torch.tensor(cell.parameters['freq_c'],
                                                                               device=self.device).squeeze()
-                    activated_mod_index = fm_active_signal.squeeze() * torch.tensor(cell.parameters['mod_index'],
-                                                                                    device=self.device).squeeze()
+
+                    if torch.is_tensor(cell.parameters['mod_index']):
+                        activated_mod_index = fm_active_signal.squeeze() * cell.parameters['mod_index'].squeeze()
+                    else:
+                        activated_mod_index = fm_active_signal.squeeze() * torch.tensor(cell.parameters['mod_index'],
+                                                                              device=self.device).squeeze()
+                    ##############
 
                     control_input_cell_index = cell.control_input[0]
                     control_input_cell = self.synth_matrix[control_input_cell_index[0]][control_input_cell_index[1]]
