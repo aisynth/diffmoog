@@ -575,79 +575,76 @@ class SynthModules:
             """
         check_adsr_timings(attack_t, decay_t, sustain_t, sustain_level, release_t, self.sig_duration, num_sounds)
 
+        #todo: refactor function and remove unecessary code. make sure it also accpets tensors as input
         if num_sounds > 1:
             if torch.is_tensor(sustain_level[0]):
                 sustain_level = [sustain_level[i] for i in range(num_sounds)]
                 sustain_level = torch.stack(sustain_level)
             else:
-                sustain_level = [sustain_level[i] for i in range(num_sounds)]
+                # sustain_level = [sustain_level[i] for i in range(num_sounds)]
+                pass
 
         enveloped_signal_tensor = torch.tensor((), requires_grad=True).to(self.device)
         first_time = True
-        x = torch.linspace(0, 1.0, int(self.sample_rate * self.sig_duration))
-        #todo: implement this in vectorized manner
-        # x = torch.linspace(0, 1.0, n_frames)[None, :, None].repeat(batch_size, 1, self.channels)
-        for i in range(num_sounds):
-            if num_sounds == 1:
-                attack_time = attack_t
-                decay_time = decay_t
-                sustain_time = sustain_t
-                release_time = release_t
-                sustain_level = float(sustain_level)
-            else:
-                attack_time = attack_t[i]
-                decay_time = decay_t[i]
-                sustain_time = sustain_t[i]
-                release_time = release_t[i]
-                current_sustain_level = sustain_level[i]
+        n_samples = int(self.sample_rate * self.sig_duration)
+        batch_size = input_signal.shape[0]
+        x = torch.linspace(0, 1.0, n_samples)[None, :].repeat(batch_size, 1)
 
-            relative_attack = attack_time / self.sig_duration
-            relative_decay = decay_time / self.sig_duration
-            relative_sustain = sustain_time / self.sig_duration
-            relative_release = release_time / self.sig_duration
-            relative_note_off = relative_attack + relative_decay + relative_sustain
-            attack = x / relative_attack
-            attack = torch.clamp(attack, max=1.0)
-            decay = (x - relative_attack) * (current_sustain_level - 1) / (relative_decay + 1e-5)
-            decay = torch.clamp(decay, max=0.0, min=current_sustain_level - 1)
-            sustain = (x - relative_note_off) * (-current_sustain_level / (relative_release + 1e-5))
-            sustain = torch.clamp(sustain, max=0.0)
+        attack_time = torch.tensor(attack_t).unsqueeze(-1)
+        decay_time = torch.tensor(decay_t).unsqueeze(-1)
+        sustain_time = torch.tensor(sustain_t).unsqueeze(-1)
+        release_time = torch.tensor(release_t).unsqueeze(-1)
+        current_sustain_level = torch.tensor(sustain_level).unsqueeze(-1)
 
-            envelope = (attack + decay + sustain)
-            envelope = torch.clamp(envelope, min=0.0, max=1.0)
+        relative_attack = attack_time / self.sig_duration
+        relative_decay = decay_time / self.sig_duration
+        relative_sustain = sustain_time / self.sig_duration
+        relative_release = release_time / self.sig_duration
+        relative_note_off = relative_attack + relative_decay + relative_sustain
+        attack = x / relative_attack
+        attack = torch.clamp(attack, max=1.0)
+        decay = (x - relative_attack) * (current_sustain_level - 1) / (relative_decay + 1e-5)
+        decay = torch.clamp(decay, max=torch.tensor(0), min=current_sustain_level - 1)
+        sustain = (x - relative_note_off) * (-current_sustain_level / (relative_release + 1e-5))
+        sustain = torch.clamp(sustain, max=0.0)
 
-            envelope = helper.move_to(envelope, self.device)
+        envelope = (attack + decay + sustain)
+        envelope = torch.clamp(envelope, min=0.0, max=1.0)
 
-            envelope_len = envelope.shape[0]
-            signal_len = self.time_samples.shape[0]
+        envelope = helper.move_to(envelope, self.device)
 
-            if envelope_len == signal_len:
-                pass
-            elif envelope_len < signal_len:
-                padding = torch.zeros((signal_len - envelope_len), device=self.device)
-                envelope = torch.cat((envelope, padding))
-            else:
-                raise ValueError("Envelope length exceeds signal duration")
+        #todo: consider removing this. current code always satisfy corresponding vector lengths.
 
-            if torch.is_tensor(input_signal) and num_sounds > 1:
-                signal_to_shape = input_signal[i]
-            else:
-                signal_to_shape = input_signal
+        # envelope_len = envelope.shape[0]
+        # signal_len = self.time_samples.shape[0]
+        #
+        # if envelope_len == signal_len:
+        #     pass
+        # elif envelope_len < signal_len:
+        #     padding = torch.zeros((signal_len - envelope_len), device=self.device)
+        #     envelope = torch.cat((envelope, padding))
+        # else:
+        #     raise ValueError("Envelope length exceeds signal duration")
 
-            enveloped_signal = signal_to_shape * envelope
+        # if torch.is_tensor(input_signal) and num_sounds > 1:
+        #     signal_to_shape = input_signal[i]
+        # else:
+        #     signal_to_shape = input_signal
 
-            if first_time:
-                if num_sounds == 1:
-                    enveloped_signal_tensor = enveloped_signal
-                else:
-                    enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped_signal), dim=0).unsqueeze(
-                        dim=0)
-                    first_time = False
-            else:
-                enveloped = enveloped_signal.unsqueeze(dim=0)
-                enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped), dim=0)
+        enveloped_signal = input_signal * envelope
 
-        return enveloped_signal_tensor
+        # if first_time:
+        #     if num_sounds == 1:
+        #         enveloped_signal_tensor = enveloped_signal
+        #     else:
+        #         enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped_signal), dim=0).unsqueeze(
+        #             dim=0)
+        #         first_time = False
+        # else:
+        #     enveloped = enveloped_signal.unsqueeze(dim=0)
+        #     enveloped_signal_tensor = torch.cat((enveloped_signal_tensor, enveloped), dim=0)
+
+        return enveloped_signal
 
     def batch_adsr_envelope(self, input_signal, attack_t, decay_t, sustain_t, sustain_level, release_t):
         """Apply an ADSR envelope to the signal
