@@ -584,36 +584,46 @@ class SynthModules:
 
         enveloped_signal_tensor = torch.tensor((), requires_grad=True).to(self.device)
         first_time = True
-        x = torch.linspace(0, 1.0, int(self.sample_rate * self.sig_duration), device=self.device)
+        x = torch.linspace(0, 1.0, int(self.sample_rate * self.sig_duration))
+        #todo: implement this in vectorized manner
+        # x = torch.linspace(0, 1.0, n_frames)[None, :, None].repeat(batch_size, 1, self.channels)
         for i in range(num_sounds):
             if num_sounds == 1:
-                #todo fix according to note off time
-                note_off = attack_t + decay_t + sustain_t
-                attack = x / attack_t
-                attack = torch.clamp(attack, max=1.0)
-                decay = (x - attack_t) * (sustain_level - 1) / (decay_t + 1e-5)
-                decay = torch.clamp(decay, max=0.0)
-                sustain = (x - note_off) * (-sustain_level / (release_t + 1e-5))
-
-                envelope = (attack + decay + sustain)
-                envelope = torch.clamp(envelope, min=0.0, max=1.0)
+                attack_time = attack_t
+                decay_time = decay_t
+                sustain_time = sustain_t
+                release_time = release_t
+                sustain_level = float(sustain_level)
             else:
-                note_off = attack_t[i] + decay_t[i] + sustain_t[i]
-                attack = x / (attack_t[i] / note_off)
-                attack = torch.clamp(attack, max=1.0)
-                decay = (x - (attack_t[i] / note_off)) * (sustain_level[i] - 1) / ((decay_t[i] / note_off) + 1e-5)
-                decay = torch.clamp(decay, max=0.0, min=sustain_level[i].item() - 1)
-                sustain = (x - (note_off / self.sig_duration)) * (-sustain_level[i] / ((release_t[i] / note_off) + 1e-5))
-                sustain = torch.clamp(sustain, max=0.0)
+                attack_time = attack_t[i]
+                decay_time = decay_t[i]
+                sustain_time = sustain_t[i]
+                release_time = release_t[i]
+                current_sustain_level = sustain_level[i]
 
-                envelope = (attack + decay + sustain)
-                envelope = torch.clamp(envelope, min=0.0, max=1.0)
+            relative_attack = attack_time / self.sig_duration
+            relative_decay = decay_time / self.sig_duration
+            relative_sustain = sustain_time / self.sig_duration
+            relative_release = release_time / self.sig_duration
+            relative_note_off = relative_attack + relative_decay + relative_sustain
+            attack = x / relative_attack
+            attack = torch.clamp(attack, max=1.0)
+            decay = (x - relative_attack) * (current_sustain_level - 1) / (relative_decay + 1e-5)
+            decay = torch.clamp(decay, max=0.0, min=current_sustain_level - 1)
+            sustain = (x - relative_note_off) * (-current_sustain_level / (relative_release + 1e-5))
+            sustain = torch.clamp(sustain, max=0.0)
+
+            envelope = (attack + decay + sustain)
+            envelope = torch.clamp(envelope, min=0.0, max=1.0)
 
             envelope = helper.move_to(envelope, self.device)
 
             envelope_len = envelope.shape[0]
             signal_len = self.time_samples.shape[0]
-            if envelope_len <= signal_len:
+
+            if envelope_len == signal_len:
+                pass
+            elif envelope_len < signal_len:
                 padding = torch.zeros((signal_len - envelope_len), device=self.device)
                 envelope = torch.cat((envelope, padding))
             else:
