@@ -38,14 +38,14 @@ def train_single_epoch(model,
                        cfg,
                        summary_writer: SummaryWriter):
     sum_epoch_loss = 0
-    num_of_mini_batches = 0
+    minibatch_index = 0
     epoch_param_diffs = defaultdict(list)
     epoch_param_vals_raw, epoch_param_vals = defaultdict(list), defaultdict(list)
     with tqdm(train_data_loader, unit="batch") as tepoch:
         for target_signal, target_param_dict, signal_index in tepoch:
 
             num_sounds = len(signal_index)
-            step = epoch * len(train_data_loader) + num_of_mini_batches
+            step = epoch * len(train_data_loader) + minibatch_index
 
             tepoch.set_description(f"Epoch {epoch}")
 
@@ -140,7 +140,7 @@ def train_single_epoch(model,
             lsd_value = np.mean(lsd(transformed_signal.squeeze().detach().cpu().numpy(),
                                     transform(pred_final_signal).detach().cpu().numpy()))
 
-            num_of_mini_batches += 1
+            minibatch_index += 1
             sum_epoch_loss += loss_total.item()
             loss_total.backward()
             optimizer.step()
@@ -150,13 +150,14 @@ def train_single_epoch(model,
             summary_writer.add_scalar('loss/parameters_decay_factor', parameters_loss_decay_factor, step)
             summary_writer.add_scalar('loss/spec_loss_rampup_factor', spec_loss_increase_factor, step)
             summary_writer.add_scalar('loss/train_parameters_loss_raw', parameters_loss, step)
+            summary_writer.add_scalar('loss/train_spectral_loss_raw', spectrogram_loss, step)
             summary_writer.add_scalar('loss/train_parameters_loss_weighted', weighted_params_loss, step)
             summary_writer.add_scalar('loss/train_spectral_loss_weighted', weighted_spec_loss, step)
-            summary_writer.add_scalar('loss/train_spectral_loss_raw', spectrogram_loss, step)
+
             summary_writer.add_scalar('metrics/lsd', lsd_value, step)
             summary_writer.add_scalar('lr_adam', optimizer.param_groups[0]['lr'], step)
 
-            if num_of_mini_batches == 1:
+            if minibatch_index == 1:
                 if num_sounds == 1:
                     sample_params_orig, sample_params_pred = parse_synth_params(target_param_dict,
                                                                                 predicted_param_dict,
@@ -199,13 +200,13 @@ def train_single_epoch(model,
                                                  global_step=epoch,
                                                  dataformats='HWC')
 
-            if num_of_mini_batches % 50 == 0:
+            if minibatch_index % 50 == 0:
                 log_gradients_in_model(model, summary_writer, step)
 
             tepoch.set_postfix(loss=loss_total.item())
 
     # Log epoch stats
-    avg_epoch_loss = sum_epoch_loss / num_of_mini_batches
+    avg_epoch_loss = sum_epoch_loss / minibatch_index
     summary_writer.add_scalar('loss/train_loss_epoch', avg_epoch_loss, epoch)
     log_dict_recursive('param_diff', epoch_param_diffs, summary_writer, epoch)
     log_dict_recursive('param_values_raw', epoch_param_vals_raw, summary_writer, epoch)

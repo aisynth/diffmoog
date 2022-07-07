@@ -12,7 +12,7 @@ import numpy as np
 from typing import Dict, List
 
 from torch.utils.tensorboard import SummaryWriter
-root = r'/home/almogelharar/almog/ai_synth/'
+root = r'C:\Users\noamk\PycharmProjects\ai_synth'
 EXP_ROOT = os.path.join(root, 'experiments')
 DATA_ROOT = os.path.join(root, 'data')
 
@@ -143,7 +143,7 @@ class Config:
 
 @dataclass
 class DatasetConfig:
-    batch_size: int = 10
+    batch_size: int = 128
     num_epochs_to_print_stats: int = 100
     train_parameters_file: str = None
     train_audio_dir: str = None
@@ -179,7 +179,7 @@ class ModelConfig:
     preset: str = 'MODULAR'
     model_type: str = 'simple'
     backbone: str = 'resnet'
-    batch_size: int = 2
+    batch_size: int = 128
     num_epochs: int = 100
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
