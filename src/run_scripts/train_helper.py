@@ -1,6 +1,9 @@
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
+
+from sklearn.metrics import confusion_matrix
+
 from synth.synth_modules import make_envelope_shape
 
 from config import SynthConfig
@@ -127,8 +130,16 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
                 diff = [np.linalg.norm(pred_vals[k] - target_vals[k]) for k in range(pred_vals.shape[0])]
                 # diff = dist(pred_vals, target_vals)
             elif param_name in ['active', 'fm_active']:
-                active_idx = [0 if f else 1 for f in target_vals]
-                diff = [1 - v[idx] for idx, v in zip(active_idx, pred_vals)]
+                active_targets = [0 if f else 1 for f in target_vals]
+                active_preds = np.argmax(pred_vals)
+                conf_mat = confusion_matrix(active_targets, active_preds)
+
+                all_diffs[f'{op_index}/{param_name}_tp'] = conf_mat[0][0]
+                all_diffs[f'{op_index}/{param_name}_tn'] = conf_mat[1][1]
+                all_diffs[f'{op_index}/{param_name}_fp'] = conf_mat[0][1]
+                all_diffs[f'{op_index}/{param_name}_fn'] = conf_mat[1][0]
+
+                diff = [1 - v[idx] for idx, v in zip(active_targets, pred_vals)]
             else:
                 diff = np.abs(target_vals.squeeze() - pred_vals.squeeze())
 

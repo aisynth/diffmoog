@@ -349,7 +349,7 @@ class Normalizer:
                                                                     original_min_val=0,
                                                                     original_max_val=synth_cfg.max_resonance_val)
 
-        self.lowpass_filter_resonance_normalizer = MinMaxNormaliser(target_min_val=0,
+        self.lowpass_tremolo_amount_normalizer = MinMaxNormaliser(target_min_val=0,
                                                                     target_max_val=1,
                                                                     original_min_val=0,
                                                                     original_max_val=synth_cfg.max_amount_tremolo)

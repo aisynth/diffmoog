@@ -84,8 +84,8 @@ class Config:
     parameters_loss_weight = 1 / 100
     spectrogram_loss_weight = 1 / 50000
 
-    spectrogram_loss_warmup = 40 * 100
-    loss_switch_steps = 20 * 100
+    spectrogram_loss_warmup = 40 * 391
+    loss_switch_steps = 0 * 391
 
     smoothness_loss_weight = 0
 
@@ -180,7 +180,7 @@ class ModelConfig:
     model_type: str = 'simple'
     backbone: str = 'resnet'
     batch_size: int = 128
-    num_epochs: int = 100
+    num_epochs: int = 40
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
