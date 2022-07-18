@@ -90,6 +90,7 @@ class ParametersLoss:
                         active_list.append(probabilities)
 
                     target_parameters[param] = torch.tensor(active_list)
+                    predicted_parameters[param] = torch.nn.functional.softmax(predicted_parameters[param], dim=1)
 
                 elif param == 'envelope':
                     attack_t = target_parameters['attack_t']
