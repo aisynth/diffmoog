@@ -131,11 +131,11 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
                 # diff = dist(pred_vals, target_vals)
             elif param_name in ['active', 'fm_active']:
                 active_targets = [0 if f else 1 for f in target_vals]
-                active_preds = np.argmax(pred_vals)
-                conf_mat = confusion_matrix(active_targets, active_preds)
+                active_preds = np.argmax(pred_vals, axis=1)
+                conf_mat = confusion_matrix(active_targets, active_preds, labels=[0, 1])
 
-                all_diffs[f'{op_index}/{param_name}_tp'] = conf_mat[0][0]
-                all_diffs[f'{op_index}/{param_name}_tn'] = conf_mat[1][1]
+                all_diffs[f'{op_index}/{param_name}_tn'] = conf_mat[0][0]
+                all_diffs[f'{op_index}/{param_name}_tp'] = conf_mat[1][1]
                 all_diffs[f'{op_index}/{param_name}_fp'] = conf_mat[0][1]
                 all_diffs[f'{op_index}/{param_name}_fn'] = conf_mat[1][0]
 

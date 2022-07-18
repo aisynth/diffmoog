@@ -220,7 +220,7 @@ def visualize_signal_prediction(orig_audio, pred_audio, orig_params, pred_params
 
     # plot original vs predicted signal
     n_rows = len(orig_spectrograms_np) + 1
-    fig, ax = plt.subplots(n_rows, 2, figsize=(20, 10))
+    fig, ax = plt.subplots(n_rows, 2, figsize=(20, 12))
 
     canvas = FigureCanvasAgg(fig)
 
