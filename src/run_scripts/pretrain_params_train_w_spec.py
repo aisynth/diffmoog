@@ -71,7 +71,10 @@ def train_single_epoch(model,
 
             for op_idx, op_dict in predicted_param_dict.items():
                 for param_name, param_vals in op_dict['parameters'].items():
-                    epoch_param_vals[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
+                    if param_name in ['active', 'fm_active']:
+                        epoch_param_vals[f'{op_idx}_{param_name}'].extend(torch.argmax(param_vals, dim=1).cpu().detach().numpy())
+                    else:
+                        epoch_param_vals[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
 
             target_param_dict = helper.build_envelope_from_adsr(target_param_dict,
                                                                 cfg,

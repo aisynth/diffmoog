@@ -3,6 +3,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from sklearn.metrics import confusion_matrix
+from scipy.special import softmax
 
 from synth.synth_modules import make_envelope_shape
 
@@ -131,15 +132,24 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
                 # diff = dist(pred_vals, target_vals)
             elif param_name in ['active', 'fm_active']:
                 active_targets = [0 if f else 1 for f in target_vals]
-                active_preds = np.argmax(pred_vals, axis=1)
+                softmax_pred_vals = softmax(pred_vals, axis=1)
+                active_preds = np.argmax(softmax_pred_vals, axis=1)
                 conf_mat = confusion_matrix(active_targets, active_preds, labels=[0, 1])
 
-                all_diffs[f'{op_index}/{param_name}_tn'] = conf_mat[0][0]
-                all_diffs[f'{op_index}/{param_name}_tp'] = conf_mat[1][1]
-                all_diffs[f'{op_index}/{param_name}_fp'] = conf_mat[0][1]
-                all_diffs[f'{op_index}/{param_name}_fn'] = conf_mat[1][0]
+                true_negative = conf_mat[0][0]
+                true_positive = conf_mat[1][1]
+                false_positive = conf_mat[0][1]
+                false_negative = conf_mat[1][0]
 
-                diff = [1 - v[idx] for idx, v in zip(active_targets, pred_vals)]
+                accuracy = (true_negative + true_positive) / len(active_preds)
+                all_diffs[f'{op_index}/{param_name}_accuracy'] = accuracy
+
+                all_diffs[f'{op_index}/{param_name}_tn'] = true_negative
+                all_diffs[f'{op_index}/{param_name}_tp'] = true_positive
+                all_diffs[f'{op_index}/{param_name}_fp'] = false_positive
+                all_diffs[f'{op_index}/{param_name}_fn'] = false_negative
+
+                diff = [1 - v[idx] for idx, v in zip(active_targets, softmax_pred_vals)]
             else:
                 diff = np.abs(target_vals.squeeze() - pred_vals.squeeze())
 
