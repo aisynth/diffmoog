@@ -35,6 +35,12 @@ def parse_synth_params(original_params: dict, predicted_params: dict, sample_idx
         orig_res[op] = {}
         for param, vals in d['parameters'].items():
 
+            if param in ['active', 'fm_active']:
+                if len(vals.shape) < 2:
+                    vals = softmax(vals)
+                else:
+                    vals = softmax(vals, axis=1)
+
             if len(vals.shape) == 0:
                 pred_res[op][param] = _np_to_str(vals.squeeze(), precision=2)
             else:

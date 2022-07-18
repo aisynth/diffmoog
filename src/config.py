@@ -12,7 +12,7 @@ import numpy as np
 from typing import Dict, List
 
 from torch.utils.tensorboard import SummaryWriter
-root = r'C:\Users\noamk\PycharmProjects\ai_synth'
+root = r'/home/noyuzrad/ai_synth'
 EXP_ROOT = os.path.join(root, 'experiments')
 DATA_ROOT = os.path.join(root, 'data')
 
@@ -179,14 +179,14 @@ class ModelConfig:
     preset: str = 'MODULAR'
     model_type: str = 'simple'
     backbone: str = 'resnet'
-    batch_size: int = 128
+    batch_size: int = 32
     num_epochs: int = 40
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
     optimizer_scheduler_gamma: float = 0.1
     reinforcement_epsilon: float = 0.15
-    num_workers: int = 2
+    num_workers: int = 0
 
 
 @dataclass

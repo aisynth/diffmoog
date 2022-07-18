@@ -91,7 +91,7 @@ def train_single_epoch(model,
             parameters_loss = loss_handler['parameters_loss'].call(predicted_parameters_dict=output_params,
                                                                    target_parameters_dict=denormalized_target_params,
                                                                    summary_writer=summary_writer,
-                                                                   global_step=step)
+                                                                   global_step=step, active_only=True)
 
             # -------------Generate Signal-------------------------------
             # --------------Target-------------------------------------

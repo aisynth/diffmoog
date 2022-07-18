@@ -36,10 +36,13 @@ def create_dataset(split: str, size: int, dataset_cfg: DatasetConfig, synth_cfg:
     # init paths
     if split.lower() == 'train':
         dataset_dir_path = dataset_cfg.train_dataset_dir_path
+        train = True
     elif split.lower() == 'test':
         dataset_dir_path = dataset_cfg.test_dataset_dir_path
+        train = False
     elif split.lower() in ['val', 'validation']:
         dataset_dir_path = dataset_cfg.val_dataset_dir_path
+        train = False
     else:
         raise ValueError(f"Requested dataset split {split} which is not supported."
                          f" Please choose from [train, test, val]")
@@ -63,7 +66,10 @@ def create_dataset(split: str, size: int, dataset_cfg: DatasetConfig, synth_cfg:
     for batch_idx in range(num_batches):
 
         if synth_cfg.preset == 'MODULAR':
-            synth_obj.generate_activations_and_chains(synth_cfg=synth_cfg, num_sounds_=dataset_cfg.batch_size)
+            synth_obj.generate_activations_and_chains(synth_cfg=synth_cfg,
+                                                      num_sounds_=dataset_cfg.batch_size,
+                                                      train=train)
+
         synth_obj.generate_random_params(synth_cfg=synth_cfg,
                                          num_sounds_=dataset_cfg.batch_size)
 

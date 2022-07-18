@@ -335,7 +335,7 @@ class SynthModular:
 
                 cell.parameters.update(operation_params)
 
-    def generate_activations_and_chains(self, synth_cfg: SynthConfig = None, num_sounds_=1):
+    def generate_activations_and_chains(self, synth_cfg: SynthConfig = None, num_sounds_=1, train: bool=False):
         # todo: generalize code to go over all cells
         rng = np.random.default_rng()
 
@@ -346,7 +346,11 @@ class SynthModular:
         lfo_sine_outputs = lfo_sine_cell.outputs
 
         lfo_sine_output = rng.choice(lfo_sine_outputs, size=num_sounds_, axis=0).tolist()
-        lfo_sine_params = {'active': np.random.choice([True, False], size=num_sounds_, p=[0.25, 0.75])}
+        if train:
+            probs = [0.75, 0.25]
+        else:
+            probs = [0.25, 0.75]
+        lfo_sine_params = {'active': np.random.choice([True, False], size=num_sounds_, p=probs)}
         lfo_sine_params['output'] = [lfo_sine_output[k] if lfo_sine_params['active'][k] else [-1, -1] for k in
                                      range(num_sounds_)]
         lfo_sine_cell.parameters = lfo_sine_params
@@ -362,7 +366,7 @@ class SynthModular:
         fm_lfo_cell = self.synth_matrix[1][1]
         fm_lfo_outputs = fm_lfo_cell.outputs
 
-        fm_lfo_random_activeness = np.random.choice([True, False], size=num_sounds_)
+        fm_lfo_random_activeness = np.random.choice([True, False], size=num_sounds_, p=[0.75, 0.25])
         fm_lfo_output = rng.choice(fm_lfo_outputs, size=num_sounds_, axis=0).tolist()
 
         fm_lfo_params = {'fm_active': [True if (lfo_sine_params['active'][k] and lfo_sine_params['output'][k] == [1, 1])

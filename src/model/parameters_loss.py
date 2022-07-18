@@ -31,7 +31,7 @@ class ParametersLoss:
         return loss_val
 
     def call(self, predicted_parameters_dict, target_parameters_dict, summary_writer: SummaryWriter,
-             global_step: int, log: bool = True):
+             global_step: int, log: bool = True, active_only=False):
         """ execute parameters loss computation between two parameter sets
 
                 Args:
@@ -49,6 +49,9 @@ class ParametersLoss:
             target_parameters = target_parameters_dict[key]['parameters']
 
             for param in predicted_parameters.keys():
+                if active_only and param not in ['active', 'fm_active']:
+                    continue
+
                 if param == 'waveform':
                     waveform_list = []
                     for idx, waveform in enumerate(target_parameters['waveform']):
