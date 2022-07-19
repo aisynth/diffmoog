@@ -54,7 +54,7 @@ def train_single_epoch(model,
             model.zero_grad(set_to_none=True)
 
             target_param_dict = helper.move_to(target_param_dict, device)
-            denormalized_target_params = normalizer.normalize(target_param_dict.copy())
+            normalized_target_params = normalizer.normalize(target_param_dict.copy())
 
             target_signal = target_signal.to(device)
             transformed_signal = transform(target_signal)
@@ -62,13 +62,16 @@ def train_single_epoch(model,
             # -----------Run Model-----------------
             output_params = model(transformed_signal)
 
+            # log into torch summary
             for op_idx, op_dict in output_params.items():
                 for param_name, param_vals in op_dict['parameters'].items():
                     epoch_param_vals_raw[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
 
+            # process output_params
             denormalized_output_dict = normalizer.denormalize(output_params)
             predicted_param_dict = helper.clamp_adsr_params(denormalized_output_dict, synth_cfg, cfg)
 
+            # log into torch summary
             for op_idx, op_dict in predicted_param_dict.items():
                 for param_name, param_vals in op_dict['parameters'].items():
                     if param_name in ['active', 'fm_active']:
@@ -89,9 +92,9 @@ def train_single_epoch(model,
                     epoch_param_diffs[op_idx].append(diff_vals)
 
             parameters_loss = loss_handler['parameters_loss'].call(predicted_parameters_dict=output_params,
-                                                                   target_parameters_dict=denormalized_target_params,
+                                                                   target_parameters_dict=normalized_target_params,
                                                                    summary_writer=summary_writer,
-                                                                   global_step=step, active_only=True)
+                                                                   global_step=step, active_only=False)
 
             # -------------Generate Signal-------------------------------
             # --------------Target-------------------------------------

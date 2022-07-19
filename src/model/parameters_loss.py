@@ -5,7 +5,7 @@ from torch.utils.tensorboard import SummaryWriter
 from model.helper import move_to
 from synth.synth_modules import make_envelope_shape
 
-from config import Config
+from config import Config, SynthConfig
 
 
 class ParametersLoss:
@@ -20,6 +20,8 @@ class ParametersLoss:
             self.criterion = nn.MSELoss()
         else:
             raise ValueError("unknown loss type")
+
+        self.cls_loss = nn.CrossEntropyLoss()
 
     @staticmethod
     def diff_loss(t: torch.Tensor):
@@ -46,54 +48,25 @@ class ParametersLoss:
         for key in predicted_parameters_dict.keys():
             operation = predicted_parameters_dict[key]['operation']
             predicted_parameters = predicted_parameters_dict[key]['parameters']
-            target_parameters = target_parameters_dict[key]['parameters']
+            target_parameters = target_parameters_dict[key]['parameters'].copy()
 
             for param in predicted_parameters.keys():
+
                 if active_only and param not in ['active', 'fm_active']:
                     continue
 
                 if param == 'waveform':
-                    waveform_list = []
-                    for idx, waveform in enumerate(target_parameters['waveform']):
-                        if waveform == 'sine':
-                            probabilities = [1., 0., 0.]
-                        elif waveform == 'square':
-                            probabilities = [0., 1., 0.]
-                        elif waveform == 'sawtooth':
-                            probabilities = [0., 0., 1.]
-                        else:
-                            probabilities = -1
-                            KeyError("Unknown waveform type")
-
-                        waveform_list.append(probabilities)
-
-                    target_parameters['waveform'] = torch.tensor(waveform_list)
+                    waveform_list = [SynthConfig.wave_type_dict[waveform] for waveform in target_parameters[param]]
+                    target_parameters[param] = torch.tensor(waveform_list)
 
                 elif param == 'filter_type':
-                    filter_type_list = []
-                    for idx, filter_type in enumerate(target_parameters['filter_type']):
-                        if filter_type == 'low_pass':
-                            probabilities = [1., 0.]
-                        elif filter_type == 'high_pass':
-                            probabilities = [0., 1.]
-                        else:
-                            probabilities = -1
-                            KeyError("Unknown filter_type")
-                        filter_type_list.append(probabilities)
-
-                    target_parameters['filter_type'] = torch.tensor(filter_type_list)
+                    filter_type_list = [SynthConfig.filter_type_dict[filter_type] for
+                                        filter_type in target_parameters[param]]
+                    target_parameters[param] = torch.tensor(filter_type_list)
 
                 elif param in ['active', 'fm_active']:
-                    active_list = []
-                    for idx, is_active in enumerate(target_parameters[param]):
-                        if is_active:
-                            probabilities = [1., 0.]
-                        else:
-                            probabilities = [0., 1.]
-                        active_list.append(probabilities)
-
+                    active_list = [0 if is_active else 1 for is_active in target_parameters[param]]
                     target_parameters[param] = torch.tensor(active_list)
-                    predicted_parameters[param] = torch.nn.functional.softmax(predicted_parameters[param], dim=1)
 
                 elif param == 'envelope':
                     attack_t = target_parameters['attack_t']
@@ -132,7 +105,11 @@ class ParametersLoss:
                 if target_parameters[param].dim() > 1:
                     target_parameters[param] = target_parameters[param].squeeze(dim=0)
 
-                loss = self.criterion(predicted_parameters[param], target_parameters[param])
+                if param in ['waveform', 'filter_type', 'active', 'fm_active']:
+                    target_parameters[param] = target_parameters[param].type(torch.LongTensor).to(self.device)
+                    loss = self.cls_loss(predicted_parameters[param], target_parameters[param])
+                else:
+                    loss = self.criterion(predicted_parameters[param], target_parameters[param])
                 total_loss += loss
 
                 loss_dict[f"{key}_{operation}_{param}"] = loss

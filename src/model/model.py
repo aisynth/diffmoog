@@ -451,8 +451,14 @@ class MLPBlock(nn.Module):
 
     def __init__(self, layer_sizes: Sequence[int]):
         super(MLPBlock, self).__init__()
-        layers = [nn.Linear(layer_sizes[i], layer_sizes[i + 1], bias=False) for i in range(len(layer_sizes) - 1)]
-        self.mlp = nn.Sequential(*layers)
+
+        layers = []
+        for i in range(len(layer_sizes) - 1):
+            linear = nn.Linear(layer_sizes[i], layer_sizes[i + 1], bias=False)
+            relu = nn.ReLU()
+            layers.extend([linear, relu])
+
+        self.mlp = nn.Sequential(*layers[:-1])
 
     def forward(self, x):
         return self.mlp(x)

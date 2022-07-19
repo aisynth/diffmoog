@@ -370,10 +370,11 @@ class Normalizer:
 
             denormalized_params_dict[key] = {'operation': operation, 'parameters': {}}
             for param_name, param_val in params.items():
-                if (operation in ['osc'] and param_name in ['freq']) or param_name == 'freq_c':
+                if (operation in ['osc'] and param_name in ['freq']) or \
+                        (param_name == 'freq_c' and 'lfo' not in operation):
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.oscillator_freq_normalizer.normalise(params[param_name])
-                elif 'lfo' in operation and param_name in ['freq']:
+                elif 'lfo' in operation and param_name in ['freq', 'freq_c']:
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.lfo_freq_normalizer.normalise(params[param_name])
                 elif param_name in ['mod_index']:
@@ -405,10 +406,11 @@ class Normalizer:
 
             denormalized_params_dict[key] = {'operation': operation, 'parameters': {}}
             for param_name, param_val in params.items():
-                if (operation in ['osc'] and param_name in ['freq']) or param_name == 'freq_c':
+                if (operation in ['osc'] and param_name in ['freq']) or \
+                        (param_name == 'freq_c' and 'lfo' not in operation):
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.oscillator_freq_normalizer.denormalise(params[param_name])
-                elif 'lfo' in operation and param_name in ['freq']:
+                elif 'lfo' in operation and param_name in ['freq', 'freq_c']:
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.lfo_freq_normalizer.denormalise(params[param_name])
                 elif param_name in ['mod_index']:
