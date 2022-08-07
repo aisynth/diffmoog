@@ -110,6 +110,7 @@ class ParametersLoss:
                     loss = self.cls_loss(predicted_parameters[param], target_parameters[param])
                 else:
                     loss = self.criterion(predicted_parameters[param], target_parameters[param])
+
                 total_loss += loss
 
                 loss_dict[f"{key}_{operation}_{param}"] = loss

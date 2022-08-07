@@ -3,7 +3,7 @@ import numpy
 from config import SynthConfig
 from synth import synth_modular_presets
 import random
-import simpleaudio as sa
+# import simpleaudio as sa
 import numpy as np
 import torch
 from torch import nn
@@ -829,12 +829,12 @@ if __name__ == "__main__":
     plt.plot(a.signal.detach().cpu().numpy())
     plt.ylim([-1, 1])
     plt.show()
-    for i in range(4):
-        play_obj = sa.play_buffer(a.signal.detach().cpu().numpy(),
-                                  num_channels=1,
-                                  bytes_per_sample=4,
-                                  sample_rate=44100)
-        play_obj.wait_done()
+    # for i in range(4):
+    #     play_obj = sa.play_buffer(a.signal.detach().cpu().numpy(),
+    #                               num_channels=1,
+    #                               bytes_per_sample=4,
+    #                               sample_rate=44100)
+    #     play_obj.wait_done()
     num_sounds_ = 10
     b = torch.rand(10, 44100)
     b = helper.move_to(b, helper.get_device())

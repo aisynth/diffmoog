@@ -349,10 +349,10 @@ class Normalizer:
                                                                     original_min_val=0,
                                                                     original_max_val=synth_cfg.max_resonance_val)
 
-        self.lowpass_tremolo_amount_normalizer = MinMaxNormaliser(target_min_val=0,
-                                                                    target_max_val=1,
-                                                                    original_min_val=0,
-                                                                    original_max_val=synth_cfg.max_amount_tremolo)
+        # self.lowpass_tremolo_amount_normalizer = MinMaxNormaliser(target_min_val=0,
+        #                                                             target_max_val=1,
+        #                                                             original_min_val=0,
+        #                                                             original_max_val=synth_cfg.max_amount_tremolo)
 
         self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                            target_max_val=1,
@@ -360,7 +360,7 @@ class Normalizer:
                                                            original_max_val=synth_cfg.oscillator_freq)
 
     def normalize(self, parameters_dict: dict):
-        denormalized_params_dict = {}
+        normalized_params_dict = {}
         for key, val in parameters_dict.items():
             operation = val['operation'] if isinstance(val['operation'], str) else val['operation'][0]
             params = val['params'] if 'params' in val else val['parameters']
@@ -368,31 +368,31 @@ class Normalizer:
             if operation == "None":
                 continue
 
-            denormalized_params_dict[key] = {'operation': operation, 'parameters': {}}
+            normalized_params_dict[key] = {'operation': operation, 'parameters': {}}
             for param_name, param_val in params.items():
                 if (operation in ['osc'] and param_name in ['freq']) or \
                         (param_name == 'freq_c' and 'lfo' not in operation):
-                    denormalized_params_dict[key]['parameters'][param_name] = \
+                    normalized_params_dict[key]['parameters'][param_name] = \
                         self.oscillator_freq_normalizer.normalise(params[param_name])
                 elif 'lfo' in operation and param_name in ['freq', 'freq_c']:
-                    denormalized_params_dict[key]['parameters'][param_name] = \
+                    normalized_params_dict[key]['parameters'][param_name] = \
                         self.lfo_freq_normalizer.normalise(params[param_name])
                 elif param_name in ['mod_index']:
-                    denormalized_params_dict[key]['parameters'][param_name] = \
+                    normalized_params_dict[key]['parameters'][param_name] = \
                         self.mod_index_normalizer.normalise(params[param_name])
                 elif param_name in ['filter_freq']:
-                    denormalized_params_dict[key]['parameters'][param_name] = \
+                    normalized_params_dict[key]['parameters'][param_name] = \
                         self.filter_freq_normalizer.normalise(params[param_name])
                 elif operation == 'env_adsr' and param_name in ['attack_t', 'decay_t', 'sustain_t']:
-                    denormalized_params_dict[key]['parameters'][param_name] = \
+                    normalized_params_dict[key]['parameters'][param_name] = \
                         self.adsr_normalizer.normalise(params[param_name])
                 elif param_name in ['resonance']:
-                    denormalized_params_dict[key]['parameters'][param_name] = \
+                    normalized_params_dict[key]['parameters'][param_name] = \
                         self.lowpass_filter_resonance_normalizer.normalise(params[param_name])
                 else:
-                    denormalized_params_dict[key]['parameters'][param_name] = params[param_name]
+                    normalized_params_dict[key]['parameters'][param_name] = params[param_name]
 
-        return denormalized_params_dict
+        return normalized_params_dict
 
     def denormalize(self, parameters_dict: dict):
 

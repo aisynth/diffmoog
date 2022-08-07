@@ -12,7 +12,7 @@ import numpy as np
 from typing import Dict, List
 
 from torch.utils.tensorboard import SummaryWriter
-root = r'/home/noyuzrad/ai_synth'
+root = r'/home/noy/PycharmProjects/ai_synth/'
 EXP_ROOT = os.path.join(root, 'experiments')
 DATA_ROOT = os.path.join(root, 'data')
 
@@ -84,8 +84,8 @@ class Config:
     parameters_loss_weight = 1 / 100
     spectrogram_loss_weight = 1 / 50000
 
-    spectrogram_loss_warmup = 40 * 391
-    loss_switch_steps = 0 * 391
+    spectrogram_loss_warmup = 40 * 3125
+    loss_switch_steps = 40 * 3125
 
     smoothness_loss_weight = 0
 
@@ -165,6 +165,7 @@ class DatasetConfig:
         self.train_audio_dir: str = os.path.join(dataset_dir, 'train', 'wav_files')
         self.val_parameters_file: str = os.path.join(dataset_dir, 'val', 'params_dataset.pkl')
         self.val_audio_dir: str = os.path.join(dataset_dir, 'val', 'wav_files')
+        self.val_nsynth_audio_dir: str = os.path.join(dataset_dir, 'val_nsynth', 'wav_files')
         self.test_parameters_file: str = os.path.join(dataset_dir, 'test', 'params_dataset.pkl')
         self.test_audio_dir: str = os.path.join(dataset_dir, 'test', 'wav_files')
         self.inference_audio_dir: str = os.path.join(dataset_dir, 'test', 'inference_wav_files')
@@ -172,6 +173,7 @@ class DatasetConfig:
         self.train_dataset_dir_path: str = os.path.join(dataset_dir, 'train')
         self.test_dataset_dir_path: str = os.path.join(dataset_dir, 'test')
         self.val_dataset_dir_path: str = os.path.join(dataset_dir, 'val')
+        self.val_nsynth_dataset_dir_path: str = os.path.join(dataset_dir, 'val_nsynth')
 
 
 @dataclass
@@ -179,8 +181,8 @@ class ModelConfig:
     preset: str = 'MODULAR'
     model_type: str = 'simple'
     backbone: str = 'resnet'
-    batch_size: int = 32
-    num_epochs: int = 40
+    batch_size: int = 16
+    num_epochs: int = 120
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
     optimizer_scheduler_lr: float = 0
@@ -281,13 +283,13 @@ def configure_experiment(exp_name: str, dataset_name: str):
     project_root = os.path.join(EXP_ROOT, 'current', exp_name, '')
 
     if os.path.isdir(project_root):
-        # overwrite = input(colored(f"Folder {project_root} already exists. Overwrite previous experiment (Y/N)?"
-        #                           f"\n\tThis will delete all files related to the previous run!",
-        #                           'yellow'))
-        # if overwrite.lower() != 'y':
-        #     print('Exiting...')
-        #     exit()
-        # else:
+        overwrite = input(colored(f"Folder {project_root} already exists. Overwrite previous experiment (Y/N)?"
+                                  f"\n\tThis will delete all files related to the previous run!",
+                                  'yellow'))
+        if overwrite.lower() != 'y':
+            print('Exiting...')
+            exit()
+        else:
             print("Deleting previous experiment...")
             rmtree(project_root)
 

@@ -60,6 +60,51 @@ def inference_loop(cfg: Config, synth_cfg: SynthConfig, synth: SynthModular, tes
 
     return results
 
+def inference_nsynth_loop(cfg: Config, synth_cfg: SynthConfig, synth: SynthModular, test_dataloader: DataLoader, preprocess_fn: callable, eval_fn: callable,
+                          post_process_fn: callable, device: str = 'cuda:0'):
+
+    step, n_samples = 0, 0
+    results = defaultdict(float)
+    for raw_target_signal, signal_index in test_dataloader:
+
+        input_batch = (raw_target_signal, signal_index)
+
+        _, metrics = nsynth_process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn, synth, device, cfg,
+                                             synth_cfg)
+        for k, val in metrics.items():
+            results[k] += val
+
+        # # Add Accuracy measures for inference
+        # # -----------Discretize output-----------------
+        # denormalized_discrete_output_params = {cell_idx: {'operation': cell_params['operation'],
+        #                                                   'parameters': discretize_params(cell_params['operation'],
+        #                                                                                   cell_params['parameters'],
+        #                                                                                   synth_cfg)}
+        #                                        for cell_idx, cell_params in processed_output.items()}
+        #
+        # discrete_target_params = {cell_idx: {'operation': cell_params['operation'],
+        #                                      'parameters': discretize_params(cell_params['operation'][0],
+        #                                                                      cell_params['parameters'], synth_cfg)}
+        #                           for cell_idx, cell_params in target_param_dict.items() if
+        #                           cell_params['operation'][0] != 'None'}
+        #
+        # # -----------Compare results-----------------
+        # correct_preds = compare_params(discrete_target_params, denormalized_discrete_output_params)
+        # for cell_idx, cell_data in correct_preds.items():
+        #     for param_name, correct_preds in cell_data.items():
+        #         results[f'{cell_idx}_{param_name}'] += correct_preds
+
+        n_samples += len(raw_target_signal)
+        step += 1
+
+        if step % 100 == 0:
+            print(f'processed {step} batches')
+
+    for k, v in results.items():
+        results[k] = v / n_samples
+
+    return results
+
 
 def process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn, synth, device, cfg, synth_cfg):
 
@@ -108,6 +153,55 @@ def process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn
     results['predicted_spectrograms'] = predicted_signal_spectrograms
 
     return results, metrics
+
+def nsynth_process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn, synth, device, cfg, synth_cfg):
+
+    results, metrics = {}, defaultdict(float)
+
+    if isinstance(input_batch, tuple):
+        raw_target_signal, _ = input_batch
+    else:
+        raw_target_signal = input_batch
+
+    assert raw_target_signal.ndim >= 2, f"Expected input to be of shape (batch, ..., signal_length) but got {raw_target_signal.shape} instead"
+    num_sounds = len(raw_target_signal)
+
+    # -----------Run Model-----------------
+    raw_target_signal = raw_target_signal.to(device)
+    target_signal_spectrogram = preprocess_fn(raw_target_signal)
+    model_output = eval_fn(target_signal_spectrogram)
+    processed_output = post_process_fn(model_output) if post_process_fn is not None else model_output
+
+    processed_output = helper.clamp_adsr_params(processed_output, synth_cfg, cfg)
+
+    synth.update_cells_from_dict(processed_output)
+    pred_final_signal, pred_signals_through_chain = \
+        synth.generate_signal(num_sounds_=num_sounds)
+
+    predicted_signal_spectrograms = preprocess_fn(pred_final_signal).squeeze().detach().cpu().numpy()
+    target_signal_spectrogram = target_signal_spectrogram.squeeze().detach().cpu().numpy()
+
+    raw_target_signal = raw_target_signal.squeeze().detach().cpu().numpy()
+    pred_final_signal = pred_final_signal.squeeze().detach().cpu().numpy()
+
+    metrics['lsd_value'] += np.sum(lsd(target_signal_spectrogram, predicted_signal_spectrograms))
+    metrics['pearson_stft'] += np.sum(pearsonr_dist(target_signal_spectrogram,
+                                                    predicted_signal_spectrograms,
+                                                    input_type='spec'))
+    metrics['pearson_fft'] += np.sum(pearsonr_dist(raw_target_signal, pred_final_signal, input_type='audio'))
+    metrics['mean_average_error'] += np.sum(mae(target_signal_spectrogram, predicted_signal_spectrograms))
+    metrics['mfcc_mae'] += np.sum(mfcc_distance(raw_target_signal, pred_final_signal, sample_rate=cfg.sample_rate))
+    metrics['spectral_convergence_value'] += np.sum(spectral_convergence(target_signal_spectrogram,
+                                                                         predicted_signal_spectrograms))
+
+    results['target_audio'] = raw_target_signal
+    results['predicted_audio'] = pred_final_signal
+
+    results['target_spectrograms'] = target_signal_spectrogram
+    results['predicted_spectrograms'] = predicted_signal_spectrograms
+
+    return results, metrics
+
 
 
 def discretize_params(operation: str, input_params: dict, synth_cfg):

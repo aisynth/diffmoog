@@ -418,11 +418,13 @@ class SimpleSynthNetwork(nn.Module):
                 model_output = param_head(latent)
 
                 if param in ['waveform', 'filter_type']:
-                    model_output = self.softmax(model_output)
+                    final_model_output = self.softmax(model_output)
                 elif param not in ['active', 'fm_active']:
-                    model_output = self.sigmoid(model_output)
+                    final_model_output = self.sigmoid(model_output)
+                else:
+                    final_model_output = model_output
 
-                output_dict[index]['parameters'][param] = model_output
+                output_dict[index]['parameters'][param] = final_model_output
 
         return output_dict
 

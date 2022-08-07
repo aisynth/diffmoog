@@ -1,4 +1,5 @@
 import os
+import os.path
 import pandas as pd
 import torchaudio
 from model import helper
@@ -13,7 +14,7 @@ class AiSynthDataset(Dataset):
     Holds a path for the sound files, and the corresponding parameters used to create each sound
 
     Upon using dataloader:
-    1. The raw audio is returned represented as log mel-spectrogram
+    1. The raw audio is returned represented as PCM
     2. The non-numeric parameters are translated to integers
     3. All data is saved as GPU tensors
     """
@@ -58,10 +59,46 @@ class AiSynthDataset(Dataset):
         return cells_dict
 
 
+class NSynthDataset(Dataset):
+    """
+    A custom NSynth dataset.
+    Holds a path for the sound files
+
+    Upon using dataloader:
+    1. The raw audio is returned represented as PCM
+    2. The non-numeric parameters are translated to integers
+    3. All data is saved as GPU tensors
+    """
+
+    def __init__(self,
+                 audio_dir,
+                 device_arg):
+        self.audio_dir = audio_dir
+        self.device = device_arg
+
+    def __len__(self):
+        res = len([name for name in os.listdir(self.audio_dir) if os.path.isfile(os.path.join(self.audio_dir, name))])
+        return res
+
+    def __getitem__(self, index):
+        audio_path = self._get_audio_path(index)
+        signal, _ = torchaudio.load(audio_path)
+        # signal = signal.to(self.device)
+
+        return signal, index
+
+    def _get_audio_path(self, index):
+        audio_file_name = f"sound_{index}.wav"
+
+        cwd = os.getcwd()
+        path = os.path.join(cwd, self.audio_dir, audio_file_name)
+        return path
+
+
 def create_data_loader(dataset, batch_size, num_workers=0, shuffle=True):
-    train_dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers,
-                                  persistent_workers=num_workers != 0, shuffle=shuffle)
-    return train_dataloader
+    dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers,
+                            persistent_workers=num_workers != 0, shuffle=shuffle)
+    return dataloader
 
 
 if __name__ == "__main__":

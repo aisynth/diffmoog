@@ -6,9 +6,9 @@ from collections import defaultdict
 
 sys.path.append("..")
 
-from run_scripts.inference.inference_helper import lsd, inference_loop
+from run_scripts.inference.inference_helper import lsd, inference_loop, inference_nsynth_loop
 from config import Config, ModelConfig, configure_experiment
-from dataset.ai_synth_dataset import AiSynthDataset, create_data_loader
+from dataset.ai_synth_dataset import AiSynthDataset, NSynthDataset, create_data_loader
 from run_scripts.inference.inference import visualize_signal_prediction
 from model.model import SimpleSynthNetwork
 from model.spectral_loss import SpectralLoss
@@ -75,7 +75,8 @@ def train_single_epoch(model,
             for op_idx, op_dict in predicted_param_dict.items():
                 for param_name, param_vals in op_dict['parameters'].items():
                     if param_name in ['active', 'fm_active']:
-                        epoch_param_vals[f'{op_idx}_{param_name}'].extend(torch.argmax(param_vals, dim=1).cpu().detach().numpy())
+                        epoch_param_vals[f'{op_idx}_{param_name}'].extend(
+                            torch.argmax(param_vals, dim=1).cpu().detach().numpy())
                     else:
                         epoch_param_vals[f'{op_idx}_{param_name}'].extend(param_vals.cpu().detach().numpy())
 
@@ -224,6 +225,7 @@ def train_single_epoch(model,
 def train(model,
           train_data_loader,
           val_dataloader,
+          val_nsynth_dataloader,
           transform,
           optimizer,
           device,
@@ -291,7 +293,13 @@ def train(model,
                                            test_dataloader=val_dataloader, preprocess_fn=transform, eval_fn=model,
                                            post_process_fn=normalizer.denormalize, device=device)
 
+        epoch_val_nsynth_metrics = inference_nsynth_loop(cfg=cfg, synth_cfg=synth_cfg, synth=modular_synth,
+                                                         test_dataloader=val_nsynth_dataloader, preprocess_fn=transform,
+                                                         eval_fn=model, post_process_fn=normalizer.denormalize,
+                                                         device=device)
+
         log_dict_recursive('val_metrics', epoch_val_metrics, summary_writer, epoch)
+        log_dict_recursive('val_nsynth_metrics', epoch_val_nsynth_metrics, summary_writer, epoch)
 
         # Sum stats over multiple epochs
         loss_list.append(avg_epoch_loss)
@@ -329,6 +337,9 @@ def run(args):
     val_dataset = AiSynthDataset(dataset_cfg.val_parameters_file, dataset_cfg.val_audio_dir, device)
     val_dataloader = create_data_loader(val_dataset, model_cfg.batch_size, ModelConfig.num_workers)
 
+    val_nsynth_dataset = NSynthDataset(dataset_cfg.val_nsynth_audio_dir, device)
+    val_nsynth_dataloader = create_data_loader(val_nsynth_dataset, model_cfg.batch_size, ModelConfig.num_workers)
+
     # construct model and assign it to device
     if model_cfg.model_type == 'simple':
         synth_net = SimpleSynthNetwork(model_cfg.preset, synth_cfg, cfg, device, backbone=model_cfg.backbone).to(device)
@@ -358,6 +369,7 @@ def run(args):
     train(model=synth_net,
           train_data_loader=train_dataloader,
           val_dataloader=val_dataloader,
+          val_nsynth_dataloader=val_nsynth_dataloader,
           transform=transform,
           optimizer=optimizer,
           device=device,
