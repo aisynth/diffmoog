@@ -111,21 +111,38 @@ def train_single_epoch(model,
                 modular_synth.generate_signal(num_sounds_=num_sounds)
 
             spectrogram_loss = 0
-            for op_index in output_params.keys():
-                op_index = str(op_index)
+            if cfg.use_chain_loss:
+                for op_index in output_params.keys():
+                    op_index = str(op_index)
 
-                c_pred_signal = pred_signals_through_chain[op_index]
-                if c_pred_signal is None:
-                    continue
+                    # current_layer = int(op_index[2])
+                    # layer_warmup_factor = cfg.chain_warmup_factor * current_layer
+                    #
+                    # if epoch - cfg.spectrogram_loss_warmup / num_iters < layer_warmup_factor:
+                    #     continue
 
-                c_target_signal = target_signals_through_chain[op_index]
-                loss, ret_spectrograms = loss_handler['spectrogram_loss'].call(c_target_signal,
-                                                                               c_pred_signal,
+                    c_pred_signal = pred_signals_through_chain[op_index]
+                    if c_pred_signal is None:
+                        continue
+
+                    c_target_signal = target_signals_through_chain[op_index]
+                    loss, ret_spectrograms = loss_handler['spectrogram_loss'].call(c_target_signal,
+                                                                                   c_pred_signal,
+                                                                                   summary_writer,
+                                                                                   op_index,
+                                                                                   step,
+                                                                                   return_spectrogram=True)
+                    spectrogram_loss += loss
+            else:
+                loss, ret_spectrograms = loss_handler['spectrogram_loss'].call(target_final_signal,
+                                                                               pred_final_signal,
                                                                                summary_writer,
-                                                                               op_index,
+                                                                               "final",
                                                                                step,
                                                                                return_spectrogram=True)
-                spectrogram_loss += loss
+                spectrogram_loss = loss
+
+
 
             parameters_loss_decay_factor = 1
             spec_loss_increase_factor = 0
@@ -136,10 +153,13 @@ def train_single_epoch(model,
                 parameters_loss_decay_factor = 1 - ((step - cfg.spectrogram_loss_warmup) / cfg.loss_switch_steps)
                 spec_loss_increase_factor = ((step - cfg.spectrogram_loss_warmup) / cfg.loss_switch_steps)
 
+                parameters_loss_decay_factor = max(parameters_loss_decay_factor, cfg.min_parameters_loss_decay)
                 weighted_params_loss = parameters_loss * cfg.parameters_loss_weight * parameters_loss_decay_factor
                 weighted_spec_loss = cfg.spectrogram_loss_weight * spectrogram_loss * spec_loss_increase_factor
             else:
-                weighted_params_loss = 0
+                parameters_loss_decay_factor = cfg.min_parameters_loss_decay
+                spec_loss_increase_factor = 1
+                weighted_params_loss = parameters_loss * cfg.parameters_loss_weight * parameters_loss_decay_factor
                 weighted_spec_loss = cfg.spectrogram_loss_weight * spectrogram_loss
 
             loss_total = weighted_params_loss + weighted_spec_loss

@@ -12,7 +12,7 @@ import numpy as np
 from typing import Dict, List
 
 from torch.utils.tensorboard import SummaryWriter
-root = r'/home/noy/PycharmProjects/ai_synth/'
+root = r'/home/almogelharar/almog/ai_synth/'
 EXP_ROOT = os.path.join(root, 'experiments')
 DATA_ROOT = os.path.join(root, 'data')
 
@@ -82,10 +82,13 @@ class Config:
     add_parameters_loss = True
     parameters_loss_type = 'L1'
     parameters_loss_weight = 1 / 100
-    spectrogram_loss_weight = 1 / 50000
+    spectrogram_loss_weight = 1 / 3000
 
-    spectrogram_loss_warmup = 40 * 3125
-    loss_switch_steps = 40 * 3125
+    spectrogram_loss_warmup = 40 * 1000
+    loss_switch_steps = 40 * 1000
+    min_parameters_loss_decay = 0.1
+
+    use_chain_loss = False
 
     smoothness_loss_weight = 0
 
@@ -181,7 +184,7 @@ class ModelConfig:
     preset: str = 'MODULAR'
     model_type: str = 'simple'
     backbone: str = 'resnet'
-    batch_size: int = 16
+    batch_size: int = 50
     num_epochs: int = 120
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0

@@ -150,10 +150,10 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
                 accuracy = (true_negative + true_positive) / len(active_preds)
                 all_diffs[f'{op_index}/{param_name}_accuracy'] = accuracy
 
-                all_diffs[f'{op_index}/{param_name}_tn'] = true_negative
-                all_diffs[f'{op_index}/{param_name}_tp'] = true_positive
-                all_diffs[f'{op_index}/{param_name}_fp'] = false_positive
-                all_diffs[f'{op_index}/{param_name}_fn'] = false_negative
+                # all_diffs[f'{op_index}/{param_name}_tn'] = true_negative
+                # all_diffs[f'{op_index}/{param_name}_tp'] = true_positive
+                # all_diffs[f'{op_index}/{param_name}_fp'] = false_positive
+                # all_diffs[f'{op_index}/{param_name}_fn'] = false_negative
 
                 diff = [1 - v[idx] for idx, v in zip(active_targets, softmax_pred_vals)]
             else:

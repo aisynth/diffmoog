@@ -1,3 +1,4 @@
+import glob
 import os
 import os.path
 import pandas as pd
@@ -74,24 +75,20 @@ class NSynthDataset(Dataset):
                  audio_dir,
                  device_arg):
         self.audio_dir = audio_dir
+        self.wav_files = glob.glob(os.path.join(audio_dir, '**', '*.wav'), recursive=True)
+        print(f"NSynth dataloader found {len(self.wav_files)} wav files in {audio_dir}")
         self.device = device_arg
 
     def __len__(self):
-        res = len([name for name in os.listdir(self.audio_dir) if os.path.isfile(os.path.join(self.audio_dir, name))])
-        return res
+        return len(self.wav_files)
 
     def __getitem__(self, index):
         audio_path = self._get_audio_path(index)
         signal, _ = torchaudio.load(audio_path)
-        # signal = signal.to(self.device)
-
         return signal, index
 
     def _get_audio_path(self, index):
-        audio_file_name = f"sound_{index}.wav"
-
-        cwd = os.getcwd()
-        path = os.path.join(cwd, self.audio_dir, audio_file_name)
+        path = self.wav_files[index]
         return path
 
 
