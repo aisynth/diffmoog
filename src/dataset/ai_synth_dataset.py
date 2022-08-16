@@ -24,6 +24,8 @@ class AiSynthDataset(Dataset):
                  parameters_pickle,
                  audio_dir,
                  device_arg):
+        # file = open(parameters_pickle, 'r')
+        # self.params = pickle.load(file)
         self.params = pd.read_pickle(parameters_pickle)
         self.audio_dir = audio_dir
         self.device = device_arg
