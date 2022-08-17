@@ -652,19 +652,19 @@ class SynthModular:
                         input_signal = 0
                         AttributeError("Illegal cell input")
 
-                    cell.signal = synth_module.adsr_envelope(input_signal,
-                                                             attack_t=cell.parameters['attack_t'],
-                                                             decay_t=cell.parameters['decay_t'],
-                                                             sustain_t=cell.parameters['sustain_t'],
-                                                             sustain_level=cell.parameters['sustain_level'],
-                                                             release_t=cell.parameters['release_t'],
-                                                             num_sounds=num_sounds_)
-                    # cell.signal = synth_module.batch_adsr_envelope(input_signal,
-                    #                                                attack_t=cell.parameters['attack_t'],
-                    #                                                decay_t=cell.parameters['decay_t'],
-                    #                                                sustain_t=cell.parameters['sustain_t'],
-                    #                                                sustain_level=cell.parameters['sustain_level'],
-                    #                                                release_t=cell.parameters['release_t'])
+                    # cell.signal = synth_module.adsr_envelope(input_signal,
+                    #                                          attack_t=cell.parameters['attack_t'],
+                    #                                          decay_t=cell.parameters['decay_t'],
+                    #                                          sustain_t=cell.parameters['sustain_t'],
+                    #                                          sustain_level=cell.parameters['sustain_level'],
+                    #                                          release_t=cell.parameters['release_t'],
+                    #                                          num_sounds=num_sounds_)
+                    cell.signal = synth_module.batch_adsr_envelope(input_signal,
+                                                                   attack_t=cell.parameters['attack_t'],
+                                                                   decay_t=cell.parameters['decay_t'],
+                                                                   sustain_t=cell.parameters['sustain_t'],
+                                                                   sustain_level=cell.parameters['sustain_level'],
+                                                                   release_t=cell.parameters['release_t'])
 
                 elif operation == 'tremolo':
                     if len(cell.audio_input) == 1:
