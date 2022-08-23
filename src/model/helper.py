@@ -116,7 +116,7 @@ def clamp_regression_params(parameters_dict: dict, synth_cfg: SynthConfig, cfg: 
     clamped_params_dict = {}
     for key, val in parameters_dict.items():
         operation = val['operation']
-        operation_params = val['params']
+        operation_params = val['parameters']
 
         if operation == 'osc':
             clamped_params_dict[key] = \
