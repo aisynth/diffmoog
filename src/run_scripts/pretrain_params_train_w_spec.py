@@ -111,6 +111,7 @@ def train_single_epoch(model,
                 modular_synth.generate_signal(num_sounds_=num_sounds)
 
             spectrogram_loss = 0
+            specloss_cnt = 0
             if cfg.use_chain_loss:
                 for op_index in output_params.keys():
                     op_index = str(op_index)
@@ -133,6 +134,9 @@ def train_single_epoch(model,
                                                                                    step,
                                                                                    return_spectrogram=True)
                     spectrogram_loss += loss
+                    specloss_cnt += 1.0
+                spectrogram_loss = spectrogram_loss / specloss_cnt
+                spectrogram_loss = spectrogram_loss / 15
             else:
                 loss, ret_spectrograms = loss_handler['spectrogram_loss'].call(target_final_signal,
                                                                                pred_final_signal,

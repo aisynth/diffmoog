@@ -60,6 +60,7 @@ def inference_loop(cfg: Config, synth_cfg: SynthConfig, synth: SynthModular, tes
 
     return results
 
+
 def inference_nsynth_loop(cfg: Config, synth_cfg: SynthConfig, synth: SynthModular, test_dataloader: DataLoader, preprocess_fn: callable, eval_fn: callable,
                           post_process_fn: callable, device: str = 'cuda:0'):
 
@@ -154,6 +155,7 @@ def process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn
 
     return results, metrics
 
+
 def nsynth_process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn, synth, device, cfg, synth_cfg):
 
     results, metrics = {}, defaultdict(float)
@@ -163,7 +165,8 @@ def nsynth_process_batch_inference(input_batch, preprocess_fn, eval_fn, post_pro
     else:
         raw_target_signal = input_batch
 
-    assert raw_target_signal.ndim >= 2, f"Expected input to be of shape (batch, ..., signal_length) but got {raw_target_signal.shape} instead"
+    assert raw_target_signal.ndim >= 2, f"Expected input to be of shape (batch, ..., signal_length)" \
+                                        f" but got {raw_target_signal.shape} instead"
     num_sounds = len(raw_target_signal)
 
     # -----------Run Model-----------------
@@ -201,7 +204,6 @@ def nsynth_process_batch_inference(input_batch, preprocess_fn, eval_fn, post_pro
     results['predicted_spectrograms'] = predicted_signal_spectrograms
 
     return results, metrics
-
 
 
 def discretize_params(operation: str, input_params: dict, synth_cfg):

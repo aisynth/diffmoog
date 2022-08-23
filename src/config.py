@@ -77,18 +77,18 @@ class Config:
     freq_reinforce_loss_factor: float = 1e5
 
     multi_spectral_loss_spec_type: str = 'BOTH'
-    multi_spectral_loss_preset: str = 'mag_logmag'
+    multi_spectral_loss_preset: str = 'cumsum_time'
 
     add_parameters_loss = True
     parameters_loss_type = 'L1'
     parameters_loss_weight = 1 / 100
-    spectrogram_loss_weight = 1 / 3000
+    spectrogram_loss_weight = 1 / 100
 
     spectrogram_loss_warmup = 40 * 1000
     loss_switch_steps = 40 * 1000
-    min_parameters_loss_decay = 0.1
+    min_parameters_loss_decay = 0.01
 
-    use_chain_loss = False
+    use_chain_loss = True
 
     smoothness_loss_weight = 0
 
