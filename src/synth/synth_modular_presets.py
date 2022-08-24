@@ -15,18 +15,6 @@ BASIC_FLOW_LFO_DECOUPLING = [
     {'index': (0, 4), 'operation': 'env_adsr', 'default_connection': True, 'synth_config': synth_cfg}
 ]
 
-# BASIC_FLOW = [
-#     {'index': (0, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
-#     {'index': (0, 1), 'operation': 'fm_sine', 'default_connection': True, 'synth_config': synth_cfg},
-#     {'index': (1, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
-#     {'index': (1, 1), 'operation': 'fm_square', 'audio_input': [[1, 0]], 'output': [0, 2], 'synth_config': synth_cfg},
-#     {'index': (2, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
-#     {'index': (2, 1), 'operation': 'fm_saw', 'audio_input': [[2, 0]], 'output': [0, 2], 'synth_config': synth_cfg},
-#     {'index': (1, 2), 'operation': None, 'audio_input': None, 'synth_config': synth_cfg},
-#     {'index': (0, 2), 'operation': 'mix', 'audio_input': [[0, 1], [1, 1], [2, 1]], 'synth_config': synth_cfg},
-#     {'index': (0, 3), 'operation': 'filter', 'default_connection': True, 'synth_config': synth_cfg},
-#     {'index': (0, 4), 'operation': 'amplitude_shape', 'default_connection': True, 'synth_config': synth_cfg}
-# ]
 
 BASIC_FLOW = [
     {'index': (0, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},
@@ -132,10 +120,6 @@ FILTER_ONLY = [
     {'index': (0, 2), 'operation': 'filter', 'default_connection': True, 'synth_config': synth_cfg}
 ]
 
-# LFO_FILTER = [
-#     {'index': (0, 0), 'operation': 'osc', 'default_connection': True, 'synth_config': synth_cfg},
-#     {'index': (0, 1), 'operation': 'filter', 'default_connection': True, 'synth_config': synth_cfg}
-# ]
 
 FM_FILTER_ADSR = [
     {'index': (0, 0), 'operation': 'lfo', 'default_connection': True, 'synth_config': synth_cfg},

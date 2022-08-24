@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import librosa
 from torch.utils.tensorboard import SummaryWriter
 
-from synth import synth_config
+from synth import synth_constants
 from torch import nn
 from config import SynthConfig, Config
 from pathlib import Path

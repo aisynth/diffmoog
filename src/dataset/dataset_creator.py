@@ -1,11 +1,14 @@
 import os, sys
+
+from synth.synth_constants import SynthConstants
+
 sys.path.append("..")
 
 import pandas as pd
 import scipy.io.wavfile
 import torch
 from model import helper
-from config import SynthConfig, DatasetConfig, Config
+from config import Config
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from synth.synth_architecture import SynthModular
 import numpy as np
@@ -27,77 +30,63 @@ Configurations settings are inside config file.
 """
 
 
-def create_dataset(split: str, size: int, dataset_cfg: DatasetConfig, synth_cfg: SynthConfig, cfg: Config,
-                   device: torch.device):
-    dataset_parameters = []
+def create_dataset(output_dir: str, split: str, size: int, device: torch.device,
+                   batch_size: int = 1000, seed: int = 123):
+
     print(f"Creating dataset \n Size = {size}")
     print(f" Type = {split} \n")
 
     # init paths
-    if split.lower() == 'train':
-        dataset_dir_path = dataset_cfg.train_dataset_dir_path
-        train = True
-    elif split.lower() == 'test':
-        dataset_dir_path = dataset_cfg.test_dataset_dir_path
-        train = False
-    elif split.lower() in ['val', 'validation']:
-        dataset_dir_path = dataset_cfg.val_dataset_dir_path
-        train = False
-    else:
-        raise ValueError(f"Requested dataset split {split} which is not supported."
-                         f" Please choose from [train, test, val]")
+    dataset_dir_path = os.path.join(output_dir, split.lower(), '')
 
     wav_files_dir = os.path.join(dataset_dir_path, 'wav_files', '')
-    os.makedirs(wav_files_dir, exist_ok=True)
-
     parameters_pickle_path = os.path.join(dataset_dir_path, "params_dataset.pkl")
     parameters_csv_path = os.path.join(dataset_dir_path, "params_dataset.csv")
 
-    synth_obj = SynthModular(synth_cfg=synth_cfg,
-                             sample_rate=cfg.sample_rate,
-                             signal_duration_sec=cfg.signal_duration_sec,
-                             num_sounds_=size,
-                             device=device,
-                             preset=synth_cfg.preset)
+    os.makedirs(wav_files_dir, exist_ok=True)
 
-    np.random.seed(synth_cfg.seed)
+    # Other inits
+    np.random.seed(seed)
+    synth_obj = SynthModular(synth_cfg, device=device)
 
-    num_batches = size // dataset_cfg.batch_size
+    train = (split.lower() == 'train')
+    dataset_parameters = []
+
+    # Create data
+    num_batches = size // batch_size
     for batch_idx in range(num_batches):
 
+        # Generate batch
         if synth_cfg.preset == 'MODULAR':
-            synth_obj.generate_activations_and_chains(synth_cfg=synth_cfg,
-                                                      num_sounds_=dataset_cfg.batch_size,
-                                                      train=train)
+            synth_obj.generate_activations_and_chains(num_sounds_=batch_size, train=train)
 
-        synth_obj.generate_random_params(synth_cfg=synth_cfg,
-                                         num_sounds_=dataset_cfg.batch_size)
-
-        synth_obj.generate_signal(num_sounds_=dataset_cfg.batch_size)
-
+        synth_obj.generate_random_params(num_sounds_=batch_size)
+        synth_obj.generate_signal(batch_size=batch_size)
         audio = synth_obj.signal
 
-        for j in range(dataset_cfg.batch_size):
+        # Save samples
+        for j in range(batch_size):
+            sample_idx = (batch_size * batch_idx) + j
 
-            params_dict = {}
-            for layer in range(synth_cfg.num_layers):
-                for channel in range(synth_cfg.num_channels):
-                    cell = synth_obj.synth_matrix[channel][layer]
-                    if cell.operation is not None:
-                        operation = cell.operation
-                    else:
-                        operation = 'None'
-                    if cell.parameters is not None:
-                        if isinstance(list(cell.parameters.values())[0], float):
-                            parameters = {k: v for k, v in cell.parameters.items()}
-                        else:
-                            parameters = {k: v[j] for k, v in cell.parameters.items()}
-                    else:
-                        parameters = 'None'
-                    params_dict[cell.index] = {'operation': operation, 'parameters': parameters}
+            params_dict = synth_obj.get_parameters(index=j)
+            # params_dict = {}
+            # for layer in range(synth_cfg.num_layers):
+            #     for channel in range(synth_cfg.num_channels):
+            #         cell = synth_obj.synth_matrix[channel][layer]
+            #         if cell.operation is not None:
+            #             operation = cell.operation
+            #         else:
+            #             operation = 'None'
+            #         if cell.parameters is not None:
+            #             if isinstance(list(cell.parameters.values())[0], float):
+            #                 parameters = {k: v for k, v in cell.parameters.items()}
+            #             else:
+            #                 parameters = {k: v[j] for k, v in cell.parameters.items()}
+            #         else:
+            #             parameters = 'None'
+            #         params_dict[cell.index] = {'operation': operation, 'parameters': parameters}
             dataset_parameters.append(params_dict)
 
-            sample_idx = (dataset_cfg.batch_size * batch_idx) + j
             file_name = f"sound_{sample_idx}"
             audio_path = os.path.join(wav_files_dir, f"{file_name}.wav")
             if audio.dim() > 1:
@@ -110,7 +99,7 @@ def create_dataset(split: str, size: int, dataset_cfg: DatasetConfig, synth_cfg:
             if c_audio.dtype == 'float64':
                 c_audio = np.float32(c_audio)
 
-            scipy.io.wavfile.write(audio_path, cfg.sample_rate, c_audio)
+            scipy.io.wavfile.write(audio_path, synth_cfg.sample_rate, c_audio)
             print(f"Generated {file_name}")
 
     parameters_dataframe = pd.DataFrame(dataset_parameters)
@@ -128,7 +117,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     cfg = Config()
-    synth_cfg = SynthConfig()
+    synth_cfg = SynthConstants()
     dataset_cfg = DatasetConfig(args.name)
 
     device = helper.get_device(args.gpu_index)

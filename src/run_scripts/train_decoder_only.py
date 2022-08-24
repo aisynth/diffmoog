@@ -122,7 +122,7 @@ def run(args):
 
     # init modular synth
     modular_synth = SynthModular(synth_cfg=synth_cfg, sample_rate=cfg.sample_rate, device=device, num_sounds=1,
-                                 signal_duration_sec=cfg.signal_duration_sec, preset=synth_cfg.preset)
+                                 signal_duration_sec=cfg.signal_duration_sec, preset_name=synth_cfg.preset)
 
     modular_synth.generate_random_params(synth_cfg)
     init_params = modular_synth.collect_params()

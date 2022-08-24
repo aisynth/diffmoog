@@ -101,14 +101,14 @@ def train_single_epoch(model,
             # --------------Target-------------------------------------
             modular_synth.update_cells_from_dict(target_param_dict)
             target_final_signal, target_signals_through_chain = \
-                modular_synth.generate_signal(num_sounds_=num_sounds)
+                modular_synth.generate_signal(batch_size=num_sounds)
 
             # --------------Predicted-------------------------------------
             params_for_pred_signal_generation = copy.copy(target_param_dict)
             params_for_pred_signal_generation.update(predicted_param_dict)
             modular_synth.update_cells_from_dict(params_for_pred_signal_generation)
             pred_final_signal, pred_signals_through_chain = \
-                modular_synth.generate_signal(num_sounds_=num_sounds)
+                modular_synth.generate_signal(batch_size=num_sounds)
 
             spectrogram_loss = 0
             specloss_cnt = 0
@@ -294,7 +294,7 @@ def train(model,
                                  signal_duration_sec=cfg.signal_duration_sec,
                                  num_sounds_=1,
                                  device=device,
-                                 preset=synth_cfg.preset)
+                                 preset_name=synth_cfg.preset)
 
     for epoch in range(num_epochs):
         cur_epoch = start_epoch + epoch

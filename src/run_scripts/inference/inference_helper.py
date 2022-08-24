@@ -129,7 +129,7 @@ def process_batch_inference(input_batch, preprocess_fn, eval_fn, post_process_fn
 
     synth.update_cells_from_dict(processed_output)
     pred_final_signal, pred_signals_through_chain = \
-        synth.generate_signal(num_sounds_=num_sounds)
+        synth.generate_signal(batch_size=num_sounds)
 
     predicted_signal_spectrograms = preprocess_fn(pred_final_signal).squeeze().detach().cpu().numpy()
     target_signal_spectrogram = target_signal_spectrogram.squeeze().detach().cpu().numpy()
@@ -179,7 +179,7 @@ def nsynth_process_batch_inference(input_batch, preprocess_fn, eval_fn, post_pro
 
     synth.update_cells_from_dict(processed_output)
     pred_final_signal, pred_signals_through_chain = \
-        synth.generate_signal(num_sounds_=num_sounds)
+        synth.generate_signal(batch_size=num_sounds)
 
     predicted_signal_spectrograms = preprocess_fn(pred_final_signal).squeeze().detach().cpu().numpy()
     target_signal_spectrogram = target_signal_spectrogram.squeeze().detach().cpu().numpy()
