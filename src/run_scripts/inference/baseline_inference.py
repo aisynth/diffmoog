@@ -4,10 +4,8 @@ import torch
 
 from config import SynthConfig, Config
 from dataset.ai_synth_dataset import AiSynthDataset, create_data_loader
-from model import helper
 from model.model import SimpleSynthNetwork
 from run_scripts.inference.inference_helper import inference_loop
-from synth.synth_architecture import SynthModular
 
 device = 'cuda:3'
 preset = 'BASIC_FLOW'

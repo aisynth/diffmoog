@@ -1,13 +1,12 @@
 from typing import Callable
 
-import numpy as np
 import torch
 import torchaudio
 from torch import nn
 from torch.utils.tensorboard import SummaryWriter
 
 from config import Config
-from model.spectral_loss_presets import loss_presets
+from model.loss.spectral_loss_presets import loss_presets
 
 loss_type_to_function = {'mag': lambda x: x,
                          'delta_time': lambda x: torch.diff(x, n=1, dim=1),

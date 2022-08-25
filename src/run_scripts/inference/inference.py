@@ -5,7 +5,6 @@ import torch
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from torch.utils.tensorboard import SummaryWriter
 
-from model import helper
 from model.model import BigSynthNetwork
 from dataset.ai_synth_dataset import AiSynthDataset, create_data_loader
 from synth.synth_architecture import SynthModular, SynthModularCell

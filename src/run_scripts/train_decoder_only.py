@@ -7,7 +7,6 @@ from dataset.ai_synth_dataset import AiSynthDataset
 from run_scripts.inference.inference import visualize_signal_prediction
 from model.model import DecoderOnlyNetwork
 from synth.synth_architecture import SynthModular
-from model import helper
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 from train_helper import *

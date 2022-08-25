@@ -3,9 +3,7 @@ import os
 import os.path
 import pandas as pd
 import torchaudio
-from model import helper
 from torch.utils.data import Dataset
-from config import Config
 from torch.utils.data import DataLoader
 
 
@@ -98,15 +96,3 @@ def create_data_loader(dataset, batch_size, num_workers=0, shuffle=True):
     dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers,
                             persistent_workers=num_workers != 0, shuffle=shuffle)
     return dataloader
-
-
-if __name__ == "__main__":
-    device = helper.get_device()
-    cfg = Config()
-    # init dataset
-    ai_synth_dataset = AiSynthDataset(cfg.train_parameters_file,
-                                      cfg.train_audio_dir,
-                                      device
-                                      )
-
-    print(f"there are {len(ai_synth_dataset)} files in the dataset")

@@ -11,10 +11,9 @@ from config import Config, ModelConfig, configure_experiment
 from dataset.ai_synth_dataset import AiSynthDataset, NSynthDataset, create_data_loader
 from run_scripts.inference.inference import visualize_signal_prediction
 from model.model import SimpleSynthNetwork
-from model.spectral_loss import SpectralLoss
-from model.parameters_loss import ParametersLoss
+from model.loss.spectral_loss import SpectralLoss
+from model.loss.parameters_loss import ParametersLoss
 from synth.synth_architecture import SynthModular
-from model import helper
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from tqdm import tqdm
 from collections.abc import Iterable

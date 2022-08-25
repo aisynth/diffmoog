@@ -1,11 +1,12 @@
 import numpy as np
 import torch
+
+import torchaudio
+
 from torch.utils.tensorboard import SummaryWriter
 
 from sklearn.metrics import confusion_matrix
 from scipy.special import softmax
-
-from synth.synth_modules import make_envelope_shape
 
 from config import SynthConfig
 from synth.synth_modular_presets import synth_presets_dict
@@ -242,3 +243,35 @@ def vectorize_unpredicted_params(target_params, model_preset, device):
     unpredicted_params_tensor = torch.stack(unpredicted_params, dim=1).float()
 
     return unpredicted_params_tensor
+
+
+def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, ckpt_path, txt_path, numpy_path):
+    # save model checkpoint
+
+    np.save(numpy_path, np.asarray(loss_list))
+    torch.save({
+        'epoch': cur_epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimiser_arg.state_dict(),
+        'loss': avg_epoch_loss
+    }, ckpt_path)
+
+    text_file = open(txt_path, 'a')
+    text_file.write(f"epoch:{cur_epoch}\tloss: " + str(avg_epoch_loss) + "\n")
+    text_file.close()
+
+
+def spectrogram_transform():
+    return torchaudio.transforms.Spectrogram(  # win_length default = n_fft. hop_length default = win_length / 2
+        n_fft=512,
+        power=2.0)
+
+
+def mel_spectrogram_transform(sample_rate):
+    return torchaudio.transforms.MelSpectrogram(sample_rate=sample_rate,
+                                                n_fft=1024,
+                                                hop_length=256,
+                                                n_mels=128,
+                                                power=2.0,
+                                                f_min=0,
+                                                f_max=8000)

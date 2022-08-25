@@ -7,7 +7,6 @@ sys.path.append("..")
 import pandas as pd
 import scipy.io.wavfile
 import torch
-from model import helper
 from config import Config
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from synth.synth_architecture import SynthModular
