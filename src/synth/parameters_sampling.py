@@ -7,260 +7,120 @@ from synth.synth_architecture import SynthModularCell
 from synth.synth_constants import SynthConstants
 
 
-def generate_random_params(self, synth_matrix: List[List[SynthModularCell]], synth_structure: SynthConstants,
-                           num_sounds_=1):
-    for layer in range(synth_structure.num_layers):
-        for channel in range(synth_structure.num_channels):
-            cell = self.synth_matrix[channel][layer]
-            operation = cell.operation
-            parameters = cell.parameters
-            if parameters is None:
-                continue
+class ParametersSampler:
 
-            activity_flags = parameters['active']
-            if 'fm_active' in parameters.keys():
-                fm_activity_flags = parameters['fm_active']
-            operation_params = {}
-            if operation == 'osc':
-                operation_params = {'amp': np.random.random_sample(size=num_sounds_),
-                                    'freq': np.asarray(random.choices(synth_structure.osc_freq_list, k=num_sounds_)),
-                                    'waveform': random.choices(list(synth_structure.wave_type_dict), k=num_sounds_)}
+    def __init__(self, synth_structure: SynthConstants, sampling_preset: dict):
+        self.sampling_preset = sampling_preset
+        self.synth_structure = synth_structure
 
-            elif operation == 'lfo':
-                operation_params = {'freq': np.random.uniform(low=0, high=synth_structure.max_lfo_freq, size=num_sounds_),
-                                    'waveform': random.choices([k for k in synth_structure.wave_type_dict.keys()],
-                                                               k=num_sounds_)}
+    def generate_activations_and_chains(self, synth_matrix: List[List[SynthModularCell]], signal_len: float,
+                                        note_off_time: float, num_sounds_=1):
+        # todo remove cases where all fms are off
+        rng = np.random.default_rng()
 
-            elif operation == 'lfo_non_sine':
-                operation_params = {'freq': np.random.uniform(low=0, high=synth_structure.max_lfo_freq, size=num_sounds_),
-                                    'waveform': random.choices(
-                                        [k for k in synth_structure.wave_type_dict.keys() if k != 'sine'],
-                                        k=num_sounds_)}
+        n_layers = len(synth_matrix[0])
+        n_channels = len(synth_matrix[1])
 
-            elif operation == 'lfo_sine':
-                freq = np.random.uniform(low=synth_structure.min_lfo_freq,
-                                         high=synth_structure.max_lfo_freq,
-                                         size=num_sounds_)
+        # Propagate activations through layers
+        output_params_dict = {}
+        for layer_idx in range(n_layers):
+            for channel_idx in range(n_channels):
 
-                operation_params['freq'] = [freq[k] if activity_flags[k] else synth_structure.non_active_freq_default
-                                            for k in range(num_sounds_)]
+                cell_params = {}
+                cell = synth_matrix[channel_idx][layer_idx]
 
-            elif operation == 'fm':
-                operation_params = {'freq_c': self._sample_c_freq(synth_structure, num_sounds_),
-                                    'waveform': random.choices(list(synth_structure.wave_type_dict), k=num_sounds_),
-                                    'mod_index': np.random.uniform(low=0, high=synth_structure.max_mod_index,
-                                                                   size=num_sounds_)}
+                operation = cell.operation
+                if operation is None or operation.lower() == 'none':
+                    continue
 
-            elif operation == 'fm_lfo':
-                freq_c = np.random.uniform(low=synth_structure.min_lfo_freq,
-                                           high=synth_structure.max_lfo_freq,
-                                           size=num_sounds_)
-                waveform = random.choices(list(synth_structure.wave_type_dict), k=num_sounds_)
-                mod_index = np.random.uniform(low=synth_structure.min_mod_index,
-                                              high=synth_structure.max_mod_index,
-                                              size=num_sounds_)
+                op_params = self.synth_structure.modular_synth_params[operation]
+                cell_preset_data = self.sampling_preset[cell.index]
 
-                operation_params['freq_c'] = np.asarray \
-                    ([freq_c[k] if activity_flags[k] else synth_structure.non_active_freq_default
-                                                         for k in range(num_sounds_)])
-                operation_params['waveform'] = [waveform[k] if activity_flags[k]
-                                                else synth_structure.non_active_waveform_default
-                                                for k in range(num_sounds_)]
-                operation_params['mod_index'] = np.asarray([mod_index[k] if fm_activity_flags[k]
-                                                            else synth_structure.non_active_mod_index_default
-                                                            for k in range(num_sounds_)])
+                if cell.control_input is not None:
+                    control_input_cell = synth_matrix[cell.control_input[0]][cell.control_input[1]]
+                    has_control_input = [cell.index == control_cell_output for control_cell_output
+                                         in control_input_cell.parameters['output']]
+                    cell_params['fm_active'] = has_control_input
+                else:
+                    has_control_input = [False for _ in range(num_sounds_)]
 
-            elif operation in ['fm_sine', 'fm_square', 'fm_saw']:
-                amp_c = np.random.uniform(low=synth_structure.min_amp, high=synth_structure.max_amp, size=num_sounds_)
-                freq_c = self._sample_c_freq(synth_structure, num_sounds_)
-                mod_index = np.random.uniform(low=0, high=synth_structure.max_mod_index, size=num_sounds_)
-                operation_params['amp_c'] = np.asarray \
-                    ([amp_c[k] if activity_flags[k] else synth_structure.non_active_amp_default
-                                                        for k in range(num_sounds_)])
-                operation_params['freq_c'] = np.asarray \
-                    ([freq_c[k] if activity_flags[k] else synth_structure.non_active_freq_default
-                                                         for k in range(num_sounds_)])
-                operation_params['mod_index'] = np.asarray([mod_index[k] if fm_activity_flags[k]
-                                                            else synth_structure.non_active_mod_index_default
-                                                            for k in range(num_sounds_)])
+                if 'active' in op_params:
+                    active_prob = cell_preset_data.get('active_prob', 0.5)
+                    random_activeness = np.random.choice([True, False], size=num_sounds_,
+                                                         p=[active_prob, 1 - active_prob])
 
-            elif operation == 'mix':
-                operation_params = None
-                continue
+                    is_active = np.logical_or(has_control_input, random_activeness)
+                    cell_params['active'] = is_active
+                else:
+                    is_active = [True for _ in range(num_sounds_)]
 
-            elif operation == 'amplitude_shape':
-                attack_t, decay_t, sustain_t, sustain_level, release_t = \
-                    self.generate_random_adsr_values(num_sounds_=num_sounds_)
+                if cell.switch_outputs is not None:
+                    selected_outputs = rng.choice(cell.outputs, size=num_sounds_, axis=0).tolist()
+                    selected_outputs = [selected_outputs[k] if act else [-1, -1] for k, act in enumerate(is_active)]
+                    cell_params['output'] = selected_outputs
 
-                operation_params = {'attack_t': attack_t,
-                                    'decay_t': decay_t,
-                                    'sustain_t': sustain_t,
-                                    'sustain_level': sustain_level,
-                                    'release_t': release_t,
-                                    'envelope': torch.full([num_sounds_], -1)}
+                if operation in ['env_adsr', 'amplitude_shape']:
+                    sampled_params = self._generate_random_adsr_values(signal_len, note_off_time,
+                                                                       num_sounds_=num_sounds_)
+                else:
+                    sampled_params = self._sample_parameters(operation, cell_params.get('active', None),
+                                                             cell_params.get('fm_active', None), num_sounds_)
 
-                # attack_t, decay_t, sustain_t, sustain_level, release_t = \
-                #     self.generate_random_adsr_values(num_sounds_=num_sounds_)
+                cell_params.update(sampled_params)
 
-                # envelope = self.make_envelope_shape(attack_t,
-                #                                     decay_t,
-                #                                     sustain_t,
-                #                                     sustain_level,
-                #                                     release_t,
-                #                                     num_sounds_)
-                # params = {'envelope': envelope}
+                output_params_dict[cell.index] = cell_params
 
-            elif operation == 'filter':
-                operation_params = {'filter_type': random.choices(list(synth_structure.filter_type_dict), k=num_sounds_),
-                                    'filter_freq': np.random.uniform(low=synth_structure.min_filter_freq,
-                                                                     high=synth_structure.max_filter_freq,
-                                                                     size=num_sounds_)}
+        return output_params_dict
 
-            elif operation == 'lowpass_filter':
-                operation_params = {'filter_freq': np.random.uniform(low=synth_structure.min_filter_freq,
-                                                                     high=synth_structure.max_filter_freq,
-                                                                     size=num_sounds_),
-                                    'resonance': np.random.uniform(low=synth_structure.min_resonance_val,
-                                                                   high=synth_structure.max_resonance_val,
-                                                                   size=num_sounds_)}
-            elif operation == 'env_adsr':
-                attack_t, decay_t, sustain_t, sustain_level, release_t = \
-                    self.generate_random_adsr_values(num_sounds_=num_sounds_)
+    def _sample_parameters(self, op_name: str, is_active, is_fm_active, batch_size: int = 1):
 
-                operation_params = {'attack_t': attack_t,
-                                    'decay_t': decay_t,
-                                    'sustain_t': sustain_t,
-                                    'sustain_level': sustain_level,
-                                    'release_t': release_t}
+        synth_structure = self.synth_structure
+        sampling_config = synth_structure.param_configs[op_name]
 
-            elif operation == 'tremolo':
-                amount = np.random.uniform(low=synth_structure.min_amount_tremolo,
-                                           high=synth_structure.max_amount_tremolo,
-                                           size=num_sounds_)
+        params_dict = {}
+        for param_name, param_config in sampling_config.items():
 
-                operation_params['amount'] = np.asarray([
-                    amount[k] if activity_flags[k] else synth_structure.non_active_tremolo_amount_default for k in
-                    range(num_sounds_)])
+            # Sample according to param type and possible values
+            if param_config['type'] == 'freq_c':
+                sampled_values = self._sample_c_freq(batch_size)
+            elif param_config['type'] == 'uniform':
+                sampled_values = np.random.uniform(low=param_config['values'][0], high=param_config['values'][1],
+                                                   size=batch_size)
+            elif param_config['type'] == 'choice':
+                sampled_values = random.choices(param_config['values'], k=batch_size)
+            else:
+                raise ValueError(f'Unrecognized parameter type {param_config["type"]}')
 
-            elif operation is None:
-                operation_params = None
-                #
-                # if operation_params is not None:
-                #     for key, val in operation_params.items():
-                #         if isinstance(val, numpy.ndarray):
-                #             operation_params[key] = val.tolist()
+            # Apply activity defaults
+            if param_config.get('activity_signal', None) == 'fm_active':
+                activity_signal = is_fm_active
+            else:
+                activity_signal = is_active
 
-                if num_sounds_ == 1:
-                    for key, value in operation_params.items():
-                        operation_params[key] = value[0]
+            if activity_signal is not None and param_config['non_active_default'] is not None:
+                sampled_values = [val if activity_signal[k] else param_config['non_active_default']
+                                  for k, val in enumerate(sampled_values)]
 
-            cell.parameters.update(operation_params)
+            params_dict[param_name] = sampled_values
 
+        return params_dict
 
-def generate_activations_and_chains(self, num_sounds_=1, train: bool=False):
-    # todo: generalize code to go over all cells
-    rng = np.random.default_rng()
+    def _generate_random_adsr_values(self, signal_duration: float, note_off_time: float, num_sounds_=1):
 
-    # lfo-sine
-    lfo_sine_cell = self.synth_matrix[0][0]
-    operation = lfo_sine_cell.operation
-    audio_input = lfo_sine_cell.audio_input
-    lfo_sine_outputs = lfo_sine_cell.outputs
+        synth_structure = self.synth_structure
 
-    lfo_sine_output = rng.choice(lfo_sine_outputs, size=num_sounds_, axis=0).tolist()
-    if train:
-        probs = [0.75, 0.25]
-    else:
-        probs = [0.25, 0.75]
-    lfo_sine_params = {'active': np.random.choice([True, False], size=num_sounds_, p=probs)}
-    lfo_sine_params['output'] = [lfo_sine_output[k] if lfo_sine_params['active'][k] else [-1, -1] for k in
-                                 range(num_sounds_)]
-    lfo_sine_cell.parameters = lfo_sine_params
-
-    # tremolo
-    tremolo_cell = self.synth_matrix[0][6]
-    tremolo_params = {
-        'active': [True if (lfo_sine_params['active'][k] and lfo_sine_params['output'][k] == [0, 6]) else False for
-                   k in range(num_sounds_)]}
-    tremolo_cell.parameters = tremolo_params
-
-    # fm_lfo
-    fm_lfo_cell = self.synth_matrix[1][1]
-    fm_lfo_outputs = fm_lfo_cell.outputs
-
-    fm_lfo_random_activeness = np.random.choice([True, False], size=num_sounds_, p=[0.75, 0.25])
-    fm_lfo_output = rng.choice(fm_lfo_outputs, size=num_sounds_, axis=0).tolist()
-
-    fm_lfo_params = {'fm_active': [True if (lfo_sine_params['active'][k] and lfo_sine_params['output'][k] == [1, 1])
-                                   else False for k in range(num_sounds_)]}
-    fm_lfo_params['active'] = [True if fm_lfo_params['fm_active'][k] or fm_lfo_random_activeness[k] else False for k
-                               in range(num_sounds_)]
-    fm_lfo_params['output'] = [fm_lfo_output[k] if fm_lfo_params['active'][k] else [-1, -1] for k in range(num_sounds_)]
-    fm_lfo_cell.parameters = fm_lfo_params
-
-    oscillator_options = [['sine'], ['saw'], ['square'], ['sine', 'saw'], ['sine', 'square'], ['saw', 'square'],
-                          ['sine', 'saw', 'square']]
-    oscillator_activeness = rng.choice(oscillator_options, size=num_sounds_, axis=0).tolist()
-
-    # sine oscillator
-    sine_cell = self.synth_matrix[0][2]
-    sine_params = {
-        'fm_active': [True if (fm_lfo_params['active'][k] and fm_lfo_params['output'][k] == [0, 2]) else False for
-                      k in range(num_sounds_)]}
-    sine_params['active'] = [True if sine_params['fm_active'][k] or 'sine' in oscillator_activeness[k] else False
-                             for k in range(num_sounds_)]
-
-    sine_cell.parameters = sine_params
-
-    # saw oscillator
-    saw_cell = self.synth_matrix[1][2]
-    saw_params = {
-        'fm_active': [True if (fm_lfo_params['active'][k] and fm_lfo_params['output'][k] == [1, 2]) else False for
-                      k in range(num_sounds_)]}
-    saw_params['active'] = [True if saw_params['fm_active'][k] or 'saw' in oscillator_activeness[k] else False
-                            for k in range(num_sounds_)]
-
-    saw_cell.parameters = saw_params
-
-    # square oscillator
-    square_cell = self.synth_matrix[2][2]
-    square_params = {
-        'fm_active': [True if (fm_lfo_params['active'][k] and fm_lfo_params['output'][k] == [2, 2]) else False for
-                      k in range(num_sounds_)]}
-    square_params['active'] = [True if square_params['fm_active'][k] or 'square' in oscillator_activeness[k]
-                               else
-                               False
-                               for k
-                               in range(num_sounds_)]
-
-    square_cell.parameters = square_params
-
-    mix_cell = self.synth_matrix[0][3]
-    mix_params = {'active': np.random.choice([True], size=num_sounds_)}
-    mix_cell.parameters = mix_params
-
-    adsr_cell = self.synth_matrix[0][4]
-    adsr_params = {'active': np.random.choice([True], size=num_sounds_)}
-    adsr_cell.parameters = adsr_params
-
-    filter_cell = self.synth_matrix[0][5]
-    filters_params = {'active': np.random.choice([True], size=num_sounds_)}
-    filter_cell.parameters = filters_params
-
-def generate_random_adsr_values(self, num_sounds_=1):
         attack_t = np.random.random(size=num_sounds_)
         decay_t = np.random.random(size=num_sounds_)
         sustain_t = np.random.random(size=num_sounds_)
         release_t = np.random.random(size=num_sounds_)
 
-        if self.synth_cfg.fixed_note_off:
+        if synth_structure.fixed_note_off:
             adsr_sum = attack_t + decay_t + sustain_t
-
-            ads_time = self.synth_cfg.note_off_time
-            release_t = release_t * (self.signal_duration_sec - self.synth_cfg.note_off_time)
+            ads_time = note_off_time
+            release_t = release_t * (signal_duration - note_off_time)
         else:
             adsr_sum = attack_t + decay_t + sustain_t + release_t
-            ads_time = self.signal_duration_sec
+            ads_time = signal_duration
             release_t = (release_t / adsr_sum) * ads_time
 
         attack_t = (attack_t / adsr_sum) * ads_time
@@ -270,7 +130,7 @@ def generate_random_adsr_values(self, num_sounds_=1):
         # fixing a numerical issue in case the ADSR times exceeds signal length
         adsr_aggregated_time = attack_t + decay_t + sustain_t + release_t
         overflow_indices = [idx for idx, val in enumerate(adsr_aggregated_time) if
-                            val > self.signal_duration_sec]
+                            val > signal_duration]
         attack_t[overflow_indices] -= 1e-6
         decay_t[overflow_indices] -= 1e-6
         sustain_t[overflow_indices] -= 1e-6
@@ -278,17 +138,21 @@ def generate_random_adsr_values(self, num_sounds_=1):
 
         sustain_level = np.random.random(size=num_sounds_)
 
-        return attack_t, decay_t, sustain_t, sustain_level, release_t
+        adsr_params = {'attack_t': attack_t, 'decay_t': decay_t, 'sustain_t': sustain_t,
+                       'sustain_level': sustain_level, 'release_t': release_t}
 
+        return adsr_params
 
-def _sample_c_freq(synth_cfg: SynthConfig, num_sounds_: int):
+    def _sample_c_freq(self, num_sounds_: int):
 
-    osc_freq_list = np.asarray(synth_cfg.osc_freq_list)
+        synth_structure = self.synth_structure
 
-    base_freqs = np.random.uniform(low=synth_cfg.osc_freq_list[0],
-                                   high=synth_cfg.osc_freq_list[-1],
-                                   size=num_sounds_)
+        osc_freq_list = np.asarray(synth_structure.osc_freq_list)
 
-    idx = np.searchsorted(synth_cfg.osc_freq_list, base_freqs, side="left")
-    idx = idx - (np.abs(base_freqs - osc_freq_list[idx - 1]) < np.abs(base_freqs - osc_freq_list[idx]))
-    return osc_freq_list[idx]
+        base_freqs = np.random.uniform(low=synth_structure.osc_freq_list[0],
+                                       high=synth_structure.osc_freq_list[-1],
+                                       size=num_sounds_)
+
+        idx = np.searchsorted(synth_structure.osc_freq_list, base_freqs, side="left")
+        idx = idx - (np.abs(base_freqs - osc_freq_list[idx - 1]) < np.abs(base_freqs - osc_freq_list[idx]))
+        return osc_freq_list[idx]

@@ -19,11 +19,12 @@ class SynthModularCell:
                  parameters=None,
                  signal=None,
                  outputs=None,
+                 switch_outputs=None,
                  default_connection=False,
                  synth_structure: SynthConstants = None,
                  device: str = 'cuda:0'):
 
-        self.check_inputs(index, audio_input, outputs, operation, parameters, synth_structure)
+        self.check_inputs(index, audio_input, outputs, switch_outputs, operation, parameters, synth_structure)
 
         self.index = index
 
@@ -33,18 +34,20 @@ class SynthModularCell:
             self.audio_input = None
             self.control_input = None
             self.outputs = None
-
+            self.switch_outputs = None
         else:
             self.audio_input = audio_input
             self.control_input = control_input
             self.outputs = outputs
+            self.switch_outputs = switch_outputs
 
         self.operation = operation
         self.parameters = parameters
         self.signal = signal
 
     @staticmethod
-    def check_inputs(index, audio_input, outputs, operation, parameters, synth_structure: SynthConstants):
+    def check_inputs(index, audio_input, outputs, switch_outputs, operation, parameters,
+                     synth_structure: SynthConstants):
         layer = index[1]
 
         if audio_input is not None:

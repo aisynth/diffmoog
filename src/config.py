@@ -191,9 +191,6 @@ class ModelConfig:
     num_workers: int = 0
 
 
-
-
-
 def configure_experiment(exp_name: str, dataset_name: str):
 
     project_root = os.path.join(EXP_ROOT, 'current', exp_name, '')
