@@ -9,8 +9,7 @@ from synth.synth_constants import SynthConstants
 
 class ParametersSampler:
 
-    def __init__(self, synth_structure: SynthConstants, sampling_preset: dict):
-        self.sampling_preset = sampling_preset
+    def __init__(self, synth_structure: SynthConstants):
         self.synth_structure = synth_structure
 
     def generate_activations_and_chains(self, synth_matrix: List[List[SynthModularCell]], signal_len: float,
@@ -34,7 +33,6 @@ class ParametersSampler:
                     continue
 
                 op_params = self.synth_structure.modular_synth_params[operation]
-                cell_preset_data = self.sampling_preset[cell.index]
 
                 if cell.control_input is not None:
                     control_input_cell = synth_matrix[cell.control_input[0]][cell.control_input[1]]
@@ -45,7 +43,7 @@ class ParametersSampler:
                     has_control_input = [False for _ in range(num_sounds_)]
 
                 if 'active' in op_params:
-                    active_prob = cell_preset_data.get('active_prob', 0.5)
+                    active_prob = cell.active_prob
                     random_activeness = np.random.choice([True, False], size=num_sounds_,
                                                          p=[active_prob, 1 - active_prob])
 
@@ -68,7 +66,7 @@ class ParametersSampler:
 
                 cell_params.update(sampled_params)
 
-                output_params_dict[cell.index] = cell_params
+                output_params_dict[cell.index] = {'operation': operation, 'parameters': cell_params}
 
         return output_params_dict
 

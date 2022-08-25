@@ -25,9 +25,11 @@ def gumbel_softmax(logits, temperature=1, hard=False, device='cuda:0'):
 
     shape = y.size()
     _, ind = y.max(dim=-1)
+
     y_hard = torch.zeros_like(y).view(-1, shape[-1])
     y_hard.scatter_(1, ind.view(-1, 1), 1)
     y_hard = y_hard.view(*shape)
+
     # Set gradients w.r.t. y_hard gradients w.r.t. y
     y_hard = (y_hard - y).detach() + y
     return y_hard

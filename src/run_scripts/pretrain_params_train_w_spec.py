@@ -18,7 +18,7 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from tqdm import tqdm
 from collections.abc import Iterable
 
-from train_helper import *
+from utils.train_utils import *
 
 sys.path.append(".")
 

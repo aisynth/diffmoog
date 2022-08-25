@@ -3,7 +3,7 @@ from typing import Tuple, Dict
 import torch
 
 from synth import synth_modular_presets
-from synth.synth_constants import SynthConstants
+from synth.synth_constants import SynthConstants, synth_structure
 from synth.synth_modules import get_synth_module
 
 from utils.types import TensorLike
@@ -20,6 +20,7 @@ class SynthModularCell:
                  signal=None,
                  outputs=None,
                  switch_outputs=None,
+                 active_prob=None,
                  default_connection=False,
                  synth_structure: SynthConstants = None,
                  device: str = 'cuda:0'):
@@ -44,6 +45,7 @@ class SynthModularCell:
         self.operation = operation
         self.parameters = parameters
         self.signal = signal
+        self.active_prob = active_prob
 
     @staticmethod
     def check_inputs(index, audio_input, outputs, switch_outputs, operation, parameters,
@@ -88,14 +90,10 @@ class SynthModularCell:
 
 class SynthModular:
     def __init__(self, preset_name: str,
-                 sample_rate=44100,
-                 signal_duration_sec=1.0,
                  device='cuda:0'):
 
-        self.synth_constants = SynthConstants()
-
-        self.sample_rate = sample_rate
-        self.signal_duration_sec = signal_duration_sec
+        self.sample_rate = synth_structure.sample_rate
+        self.signal_duration_sec = synth_structure.signal_duration
 
         self.device = device
 
@@ -109,7 +107,7 @@ class SynthModular:
             for layer_idx in range(n_layers):
                 cell = preset.get((channel_idx, layer_idx), {})
                 self.synth_matrix[channel_idx][layer_idx] = SynthModularCell(**cell, device=self.device,
-                                                                             synth_structure=self.synth_constants)
+                                                                             synth_structure=synth_structure)
 
     def generate_signal(self, batch_size: int = 1) -> (TensorLike, Dict[str, TensorLike]):
         output_signals = {}
@@ -156,7 +154,7 @@ class SynthModular:
         cell = self.synth_matrix[index[0]][index[1]]
         if parameters is not None and isinstance(parameters, dict):
             for key in parameters:
-                if key not in self.synth_constants.modular_synth_params[cell.operation]:
+                if key not in synth_structure.modular_synth_params[cell.operation]:
                     raise ValueError("Illegal parameter for the provided operation.")
             cell.parameters = parameters
         else:
@@ -192,7 +190,7 @@ class SynthModular:
     def reset_signal(self):
         for channel in self.synth_matrix:
             for cell in channel:
-                cell.signal = torch.zeros((1, int(self.sample_rate * self.signal_duration_sec)), requires_grad=True)
+                cell.signal = 0
 
     @staticmethod
     def _parse_preset(preset_name: str) -> (dict, Tuple[int, int]):

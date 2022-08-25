@@ -9,7 +9,7 @@ from synth.synth_architecture import SynthModular
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from tqdm import tqdm
 
-from train_helper import *
+from utils.train_utils import *
 
 
 def train_single_epoch(model,

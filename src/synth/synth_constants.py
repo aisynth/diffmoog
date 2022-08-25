@@ -27,8 +27,8 @@ class SynthConstants:
     min_amount_tremolo: float = 0.05
     max_amount_tremolo: float = 1
 
+    sample_rate: int = 16000
     fixed_note_off: bool = True
-    note_off_time: float = 3.0
 
     # non-active operation defaults
     non_active_waveform_default = 'sine'

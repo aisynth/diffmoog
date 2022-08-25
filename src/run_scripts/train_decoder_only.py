@@ -9,7 +9,7 @@ from model.model import DecoderOnlyNetwork
 from synth.synth_architecture import SynthModular
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-from train_helper import *
+from utils.train_utils import *
 
 
 def train_single_step(model, step, sample, optimizer, scheduler, loss_handler, device, modular_synth,

@@ -17,7 +17,7 @@ from torchaudio.functional.filtering import lowpass_biquad, highpass_biquad
 
 import julius
 from julius.lowpass import lowpass_filter_new
-from model.gumble_softmax import gumbel_softmax
+from utils.gumble_softmax import gumbel_softmax
 from synth.synth_constants import SynthConstants
 from utils.types import TensorLike
 

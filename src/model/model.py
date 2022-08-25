@@ -6,8 +6,6 @@ from torchvision.models import resnet18, resnet34
 from synth.synth_modular_presets import synth_presets_dict
 from config import SynthConfig, Config
 
-SMALL_LINEAR_IN_CHANNELS = 4480
-BIG_LINEAR_IN_CHANNELS = 23040
 LATENT_SPACE_SIZE = 128
 
 

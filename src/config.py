@@ -12,6 +12,9 @@ import numpy as np
 from typing import Dict, List
 
 from torch.utils.tensorboard import SummaryWriter
+
+from synth.synth_constants import synth_structure
+
 root = r'/home/almogelharar/almog/ai_synth/'
 EXP_ROOT = os.path.join(root, 'experiments')
 DATA_ROOT = os.path.join(root, 'data')
@@ -87,18 +90,6 @@ class Config:
 
     use_chain_loss = True
 
-    smoothness_loss_weight = 0
-
-    # Debug
-    debug_mode: bool = False
-    plot_spec: bool = False
-    print_train_batch_stats: bool = False
-    print_timings: bool = False
-    print_synth_param_stats: bool = False
-    print_accuracy_stats: bool = False
-    print_per_accuracy_stats_multiple_epochs: bool = True
-
-    log_spectrogram_mse_loss: bool = False
 
     def __init__(self, project_root: str = ''):
 
@@ -142,41 +133,6 @@ class Config:
 
 
 @dataclass
-class DatasetConfig:
-    batch_size: int = 128
-    num_epochs_to_print_stats: int = 100
-    train_parameters_file: str = None
-    train_audio_dir: str = None
-    val_parameters_file: str = None
-    val_audio_dir: str = None
-    test_parameters_file: str = None
-    test_audio_dir: str = None
-    inference_audio_dir: str = None
-    inference_plots_dir: str = None
-    train_dataset_dir_path: str = None
-    test_dataset_dir_path: str = None
-    val_dataset_dir_path: str = None
-
-    def __init__(self, dataset_name):
-
-        dataset_dir = os.path.join(DATA_ROOT, dataset_name, '')
-
-        self.train_parameters_file: str = os.path.join(dataset_dir, 'train', 'params_dataset.pkl')
-        self.train_audio_dir: str = os.path.join(dataset_dir, 'train', 'wav_files')
-        self.val_parameters_file: str = os.path.join(dataset_dir, 'val', 'params_dataset.pkl')
-        self.val_audio_dir: str = os.path.join(dataset_dir, 'val', 'wav_files')
-        self.val_nsynth_audio_dir: str = os.path.join(dataset_dir, 'val_nsynth', 'wav_files')
-        self.test_parameters_file: str = os.path.join(dataset_dir, 'test', 'params_dataset.pkl')
-        self.test_audio_dir: str = os.path.join(dataset_dir, 'test', 'wav_files')
-        self.inference_audio_dir: str = os.path.join(dataset_dir, 'test', 'inference_wav_files')
-        self.inference_plots_dir: str = os.path.join(dataset_dir, 'test', 'inference_plots')
-        self.train_dataset_dir_path: str = os.path.join(dataset_dir, 'train')
-        self.test_dataset_dir_path: str = os.path.join(dataset_dir, 'test')
-        self.val_dataset_dir_path: str = os.path.join(dataset_dir, 'val')
-        self.val_nsynth_dataset_dir_path: str = os.path.join(dataset_dir, 'val_nsynth')
-
-
-@dataclass
 class ModelConfig:
     preset: str = 'MODULAR'
     model_type: str = 'simple'
@@ -207,8 +163,8 @@ def configure_experiment(exp_name: str, dataset_name: str):
             rmtree(project_root)
 
     cfg = Config(project_root)
-    synth_cfg = SynthConfig()
-    dataset_cfg = DatasetConfig(dataset_name)
+    synth_cfg = synth_structure
+    dataset_cfg = {'dataset_name': dataset_name}
     model_cfg = ModelConfig()
 
     config_dump_path = os.path.join(cfg.project_root, 'config_dump', '')
