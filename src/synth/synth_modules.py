@@ -6,7 +6,7 @@ Created on Mon May 31 15:41:38 2021
 @author: Moshe Laufer, Noy Uzrad
 """
 from abc import ABC, abstractmethod
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union, Sequence
 
 import numpy as np
 
@@ -14,11 +14,11 @@ import torch
 import math
 
 from torchaudio.functional.filtering import lowpass_biquad, highpass_biquad
-from torchaudio.transforms import Spectrogram, GriffinLim
-import matplotlib.pyplot as plt
+
 from model import helper
 import julius
 from julius.lowpass import lowpass_filter_new
+from model.gumble_softmax import gumbel_softmax
 from synth.synth_constants import SynthConstants
 from utils.types import TensorLike
 
@@ -41,12 +41,13 @@ class SynthModule(ABC):
         self.name = name
 
     @abstractmethod
-    def generate_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
-                       sample_rate: int, signal_duration: float, batch_size: int = 1):
+    def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
+                      sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
         pass
 
     @staticmethod
-    def _mix_waveforms(waves_tensor, raw_waveform_selector, type_indices):
+    def _mix_waveforms(waves_tensor: torch.Tensor, raw_waveform_selector: Union[str, Sequence[str], TensorLike],
+                       type_indices: Dict[str, int]) -> torch.Tensor:
 
         if isinstance(raw_waveform_selector, str):
             idx = type_indices[raw_waveform_selector]
@@ -59,12 +60,12 @@ class SynthModule(ABC):
 
         oscillator_tensor = 0
         for i in range(len(waves_tensor)):
-            oscillator_tensor += raw_waveform_selector.t()[i].unsqueeze(1) * waves_tensor[i]
+            oscillator_tensor += raw_waveform_selector.transpose()[i].unsqueeze(1) * waves_tensor[i]
 
         return oscillator_tensor
 
-    def standardize_input(self, input_val, requested_dtype, requested_dims: int, batch_size: int,
-                          value_range: Tuple = None):
+    def _standardize_input(self, input_val, requested_dtype, requested_dims: int, batch_size: int,
+                           value_range: Tuple = None) -> torch.Tensor:
 
         # Single scalar input value
         if isinstance(input_val, (float, np.floating, int, np.int)):
@@ -97,22 +98,43 @@ class SynthModule(ABC):
 
         return output_tensor
 
-    def verify_input_params(self, params_to_test: dict):
+    def _verify_input_params(self, params_to_test: dict):
 
         expected_params = self.synth_structure.modular_synth_params[self.name]
         assert set(params_to_test.keys()) == set(expected_params),\
             f'Expected input parameters {expected_params} but got {list(params_to_test.keys())}'
 
+    def _process_active_signal(self, active_vector: TensorLike, batch_size: int) -> torch.Tensor:
+
+        if active_vector is None:
+            ret_active_vector = torch.ones([batch_size, 1], dtype=torch.long, device=self.device)
+            return ret_active_vector
+
+        if not isinstance(active_vector, torch.Tensor):
+            active_vector = torch.tensor(active_vector)
+
+        if active_vector.dtype == torch.bool:
+            ret_active_vector = active_vector.long().unsqueeze(1).to(self.device)
+            return ret_active_vector
+
+        active_vector_gumble = gumbel_softmax(active_vector, hard=True, device=self.device)
+        ret_active_vector = active_vector_gumble[:, :1]
+
+        return ret_active_vector
+
 
 class Oscillator(SynthModule):
 
-    def __init__(self, name:str, device: str, synth_structure: SynthConstants):
+    def __init__(self, name: str, device: str, synth_structure: SynthConstants, waveform: str = None):
+
         super().__init__(name=name, device=device, synth_structure=synth_structure)
+
+        self.waveform = waveform
         self.wave_type_indices = {k: torch.tensor(v, dtype=torch.long, device=self.device).squeeze()
                                   for k, v in self.synth_structure.wave_type_dict.items()}
 
-    def generate_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
-                       sample_rate: int, signal_duration: float, batch_size: int = 1):
+    def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
+                      sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
         """Creates a basic oscillator.
 
             Retrieves a waveform shape and attributes, and construct the respected signal
@@ -132,82 +154,103 @@ class Oscillator(SynthModule):
                 :rtype: object
             """
 
-        self.verify_input_params(params)
+        self._verify_input_params(params)
 
-        amp = self.standardize_input(params['amp'], requested_dtype=torch.float32, requested_dims=2,
-                                     batch_size=batch_size)
-        freq = self.standardize_input(params['freq'], requested_dtype=torch.float32, requested_dims=2,
+        active_signal = self._process_active_signal(params.get('active', None), batch_size)
+
+        amp = self._standardize_input(params['amp'], requested_dtype=torch.float32, requested_dims=2,
                                       batch_size=batch_size)
+        freq = self._standardize_input(params['freq'], requested_dtype=torch.float32, requested_dims=2,
+                                       batch_size=batch_size)
+
+        amp *= active_signal
+        freq *= active_signal
 
         t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True)
-        sine_wave, square_wave, sawtooth_wave = self._generate_wave_tensors(t, amp, freq, phase_mod=0)
+        wave_tensors = self._generate_wave_tensors(t, amp, freq, phase_mod=0)
 
-        waves_tensor = torch.stack([sine_wave, square_wave, sawtooth_wave])
+        if self.waveform is not None:
+            return wave_tensors[self.waveform]
+
+        waves_tensor = torch.stack([wave_tensors['sine'], wave_tensors['square'], wave_tensors['saw']])
         oscillator_tensor = self._mix_waveforms(waves_tensor, params['waveform'], self.wave_type_indices)
 
         return oscillator_tensor
 
-    @staticmethod
-    def _generate_wave_tensors(t, amp, freq, phase_mod):
+    def _generate_wave_tensors(self, t, amp, freq, phase_mod):
 
-        sine_wave = amp * torch.sin(TWO_PI * freq * t + phase_mod)
+        wave_tensors = {}
 
-        square_wave = amp * torch.sign(torch.sin(TWO_PI * freq * t + phase_mod))
+        if self.waveform == 'sine' or self.waveform is None:
+            sine_wave = amp * torch.sin(TWO_PI * freq * t + phase_mod)
+            wave_tensors['sine'] = sine_wave
 
-        sawtooth_wave = 2 * (t * freq - torch.floor(0.5 + t * freq))  # Sawtooth closed form
+        if self.waveform == 'square' or self.waveform is None:
+            square_wave = amp * torch.sign(torch.sin(TWO_PI * freq * t + phase_mod))
+            wave_tensors['square'] = square_wave
 
-        # Phase shift (by normalization to range [0,1] and modulo operation)
-        sawtooth_wave = (((sawtooth_wave + 1) / 2) + phase_mod / TWO_PI) % 1
-        sawtooth_wave = amp * (sawtooth_wave * 2 - 1)  # re-normalization to range [-amp, amp]
+        if self.waveform == 'saw' or self.waveform is None:
+            sawtooth_wave = 2 * (t * freq - torch.floor(0.5 + t * freq))  # Sawtooth closed form
 
-        return sine_wave, square_wave, sawtooth_wave
+            # Phase shift (by normalization to range [0,1] and modulo operation)
+            sawtooth_wave = (((sawtooth_wave + 1) / 2) + phase_mod / TWO_PI) % 1
+            sawtooth_wave = amp * (sawtooth_wave * 2 - 1)  # re-normalization to range [-amp, amp]
+
+            wave_tensors['saw'] = sawtooth_wave
+
+        return wave_tensors
 
 
 class FMOscillator(Oscillator):
 
-    def __init__(self, device: str, synth_structure: SynthConstants, waveform: str = None):
+    def __init__(self, name: str, device: str, synth_structure: SynthConstants, waveform: str = None):
 
         if waveform is not None:
             assert waveform in ['sine', 'square', 'saw'], f'Unexpected waveform {waveform} given to FMOscillator'
-            name = f"fm_{waveform}"
-        else:
-            name = 'fm'
 
         super().__init__(name=name, device=device, synth_structure=synth_structure)
 
         self.waveform = waveform
 
-    def generate_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
-                       sample_rate: int, signal_duration: float, batch_size: int = 1):
+    def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
+                      sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
 
-        """Batch oscillator with FM modulation
+        """
+        Batch oscillator with FM modulation
 
-            Creates an oscillator and modulates its frequency by a given modulator
-            Args come as vector of values, with length of the numer of sounds to create
-            Args:
-                self: Self object
-                amp_c: Vector of amplitude in range [0, 1]
-                freq_c: Vector of Frequencies in range [0, 22000]
-                waveform: Vector of waveform with type from [sine, square, triangle, sawtooth]
-                mod_index: Vector of modulation indexes, which affects the amount of modulation
-                modulator: Vector of modulator signals, to affect carrier frequency
+        Creates an oscillator and modulates its frequency by a given modulator
+        Args come as vector of values, with length of the numer of sounds to create
+        params:
+            self: Self object
+            amp_c: Vector of amplitude in range [0, 1]
+            freq_c: Vector of Frequencies in range [0, 22000]
+            waveform: Vector of waveform with type from [sine, square, triangle, sawtooth]
+            mod_index: Vector of modulation indexes, which affects the amount of modulation
+            modulator: Vector of modulator signals, to affect carrier frequency
 
-            Returns:
-                A torch with the constructed FM signal
+        Returns:
+            A torch with the constructed FM signal
 
-            Raises:
-                ValueError: Provided variables are out of range
-            """
+        Raises:
+            ValueError: Provided variables are out of range
+        """
 
-        self.verify_input_params(params)
+        self._verify_input_params(params)
+
+        active_signal = self._process_active_signal(params.get('active', None), batch_size)
+        fm_active_signal = self._process_active_signal(params.get('fm_active', None), batch_size)
 
         parsed_params = {}
-        for k in ['amp_c', 'freq_c', 'mod_index', 'modulator']:
-            parsed_params[k] = self.standardize_input(params[k], requested_dtype=torch.float32, requested_dims=2,
-                                                      batch_size=batch_size)
+        for k in ['amp_c', 'freq_c', 'mod_index']:
+            parsed_params[k] = self._standardize_input(params[k], requested_dtype=torch.float32, requested_dims=2,
+                                                       batch_size=batch_size)
+
+        parsed_params['freq_c'] = parsed_params['freq_c'] * active_signal
+        parsed_params['mod_index'] = parsed_params['mod_index'] * fm_active_signal
+        modulator_signal = modulator_signal * fm_active_signal
 
         t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True)
-        wave_tensors = self._generate_modulated_wave_tensors(t, **parsed_params)
+        wave_tensors = self._generate_modulated_wave_tensors(t, modulator=modulator_signal, **parsed_params)
 
         if self.waveform is not None:
             return wave_tensors[self.waveform]
@@ -239,6 +282,53 @@ class FMOscillator(Oscillator):
         return wave_tensors
 
 
+class ADSR(SynthModule):
+
+    def __init__(self, device: str, synth_structure: SynthConstants):
+        super().__init__(name='env_adsr', device=device, synth_structure=synth_structure)
+
+    def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
+                      sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
+
+        self._verify_input_params(params)
+
+        parsed_params, num_timesteps = {}, {}
+        total_time = 0
+        for k in ['attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']:
+            parsed_params[k] = self._standardize_input(params[k], requested_dtype=torch.float64, requested_dims=2,
+                                                       batch_size=batch_size)
+            if k != 'sustain_level':
+                num_timesteps[k] = torch.floor(sample_rate * signal_duration * parsed_params[k])
+                total_time += parsed_params[k]
+
+        if torch.any(total_time > signal_duration):
+            raise ValueError("Provided ADSR durations exceeds signal duration")
+
+        attack = torch.cat([torch.linspace(0, 1, int(attack_steps.item()), device=self.device) for attack_steps
+                            in num_timesteps['attack_t']])
+        decay = torch.cat([torch.linspace(1, sustain_val.int(), int(decay_steps), device=self.device) for
+                           sustain_val, decay_steps in zip(parsed_params['sustain_level'], num_timesteps['decay_t'])])
+        sustain = torch.cat([torch.full(sustain_steps, sustain_val, device=self.device) for sustain_steps, sustain_val
+                             in zip(num_timesteps['sustain_t'], parsed_params['sustain_level'])])
+        release = torch.cat([torch.linspace(sustain_val, 0, int(release_steps), device=self.device) for
+                             sustain_val, release_steps in zip(parsed_params['sustain_level'],
+                                                               num_timesteps['release_t'])])
+
+        envelope = torch.cat((attack, decay, sustain, release))
+
+        envelope_len = envelope.shape[0]
+        signal_len = int(sample_rate * signal_duration)
+        if envelope_len <= signal_len:
+            padding = torch.zeros((signal_len - envelope_len), device=helper.get_device())
+            envelope = torch.cat((envelope, padding))
+        else:
+            raise ValueError("Envelope length exceeds signal duration")
+
+        enveloped_signal = input_signal * envelope
+
+        return enveloped_signal
+
+
 class Filter(SynthModule):
 
     def __init__(self, device: str, synth_structure: SynthConstants, filter_type: str = None):
@@ -253,13 +343,13 @@ class Filter(SynthModule):
         self.filter_type_indices = {k: torch.tensor(v, dtype=torch.long, device=self.device).squeeze()
                                     for k, v in synth_structure.filter_type_dict.items()}
 
-    def generate_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
-                       sample_rate: int, signal_duration: float, batch_size: int = 1):
+    def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
+                      sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
 
-        self.verify_input_params(params)
+        self._verify_input_params(params)
 
-        filter_freq = self.standardize_input(params['filter_freq'], requested_dtype=torch.float64, requested_dims=2,
-                                             batch_size=batch_size)
+        filter_freq = self._standardize_input(params['filter_freq'], requested_dtype=torch.float64, requested_dims=2,
+                                              batch_size=batch_size)
 
         assert torch.all(filter_freq <= (sample_rate / 2)), "Filter cutoff frequency higher then Nyquist." \
                                                             " Please check config"
@@ -323,8 +413,8 @@ class Tremolo(SynthModule):
     def __init__(self, device: str, synth_structure: SynthConstants):
         super().__init__(name='tremolo', device=device, synth_structure=synth_structure)
 
-    def generate_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
-                       sample_rate: int, signal_duration: float, batch_size: int = 1):
+    def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
+                      sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
         """tremolo effect for an input signal
 
             This is a kind of AM modulation, where the signal is multiplied as a whole by a given modulator.
@@ -332,7 +422,7 @@ class Tremolo(SynthModule):
             so start is > 0, such that the original amplitude of the input audio is preserved and there is no phase
             shift due to multiplication by negative number.
 
-            Args:
+            params:
                 self: Self object
                 input_signal: Input signal to be used as carrier
                 modulator_signal: modulator signal to modulate the input
@@ -347,11 +437,14 @@ class Tremolo(SynthModule):
                 ValueError: Amount is out of range [-1, 1]
             """
 
-        self.verify_input_params(params)
+        self._verify_input_params(params)
 
-        amount = self.standardize_input(params['amount'], requested_dtype=torch.float64, requested_dims=2,
-                                        batch_size=batch_size, value_range=(0, 1))
+        active_signal = self._process_active_signal(params.get('active', None), batch_size)
 
+        amount = self._standardize_input(params['amount'], requested_dtype=torch.float64, requested_dims=2,
+                                         batch_size=batch_size, value_range=(0, 1))
+
+        modulator_signal = modulator_signal * active_signal
         tremolo = torch.add(torch.mul(amount, (modulator_signal + 1) / 2), (1 - amount))
 
         tremolo_signal = input_signal * tremolo
@@ -359,349 +452,56 @@ class Tremolo(SynthModule):
         return tremolo_signal
 
 
+class Mix(SynthModule):
+
+    def __init__(self, device: str, synth_structure: SynthConstants):
+        super().__init__(name='mix', device=device, synth_structure=synth_structure)
+
+    def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
+                      sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
+
+        assert input_signal.shape[1] == batch_size and input_signal.shape[2] == sample_rate * signal_duration
+
+        summed_signal = torch.sum(input_signal, dim=0)
+        mixed_signal = summed_signal / torch.shape[0]
+
+        return mixed_signal
+
+
+class Noop(SynthModule):
+
+    def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
+                      sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
+
+        return input_signal
+
+
 def get_synth_module(op_name: str, device: str, synth_structure: SynthConstants):
 
-    if op_name in ['osc']:
+    op_name = op_name.lower()
+
+    if op_name in ['osc', 'lfo', 'lfo_non_sine']:
         return Oscillator(op_name, device, synth_structure)
-    elif op_name[:2] == 'fm':
-        if len(op_name) > 2:
-            waveform = op_name.split('_')[1]
-            assert waveform in ['sine', 'saw', 'square']
-        else:
-            waveform = None
-        return FMOscillator(device, synth_structure, waveform)
-    elif 'filter' in op_name:
+    elif op_name in ['lfo_sine', 'lfo_square', 'lfo_saw']:
+        waveform = op_name.split('_')[1]
+        return Oscillator(op_name, device, synth_structure, waveform)
+    elif op_name in ['fm', 'fm_lfo']:
+        return FMOscillator(op_name, device, synth_structure)
+    elif op_name in ['fm_sine', 'fm_square', 'fm_saw']:
+        waveform = op_name.split('_')[1]
+        return FMOscillator(op_name, device, synth_structure, waveform)
+    elif op_name in ['env_adsr']:
+        return ADSR(device, synth_structure)
+    elif op_name in ['filter', 'lowpass_filter', 'highpass_filter']:
         if op_name != 'filter':
             filter_type = op_name.split('_')[0]
-        else:
-            filter_type = None
-        return Filter(device, synth_structure, filter_type)
-    elif op_name == 'tremolo':
+            return Filter(device, synth_structure, filter_type)
+        return Filter(device, synth_structure)
+    elif op_name in ['tremolo']:
         return Tremolo(device, synth_structure)
+    elif op_name in ['mix']:
+        return Mix(device, synth_structure)
+    elif op_name.lower() == 'none' or op_name is None:
+        return Noop('none', device, synth_structure)
     else:
         raise ValueError(f"Unsupported synth module {op_name}")
-
-
-
-class SynthModules:
-    def __init__(self, num_sounds=1, sample_rate=44100, signal_duration_sec=1.0, device='cuda:0'):
-        self.sample_rate = sample_rate
-        self.sig_duration = signal_duration_sec
-        self.time_samples = torch.linspace(0, self.sig_duration, steps=int(self.sample_rate * self.sig_duration),
-                                           requires_grad=True)
-        self.modulation_time = torch.linspace(0, self.sig_duration, steps=self.sample_rate)
-        self.modulation = 0
-        self.signal = torch.zeros(size=(num_sounds, self.time_samples.shape[0]), dtype=torch.float32,
-                                  requires_grad=True)
-
-        self.device = device
-
-        self.time_samples = helper.move_to(self.time_samples, self.device)
-        self.modulation_time = helper.move_to(self.modulation_time, self.device)
-        self.signal = helper.move_to(self.signal, self.device)
-
-        self.wave_type_indices = {k: torch.tensor(v, dtype=torch.long, device=self.device).squeeze()
-                                  for k, v in SynthConfig.wave_type_dict.items()}
-        self.filter_type_indices = {k: torch.tensor(v, dtype=torch.long, device=self.device).squeeze()
-                                    for k, v in SynthConfig.filter_type_dict.items()}
-        # self.room_impulse_responses = torch.load('rir_for_reverb_no_amp')
-
-
-    def mix_signal(self, new_signal, factor):
-        """Signal superposition. factor balances the mix
-        1 - original signal only, 0 - new signal only, 0.5 evenly balanced. """
-        if factor < 0 or factor > 1:
-            raise ValueError("Provided factor value is out of range [0, 1]")
-        self.signal = factor * self.signal + (1 - factor) * new_signal
-
-    def batch_adsr_envelope(self, input_signal, attack_t, decay_t, sustain_t, sustain_level, release_t):
-        """Apply an ADSR envelope to the signal
-
-            builds the ADSR shape and multiply by the signal
-
-            Args:
-                self: Self object
-                input_signal: target signal to apply adsr
-                attack_t: Length of attack in seconds. Time to go from 0 to 1 amplitude.
-                decay_t: Length of decay in seconds. Time to go from 1 amplitude to sustain level.
-                sustain_t: Length of sustain in seconds, with sustain level amplitude
-                sustain_level: Sustain volume level
-                release_t: Length of release in seconds. Time to go ftom sustain level to 0 amplitude
-                num_sounds: number of sounds to process
-
-            Raises:
-                ValueError: Provided ADSR timings are not the same as the signal length
-            """
-        attack_t = self._standardize_batch_input(attack_t, requested_dtype=torch.float64, requested_dims=2)
-        decay_t = self._standardize_batch_input(decay_t, requested_dtype=torch.float64, requested_dims=2)
-        sustain_t = self._standardize_batch_input(sustain_t, requested_dtype=torch.float64, requested_dims=2)
-        release_t = self._standardize_batch_input(release_t, requested_dtype=torch.float64, requested_dims=2)
-        sustain_level = self._standardize_batch_input(sustain_level, requested_dtype=torch.float64, requested_dims=2)
-
-        if torch.any(attack_t + decay_t + sustain_t + release_t > self.sig_duration):
-            raise ValueError("Provided ADSR durations exceeds signal duration")
-
-        attack_num_samples = torch.floor(self.sig_duration * self.sample_rate * attack_t)
-        decay_num_samples = torch.floor(self.sig_duration * self.sample_rate * decay_t)
-        sustain_num_samples = torch.floor(self.sig_duration * self.sample_rate * sustain_t)
-        release_num_samples = torch.floor(self.sig_duration * self.sample_rate * release_t)
-
-        attack = torch.cat([torch.linspace(0, 1, int(attack_steps.item()), device=helper.get_device()) for attack_steps
-                            in attack_num_samples])
-        decay = torch.cat([torch.linspace(1, sustain_val.int(), int(decay_steps), device=helper.get_device())
-                           for sustain_val, decay_steps in zip(sustain_level, decay_num_samples)])
-        sustain = torch.cat([torch.full(sustain_steps, sustain_val, device=helper.get_device())
-                             for sustain_steps, sustain_val in zip(sustain_num_samples, sustain_level)])
-        release = torch.cat([torch.linspace(sustain_val, 0, int(release_steps), device=helper.get_device())
-                             for sustain_val, release_steps in zip(sustain_level, release_num_samples)])
-
-        envelope = torch.cat((attack, decay, sustain, release))
-
-        envelope_len = envelope.shape[0]
-        signal_len = self.time_samples.shape[0]
-        if envelope_len <= signal_len:
-            padding = torch.zeros((signal_len - envelope_len), device=helper.get_device())
-            envelope = torch.cat((envelope, padding))
-        else:
-            raise ValueError("Envelope length exceeds signal duration")
-
-        enveloped_signal = input_signal * envelope
-
-        return enveloped_signal
-
-    def amplitude_envelope(self, input_signal, envelope_shape):
-        enveloped_signal = input_signal * envelope_shape
-        return enveloped_signal
-
-
-def check_adsr_timings(attack_t, decay_t, sustain_t, sustain_level, release_t, signal_duration, num_sounds=1):
-    """
-    The function checks that:
-    1.ADSR timings does not exceed signal duration
-    2.Sustain level within [0,1] range
-
-    :exception: throws value error when faulty.
-    """
-    if num_sounds == 1:
-        if attack_t + decay_t + sustain_t + release_t > signal_duration:
-            raise ValueError("Provided ADSR durations exceeds signal duration")
-        if sustain_level < 0 or sustain_level > 1:
-            raise ValueError("Provided sustain level is out of range [0, 1]")
-    else:
-        for i in range(num_sounds):
-            if attack_t[i] + decay_t[i] + sustain_t[i] + release_t[i] > signal_duration:
-                raise ValueError("Provided ADSR durations exceeds signal duration")
-            if sustain_level[i] < 0 or sustain_level[i] > 1:
-                raise ValueError("Provided sustain level is out of range [0, 1]")
-
-
-def make_envelope_shape(attack_t,
-                        decay_t,
-                        sustain_t,
-                        sustain_level,
-                        release_t,
-                        signal_duration,
-                        sample_rate,
-                        device,
-                        num_sounds=1):
-
-    if isinstance(attack_t, list) or isinstance(attack_t, np.ndarray):
-        attack_t = torch.tensor(attack_t, dtype=torch.float64)
-        decay_t = torch.tensor(decay_t, dtype=torch.float64)
-        sustain_t = torch.tensor(sustain_t, dtype=torch.float64)
-        sustain_level = torch.tensor(sustain_level, dtype=torch.float64)
-        release_t = torch.tensor(release_t, dtype=torch.float64)
-
-    # todo: prevent substruction so we get negative numbers here. consider substract only when check_adsr_timngs fail
-    # with try catch exception
-    epsilon = 1e-5
-    attack_t = attack_t - epsilon
-    decay_t = decay_t - epsilon
-    sustain_t = sustain_t - epsilon
-    release_t = release_t - epsilon
-
-    check_adsr_timings(attack_t,
-                       decay_t,
-                       sustain_t,
-                       sustain_level,
-                       release_t,
-                       signal_duration,
-                       num_sounds)
-
-    if num_sounds == 1:
-        attack_num_samples = int(signal_duration * sample_rate * attack_t)
-        decay_num_samples = int(signal_duration * sample_rate * decay_t)
-        sustain_num_samples = int(signal_duration * sample_rate * sustain_t)
-        release_num_samples = int(signal_duration * sample_rate * release_t)
-    else:
-        attack_num_samples = [torch.floor(signal_duration * sample_rate * attack_t[k]) for k in range(num_sounds)]
-        decay_num_samples = [torch.floor(signal_duration * sample_rate * decay_t[k]) for k in range(num_sounds)]
-        sustain_num_samples = [torch.floor(signal_duration * sample_rate * sustain_t[k]) for k in range(num_sounds)]
-        release_num_samples = [torch.floor(signal_duration * sample_rate * release_t[k]) for k in range(num_sounds)]
-        attack_num_samples = torch.stack(attack_num_samples)
-        decay_num_samples = torch.stack(decay_num_samples)
-        sustain_num_samples = torch.stack(sustain_num_samples)
-        release_num_samples = torch.stack(release_num_samples)
-
-    if num_sounds == 1:
-        sustain_level = sustain_level.item()
-    else:
-        if torch.is_tensor(sustain_level[0]):
-            sustain_level = [sustain_level[i] for i in range(num_sounds)]
-            sustain_level = torch.stack(sustain_level)
-        else:
-            sustain_level = [sustain_level[i] for i in range(num_sounds)]
-
-    envelopes_tensor = torch.tensor((), requires_grad=True).to(device)
-    first_time = True
-    for k in range(num_sounds):
-        if num_sounds == 1:
-            attack = torch.linspace(0, 1, attack_num_samples)
-            decay = torch.linspace(1, sustain_level, decay_num_samples)
-            sustain = torch.full((sustain_num_samples,), sustain_level)
-            release = torch.linspace(sustain_level, 0, release_num_samples)
-        else:
-            # convert 1d vector to scalar tensor to be used in linspace
-            # IMPORTANT: lost gradients here! Using int() loses gradients since only float tensors have gradients
-            attack_num_samples_sc = attack_num_samples[k].int().squeeze()
-            decay_num_samples_sc = decay_num_samples[k].int().squeeze()
-            sustain_num_samples_sc = sustain_num_samples[k].int().squeeze()
-            sustain_level_sc = sustain_level[k].squeeze()
-            release_num_samples_sc = release_num_samples[k].int().squeeze()
-
-            attack = torch.linspace(0, 1, attack_num_samples_sc)
-            decay = torch.linspace(1, sustain_level_sc, decay_num_samples_sc)
-            sustain = torch.full((sustain_num_samples_sc,), sustain_level_sc)
-            release = torch.linspace(sustain_level_sc, 0, release_num_samples_sc)
-
-        envelope = torch.cat((attack, decay, sustain, release)).to(device)
-
-        envelope_num_samples = envelope.shape[0]
-        signal_num_samples = int(signal_duration * sample_rate)
-        if envelope_num_samples <= signal_num_samples:
-            padding = torch.zeros((signal_num_samples - envelope_num_samples), device=device)
-            envelope = torch.cat((envelope, padding))
-        else:
-            raise ValueError("Envelope length exceeds signal duration")
-
-        if first_time:
-            if num_sounds == 1:
-                envelopes_tensor = envelope
-            else:
-                envelopes_tensor = torch.cat((envelopes_tensor, envelope), dim=0).unsqueeze(dim=0)
-                first_time = False
-        else:
-            envelope = envelope.unsqueeze(dim=0)
-            envelopes_tensor = torch.cat((envelopes_tensor, envelope), dim=0)
-
-    return envelopes_tensor
-
-"""
-Reverb implementation - Currently not working as expected
-So it is not used
-
-    def reverb(self, size, dry_wet):
-        if size not in [1, 2, 3, 4, 5, 6]:
-            raise ValueError("reverb size must be an int in range [1, 6]")
-        if dry_wet < 0 or dry_wet > 1:
-            raise ValueError("Provided dry/wet value is out of range [0, 1]")
-
-        if size == 1:
-            response_name = 'rir0'
-        elif size == 2:
-            response_name = 'rir20'
-        elif size == 3:
-            response_name = 'rir40'
-        elif size == 4:
-            response_name = 'rir60'
-        elif size == 5:
-            response_name = 'rir80'
-        elif size == 6:
-            response_name = 'rir100'
-        else:
-            response_name = 'rir0'
-
-        signal_clean = self.signal
-        room_impulse_response = self.room_impulse_responses[response_name]
-
-        # room_response_start_index = 0
-        # room_response_end_index = room_impulse_response.size()[0] - 1
-        # signal_start_index = 0
-        # signal_end_index = signal_clean.size()[0] - 1
-        # while room_impulse_response[room_response_start_index] == 0:
-        #     room_response_start_index = room_response_start_index+1
-        # while room_impulse_response[room_response_end_index] == 0:
-        #     room_response_end_index = room_response_end_index-1
-        # while signal_clean[signal_start_index] == 0:
-        #     signal_start_index = signal_start_index+1
-        # while signal_clean[signal_end_index] == 0:
-        #     signal_end_index = signal_end_index-1
-        # print(room_impulse_response.shape)
-        # print(signal_clean.shape)
-        # signal_clean = signal_clean[signal_start_index:signal_end_index]
-        # room_impulse_response = room_impulse_response[room_response_start_index:room_response_end_index]
-
-        kernel_size = room_impulse_response.shape[0]
-        signal_size = signal_clean.shape[0]
-
-        print("kersize", kernel_size)
-        print("sigsize", signal_size)
-        print(room_impulse_response.shape)
-        print(signal_clean.shape)
-
-        room_impulse_response = room_impulse_response.unsqueeze(0).unsqueeze(0)
-        signal_clean = signal_clean.unsqueeze(0).unsqueeze(0)
-
-        signal_reverb = F.conv1d(signal_clean, room_impulse_response, bias=None, stride=1)
-
-        signal_reverb = torch.squeeze(signal_reverb)
-        signal_clean = torch.squeeze(signal_clean)
-
-        print("sig rev shape", signal_reverb.shape)
-        print(signal_reverb.shape[0])
-
-        if signal_reverb.shape[0] > signal_clean.shape[0]:
-            padding = torch.zeros(signal_reverb.shape[0] - signal_clean.shape[0])
-            signal_clean = torch.cat((signal_clean, padding))
-        else:
-            padding = torch.zeros(signal_clean.shape[0] - signal_reverb.shape[0])
-            signal_reverb = torch.cat((signal_reverb, padding))
-
-        self.signal = dry_wet * signal_reverb + (1 - dry_wet) * signal_clean
-        self.signal = torch.squeeze(self.signal)
-"""
-
-if __name__ == "__main__":
-    a = SynthModules()
-    b = SynthModules()
-    # b.oscillator(1, 5, 0, 'sine')
-    a.oscillator_fm(amp_c=1, freq_c=440, waveform='sine', mod_index=10, modulator=b.signal)
-    # a.oscillator(amp=1, freq=100, phase=0, waveform='sine')
-    # a.adsr_envelope(attack_t=0.5, decay_t=0, sustain_t=0.5, sustain_level=0.5, release_t=0)
-    # plt.plot(a.signal)
-    # plt.show
-    # play_obj = sa.play_buffer(a.signal.numpy(), num_channels=1, bytes_per_sample=4, sample_rate=a.sample_rate)
-    # play_obj.wait_done()
-    # b = Signal()
-    # a.am_modulation(amp_c=1, freq_c=4, amp_m=0.3, freq_m=0, final_max_amp=0.5, waveform='sine')
-    # b.am_modulation_by_input_signal(a.data, modulation_factor=1, amp_c=0.5, freq_c=40, waveform='triangle')
-    plt.plot(a.signal)
-    # plt.plot(b.data)
-    # torch.tensor(0)
-    # print(torch.sign(torch.tensor(0)))
-    # # b.fm_modulation_by_input_signal(a.data, 440, 1, 10, 'sawtooth')
-    # # plt.plot(b.data)
-    # plt.show()
-    #
-    # # plt.plot(a.data)
-    # a.low_pass(1000)
-    # play_obj = sa.play_buffer(b.data.numpy(), 1, 4, b.sample_rate)
-    # play_obj.wait_done()
-    # plt.plot(a.data)
-    #
-    # def fm_modulation(self, amp_mod, fm, fc, Ac, waveform):
-    # a.fm_modulation(1, 3, 5, 1, 'tri')
-    # print(a.data)
-    # plt.plot(a.data)
-    #
-    # plt.show()
