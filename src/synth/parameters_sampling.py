@@ -17,8 +17,8 @@ class ParametersSampler:
         # todo remove cases where all fms are off
         rng = np.random.default_rng()
 
+        n_channels = len(synth_matrix)
         n_layers = len(synth_matrix[0])
-        n_channels = len(synth_matrix[1])
 
         # Propagate activations through layers
         output_params_dict = {}
@@ -35,15 +35,16 @@ class ParametersSampler:
                 op_params = self.synth_structure.modular_synth_params[operation]
 
                 if cell.control_input is not None:
-                    control_input_cell = synth_matrix[cell.control_input[0]][cell.control_input[1]]
-                    has_control_input = [cell.index == control_cell_output for control_cell_output
+                    assert len(cell.control_input) == 1
+                    control_input_cell = synth_matrix[cell.control_input[0][0]][cell.control_input[0][1]]
+                    has_control_input = [tuple(cell.index) == tuple(control_cell_output) for control_cell_output
                                          in control_input_cell.parameters['output']]
                     cell_params['fm_active'] = has_control_input
                 else:
                     has_control_input = [False for _ in range(num_sounds_)]
 
                 if 'active' in op_params:
-                    active_prob = cell.active_prob
+                    active_prob = cell.active_prob if cell.active_prob is not None else 0.5
                     random_activeness = np.random.choice([True, False], size=num_sounds_,
                                                          p=[active_prob, 1 - active_prob])
 
@@ -66,6 +67,7 @@ class ParametersSampler:
 
                 cell_params.update(sampled_params)
 
+                cell.parameters = cell_params
                 output_params_dict[cell.index] = {'operation': operation, 'parameters': cell_params}
 
         return output_params_dict
@@ -95,7 +97,7 @@ class ParametersSampler:
             else:
                 activity_signal = is_active
 
-            if activity_signal is not None and param_config['non_active_default'] is not None:
+            if activity_signal is not None and param_config.get('non_active_default', None) is not None:
                 sampled_values = [val if activity_signal[k] else param_config['non_active_default']
                                   for k, val in enumerate(sampled_values)]
 

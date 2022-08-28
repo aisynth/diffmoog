@@ -100,7 +100,7 @@ class SynthModule(ABC):
     def _verify_input_params(self, params_to_test: dict):
 
         expected_params = self.synth_structure.modular_synth_params[self.name]
-        assert set(params_to_test.keys()) == set(expected_params),\
+        assert set(expected_params).issubset(set(params_to_test.keys())),\
             f'Expected input parameters {expected_params} but got {list(params_to_test.keys())}'
 
     def _process_active_signal(self, active_vector: TensorLike, batch_size: int) -> torch.Tensor:
@@ -165,7 +165,8 @@ class Oscillator(SynthModule):
         amp *= active_signal
         freq *= active_signal
 
-        t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True)
+        t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True,
+                           device=self.device)
         wave_tensors = self._generate_wave_tensors(t, amp, freq, phase_mod=0)
 
         if self.waveform is not None:
@@ -248,7 +249,8 @@ class FMOscillator(Oscillator):
         parsed_params['mod_index'] = parsed_params['mod_index'] * fm_active_signal
         modulator_signal = modulator_signal * fm_active_signal
 
-        t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True)
+        t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True,
+                           device=self.device)
         wave_tensors = self._generate_modulated_wave_tensors(t, modulator=modulator_signal, **parsed_params)
 
         if self.waveform is not None:
@@ -291,37 +293,34 @@ class ADSR(SynthModule):
 
         self._verify_input_params(params)
 
-        parsed_params, num_timesteps = {}, {}
+        n_samples = int(sample_rate * signal_duration)
+        x = torch.linspace(0, 1.0, n_samples, device=self.device)[None, :].repeat(batch_size, 1)
+
+        parsed_params, relative_params = {}, {}
         total_time = 0
         for k in ['attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']:
             parsed_params[k] = self._standardize_input(params[k], requested_dtype=torch.float64, requested_dims=2,
                                                        batch_size=batch_size)
             if k != 'sustain_level':
-                num_timesteps[k] = torch.floor(sample_rate * signal_duration * parsed_params[k])
+                relative_params[k] = parsed_params[k] / signal_duration
                 total_time += parsed_params[k]
 
         if torch.any(total_time > signal_duration):
             raise ValueError("Provided ADSR durations exceeds signal duration")
 
-        attack = torch.cat([torch.linspace(0, 1, int(attack_steps.item()), device=self.device) for attack_steps
-                            in num_timesteps['attack_t']])
-        decay = torch.cat([torch.linspace(1, sustain_val.int(), int(decay_steps), device=self.device) for
-                           sustain_val, decay_steps in zip(parsed_params['sustain_level'], num_timesteps['decay_t'])])
-        sustain = torch.cat([torch.full(sustain_steps, sustain_val, device=self.device) for sustain_steps, sustain_val
-                             in zip(num_timesteps['sustain_t'], parsed_params['sustain_level'])])
-        release = torch.cat([torch.linspace(sustain_val, 0, int(release_steps), device=self.device) for
-                             sustain_val, release_steps in zip(parsed_params['sustain_level'],
-                                                               num_timesteps['release_t'])])
+        relative_note_off = relative_params['attack_t'] + relative_params['decay_t'] + relative_params['sustain_t']
 
-        envelope = torch.cat((attack, decay, sustain, release))
+        attack = x / relative_params['attack_t']
+        attack = torch.clamp(attack, max=1.0)
 
-        envelope_len = envelope.shape[0]
-        signal_len = int(sample_rate * signal_duration)
-        if envelope_len <= signal_len:
-            padding = torch.zeros((signal_len - envelope_len), device=helper.get_device())
-            envelope = torch.cat((envelope, padding))
-        else:
-            raise ValueError("Envelope length exceeds signal duration")
+        decay = (x - relative_params['attack_t']) * (parsed_params['sustain_level'] - 1) / (relative_params['decay_t'] + 1e-5)
+        decay = torch.clamp(decay, max=torch.tensor(0).to(decay.device), min=parsed_params['sustain_level'] - 1)
+
+        sustain = (x - relative_note_off) * (-parsed_params['sustain_level'] / (relative_params['release_t'] + 1e-5))
+        sustain = torch.clamp(sustain, max=0.0)
+
+        envelope = (attack + decay + sustain)
+        envelope = torch.clamp(envelope, min=0.0, max=1.0)
 
         enveloped_signal = input_signal * envelope
 
@@ -462,7 +461,7 @@ class Mix(SynthModule):
         assert input_signal.shape[1] == batch_size and input_signal.shape[2] == sample_rate * signal_duration
 
         summed_signal = torch.sum(input_signal, dim=0)
-        mixed_signal = summed_signal / torch.shape[0]
+        mixed_signal = summed_signal / input_signal.shape[0]
 
         return mixed_signal
 
@@ -476,6 +475,9 @@ class Noop(SynthModule):
 
 
 def get_synth_module(op_name: str, device: str, synth_structure: SynthConstants):
+
+    if op_name is None or op_name in ['None', 'none']:
+        return Noop('none', device, synth_structure)
 
     op_name = op_name.lower()
 
@@ -500,7 +502,5 @@ def get_synth_module(op_name: str, device: str, synth_structure: SynthConstants)
         return Tremolo(device, synth_structure)
     elif op_name in ['mix']:
         return Mix(device, synth_structure)
-    elif op_name.lower() == 'none' or op_name is None:
-        return Noop('none', device, synth_structure)
     else:
         raise ValueError(f"Unsupported synth module {op_name}")

@@ -4,10 +4,10 @@ sys.path.append("..")
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
-import torch
 import pandas as pd
 import numpy as np
 
+from torch import device
 import scipy.io.wavfile
 
 from config import DATA_ROOT
@@ -19,7 +19,7 @@ from utils.gpu_utils import get_device
 
 
 def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_duration: float, note_off_time: float,
-                   device: torch.device, batch_size: int = 1000, seed: int = 42):
+                   device: device, batch_size: int = 1000, seed: int = 42):
     """
     Create a dataset by randomizing synthesizer parameters and generating sound.
 
@@ -63,7 +63,7 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
         sampled_parameters = params_sampler.generate_activations_and_chains(synth_obj.synth_matrix, signal_duration,
                                                                             note_off_time, num_sounds_=batch_size)
         synth_obj.update_cells_from_dict(sampled_parameters)
-        synth_obj.generate_signal(batch_size=batch_size)
+        synth_obj.generate_signal(signal_duration=signal_duration, batch_size=batch_size)
         audio = synth_obj.get_final_signal()
 
         # Save samples
@@ -79,7 +79,7 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
                 c_audio = audio[j]
             else:
                 c_audio = audio
-            c_audio = torch.squeeze(c_audio)
+            c_audio = c_audio.squeeze()
             c_audio = c_audio.detach().cpu().numpy()
 
             if c_audio.dtype == 'float64':
@@ -101,7 +101,7 @@ def extract_single_sample_params(params_dict, idx):
             operation = cell_params['operation']
         else:
             operation = 'None'
-        if cell_params['parameters'] is not None:
+        if cell_params['parameters'] is not None and len(cell_params['parameters']) > 0:
             if isinstance(list(cell_params['parameters'].values())[0], float):
                 parameters = {k: v for k, v in cell_params['parameters'].items()}
             else:
@@ -130,12 +130,12 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    output_dir = os.path.join(DATA_ROOT, args.name, args.split, '')
+    output_dir = os.path.join(DATA_ROOT, args.name, '')
     os.makedirs(output_dir, exist_ok=True)
 
     device = get_device(args.gpu_index)
     create_dataset(preset=args.preset, output_dir=output_dir, split=args.split, size=args.size,
-                   signal_duration=args.signal_duration, note_off_time=args.note_off_time, batch_size=args.batch_size,
+                   signal_duration=args.signal_duration, note_off_time=args.note_off, batch_size=args.batch_size,
                    device=device)
 
 

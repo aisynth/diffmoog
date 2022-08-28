@@ -89,36 +89,38 @@ class SynthModularCell:
 
 
 class SynthModular:
-    def __init__(self, preset_name: str,
-                 device='cuda:0'):
+    def __init__(self, preset_name: str, device='cuda:0'):
 
         self.sample_rate = synth_structure.sample_rate
-        self.signal_duration_sec = synth_structure.signal_duration
 
         self.device = device
 
         preset, (n_channels, n_layers) = self._parse_preset(preset_name)
 
+        self.n_channels = n_channels
+        self.n_layers = n_layers
         self.synth_matrix = None
         self.apply_architecture(preset, n_channels, n_layers)
 
     def apply_architecture(self, preset: dict, n_channels: int, n_layers: int):
+        self.synth_matrix = [[None for _ in range(n_layers)] for _ in range(n_channels)]
         for channel_idx in range(n_channels):
             for layer_idx in range(n_layers):
-                cell = preset.get((channel_idx, layer_idx), {})
+                cell = preset.get((channel_idx, layer_idx), {'index': (channel_idx, layer_idx)})
                 self.synth_matrix[channel_idx][layer_idx] = SynthModularCell(**cell, device=self.device,
                                                                              synth_structure=synth_structure)
 
-    def generate_signal(self, batch_size: int = 1) -> (TensorLike, Dict[str, TensorLike]):
+    def generate_signal(self, signal_duration: float, batch_size: int = 1) -> (TensorLike, Dict[str, TensorLike]):
         output_signals = {}
-        for channel in self.synth_matrix:
-            for cell in channel:
+        for layer in range(self.n_layers):
+            for channel in range(self.n_channels):
+                cell = self.synth_matrix[channel][layer]
                 audio_inputs, control_input = self._get_cell_inputs(cell)
-                if len(audio_inputs) == 1:
+                if audio_inputs is not None and len(audio_inputs) == 1:
                     audio_inputs = audio_inputs[0]
 
                 cell.generate_signal(audio_inputs, control_input, cell.parameters, self.sample_rate,
-                                     self.signal_duration_sec, batch_size)
+                                     signal_duration, batch_size)
 
                 output_signals[f"({cell.index[0]}, {cell.index[1]})"] = cell.signal
 
@@ -154,7 +156,7 @@ class SynthModular:
         cell = self.synth_matrix[index[0]][index[1]]
         if parameters is not None and isinstance(parameters, dict):
             for key in parameters:
-                if key not in synth_structure.modular_synth_params[cell.operation]:
+                if key != 'output' and key not in synth_structure.modular_synth_params[cell.operation]:
                     raise ValueError("Illegal parameter for the provided operation.")
             cell.parameters = parameters
         else:
