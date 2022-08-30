@@ -3,7 +3,7 @@ model:
   backbone: resnet
   preset: MODULAR
   num_workers: 0
-  batch_size: 50
+  batch_size: 75
   num_epochs: 200
 
   optimizer:

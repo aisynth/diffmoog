@@ -35,7 +35,8 @@ def run(run_args):
     device = get_device(run_args.gpu_index)
     lit_module = LitModularSynth(cfg, device)
 
-    callbacks = [ModelCheckpoint(cfg.ckpts_dir, monitor='lsd_value', save_last=True),
+    callbacks = [ModelCheckpoint(cfg.ckpts_dir, monitor='nsynth_validation_metrics/lsd_value/dataloader_idx_1',
+                                 save_last=True),
                  LearningRateMonitor(logging_interval='step')]
 
     tb_logger = TensorBoardLogger(cfg.logs_dir, name=exp_name)

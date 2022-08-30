@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from pytorch_lightning.loggers import TensorBoardLogger
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -67,10 +68,10 @@ def _np_to_str(val: np.ndarray, precision=2) -> str:
     return ''
 
 
-def log_dict_recursive(tag: str, data_to_log, writer: SummaryWriter, step: int):
+def log_dict_recursive(tag: str, data_to_log, writer: TensorBoardLogger, step: int):
 
     if isinstance(data_to_log, np.float) or isinstance(data_to_log, np.int):
-        writer.add_scalar(tag, data_to_log, step)
+        writer.log_metrics({tag: data_to_log}, step)
         return
 
     if type(data_to_log) == list:
@@ -79,9 +80,9 @@ def log_dict_recursive(tag: str, data_to_log, writer: SummaryWriter, step: int):
     if type(data_to_log) in [torch.Tensor, np.ndarray, int, float]:
         data_to_log = data_to_log.squeeze()
         if len(data_to_log.shape) == 0 or len(data_to_log) <= 1:
-            writer.add_scalar(tag, data_to_log, step)
+            writer.log_metrics({tag: data_to_log}, step)
         elif len(data_to_log) > 1:
-            writer.add_histogram(tag, data_to_log, step)
+            writer.experiment.add_histogram(tag, data_to_log, step)
         else:
             raise ValueError(f"Unexpected value to log {data_to_log}")
         return

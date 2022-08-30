@@ -15,7 +15,7 @@ from model.model import SynthNetwork
 from synth.parameters_normalizer import Normalizer
 from synth.synth_architecture import SynthModular
 from synth.synth_constants import synth_structure
-from utils.metrics import lsd, pearsonr_dist, mae, mfcc_distance, spectral_convergence
+from utils.metrics import lsd, pearsonr_dist, mae, mfcc_distance, spectral_convergence, paper_lsd
 from utils.train_utils import log_dict_recursive, parse_synth_params, get_param_diffs, to_numpy_recursive
 from utils.visualization_utils import visualize_signal_prediction
 
@@ -93,21 +93,24 @@ class LitModularSynth(LightningModule):
         total_params_loss, per_parameter_loss = self.params_loss.call(predicted_params_unit_range,
                                                                       target_params_unit_range)
 
-        params_for_pred_signal_generation = copy.copy(target_params_full_range)
-        params_for_pred_signal_generation.update(predicted_params_full_range)
-        pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(params_for_pred_signal_generation,
-                                                                                  batch_size)
-
-        if self.cfg.loss.use_chain_loss:
-            _, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
-            spec_loss = self._calculate_spectrogram_chain_loss(target_signals_through_chain, pred_signals_through_chain,
-                                                               log=True)
+        if self.global_step < self.cfg.loss.spectrogram_loss_warmup and not return_metrics:
+            spec_loss = 0
         else:
-            pred_final_signal, _ = self.generate_synth_sound(predicted_params_full_range, batch_size)
-            spec_loss, per_op_loss, per_op_weighted_loss, ret_spectrograms = \
-                self.spec_loss.call(target_signal, pred_final_signal, return_spectrogram=True,
-                                    step=self.global_step)
-            self._log_recursive(per_op_weighted_loss, f'final_spec_losses_weighted')
+            params_for_pred_signal_generation = copy.copy(target_params_full_range)
+            params_for_pred_signal_generation.update(predicted_params_full_range)
+            pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(params_for_pred_signal_generation,
+                                                                                      batch_size)
+
+            if self.cfg.loss.use_chain_loss:
+                _, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
+                spec_loss = self._calculate_spectrogram_chain_loss(target_signals_through_chain, pred_signals_through_chain,
+                                                                   log=True)
+            else:
+                pred_final_signal, _ = self.generate_synth_sound(predicted_params_full_range, batch_size)
+                spec_loss, per_op_loss, per_op_weighted_loss, ret_spectrograms = \
+                    self.spec_loss.call(target_signal, pred_final_signal, return_spectrogram=True,
+                                        step=self.global_step)
+                self._log_recursive(per_op_weighted_loss, f'final_spec_losses_weighted')
 
         loss_total, weighted_params_loss, weighted_spec_loss = self._balance_losses(total_params_loss, spec_loss, log)
         param_diffs = get_param_diffs(predicted_params_full_range.copy(), target_params_full_range.copy())
@@ -268,19 +271,17 @@ class LitModularSynth(LightningModule):
         target_signal = target_signal.squeeze().float()
         predicted_signal = predicted_signal.squeeze().float()
 
-        target_spec = self.signal_transform(target_signal).cpu().numpy()
-        predicted_spec = self.signal_transform(predicted_signal).cpu().numpy()
+        target_spec = self.signal_transform(target_signal)
+        predicted_spec = self.signal_transform(predicted_signal)
 
-        target_signal = target_signal.cpu().numpy()
-        predicted_signal = predicted_signal.cpu().numpy()
-
-        metrics['lsd_value'] = lsd(target_spec, predicted_spec, reduction=np.mean)
-        metrics['pearson_stft'] = pearsonr_dist(target_spec, predicted_spec, input_type='spec', reduction=np.mean)
-        metrics['pearson_fft'] = pearsonr_dist(target_signal, predicted_signal, input_type='audio', reduction=np.mean)
-        metrics['mean_average_error'] = mae(target_spec, predicted_spec, reduction=np.mean)
+        metrics['paper_lsd_value'] = paper_lsd(target_signal, predicted_signal)
+        metrics['lsd_value'] = lsd(target_spec, predicted_spec, reduction=torch.mean)
+        metrics['pearson_stft'] = pearsonr_dist(target_spec, predicted_spec, input_type='spec', reduction=torch.mean)
+        metrics['pearson_fft'] = pearsonr_dist(target_signal, predicted_signal, input_type='audio', reduction=torch.mean)
+        metrics['mean_average_error'] = mae(target_spec, predicted_spec, reduction=torch.mean)
         metrics['mfcc_mae'] = mfcc_distance(target_signal, predicted_signal, sample_rate=synth_structure.sample_rate,
-                                            reduction=np.mean)
-        metrics['spectral_convergence_value'] = spectral_convergence(target_spec, predicted_spec, reduction=np.mean)
+                                            device=self.device, reduction=torch.mean)
+        metrics['spectral_convergence_value'] = spectral_convergence(target_spec, predicted_spec, reduction=torch.mean)
 
         return metrics
 
@@ -312,8 +313,33 @@ class LitModularSynth(LightningModule):
                                      dataformats='HWC')
 
     def _log_recursive(self, items_to_log: dict, tag: str, on_epoch=False):
-        interval = self.current_epoch if on_epoch else self.global_step
-        log_dict_recursive(tag, items_to_log, self.tb_logger, interval)
+        if isinstance(items_to_log, np.float) or isinstance(items_to_log, np.int):
+            self.log(tag, items_to_log, on_step=True, on_epoch=on_epoch)
+            return
+
+        if type(items_to_log) == list:
+            items_to_log = np.asarray(items_to_log)
+
+        if type(items_to_log) in [torch.Tensor, np.ndarray, int, float]:
+            items_to_log = items_to_log.squeeze()
+            if len(items_to_log.shape) == 0 or len(items_to_log) <= 1:
+                self.log(tag, items_to_log)
+            elif len(items_to_log) > 1:
+                self.tb_logger.add_histogram(tag, items_to_log)
+            else:
+                raise ValueError(f"Unexpected value to log {items_to_log}")
+            return
+
+        if not isinstance(items_to_log, dict):
+            return
+
+        if 'operation' in items_to_log:
+            tag += '_' + items_to_log['operation']
+
+        for k, v in items_to_log.items():
+            self._log_recursive(v, f'{tag}/{k}', on_epoch)
+
+        return
 
     @staticmethod
     def _accumulate_batch_values(accumulator: dict, batch_vals: dict):

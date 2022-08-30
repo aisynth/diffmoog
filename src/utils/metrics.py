@@ -1,8 +1,30 @@
-import numpy as np
-from librosa.feature import mfcc
+import torch
+from torchaudio.transforms import MFCC
 
-from scipy.stats import pearsonr
-from scipy.fft import fft
+from torchmetrics.functional import pearson_corrcoef
+
+
+amp = lambda x: x[..., 0]**2 + x[..., 1]**2
+
+
+def spectrogram(audio, size=2048, hop_length=1024, power=2, center=False, window=None):
+    power_spec = amp(torch.view_as_real(torch.stft(audio, size, window=window, hop_length=hop_length, center=center,
+                                                   return_complex=True)))
+    if power == 2:
+        spec = power_spec
+    elif power == 1:
+        spec = power_spec.sqrt()
+    return spec
+
+
+def paper_lsd(orig_audio, resyn_audio):
+    window = torch.hann_window(1024).to(orig_audio.device)
+    orig_power_s = spectrogram(orig_audio, 1024, 256, window=window).detach()
+    resyn_power_s = spectrogram(resyn_audio, 1024, 256, window=window).detach()
+    lsd_val = torch.sqrt(((10 * (torch.log10(resyn_power_s+1e-5)-torch.log10(orig_power_s+1e-5)))**2).sum(dim=(1,2))) /\
+              orig_power_s.shape[-1]
+    lsd_val = lsd_val.mean()
+    return lsd_val
 
 
 def lsd(spec1, spec2, reduction=None):
@@ -10,8 +32,8 @@ def lsd(spec1, spec2, reduction=None):
 
     assert spec1.ndim == 3 and spec2.ndim == 3, "Input must be a batch of 2d spectrograms"
 
-    batch_diff = np.log10(spec1 + 1e-5) - np.log10(spec2 + 1e-5)
-    lsd_val = [np.linalg.norm(10 * x, ord='fro') / x.shape[-1] for x in batch_diff]
+    batch_diff = torch.log10(spec1 + 1e-5) - torch.log10(spec2 + 1e-5)
+    lsd_val = torch.linalg.norm(10 * batch_diff, ord='fro', dim=(1, 2)) / batch_diff.shape[-1]
     
     if reduction is not None:
         lsd_val = reduction(lsd_val)
@@ -27,15 +49,13 @@ def pearsonr_dist(x1, x2, input_type='spec', reduction=None):
         x2 = [x.flatten() for x in x2]
     elif input_type == 'audio':
         assert x1.ndim == 2 and x2.ndim == 2, "Input must be a batch of 1d wavelet"
-        x1 = np.abs(fft(x1))
-        x2 = np.abs(fft(x2))
+        x1 = torch.abs(torch.fft.fft(x1))
+        x2 = torch.abs(torch.fft.fft(x2))
     else:
         AttributeError("Unknown input_type")
 
-    pearson_r = [pearsonr(c_x1, c_x2)[0] for c_x1, c_x2 in zip(x1, x2)]
-    
-    pearson_r = np.asarray(pearson_r)
-    pearson_r[np.isnan(pearson_r)] = 0
+    pearson_r = torch.tensor([pearson_corrcoef(c_x1, c_x2) for c_x1, c_x2 in zip(x1, x2)])
+    pearson_r[torch.isnan(pearson_r)] = 0
     
     if reduction is not None:
         pearson_r = reduction(pearson_r)
@@ -47,8 +67,8 @@ def mae(spec1, spec2, reduction=None):
 
     assert spec1.ndim == 3 and spec2.ndim == 3, "Input must be a batch of 2d spectrograms"
 
-    abs_diff = np.abs(np.log10(spec1 + 1e-5) - np.log10(spec2 + 1e-5))
-    mae_val = [sample_diff.mean() for sample_diff in abs_diff]
+    abs_diff = torch.abs(torch.log10(spec1 + 1e-5) - torch.log10(spec2 + 1e-5))
+    mae_val = abs_diff.mean(dim=(1, 2))
     
     if reduction is not None:
         mae_val = reduction(mae_val)
@@ -56,45 +76,40 @@ def mae(spec1, spec2, reduction=None):
     return mae_val
 
 
-def mfcc_distance(sound_batch1, sound_batch2, sample_rate, reduction=None):
+def mfcc_distance(sound_batch1, sound_batch2, sample_rate, device, reduction=None):
+
+    mfcc = MFCC(sample_rate).to(device)
 
     assert sound_batch1.ndim == 2 and sound_batch2.ndim == 2, "Input must be a batch of 1d wavelet"
 
-    res = []
-    for sound1, sound2 in zip(sound_batch1, sound_batch2):
-        mfcc1 = mfcc(y=sound1, sr=sample_rate, n_mfcc=40)
-        mfcc2 = mfcc(y=sound2, sr=sample_rate, n_mfcc=40)
+    mfcc1 = mfcc(sound_batch1)
+    mfcc2 = mfcc(sound_batch2)
 
-        abs_diff = np.abs(mfcc1 - mfcc2)
-        mfcc_dist = abs_diff.mean()
-        res.append(mfcc_dist)
-        
+    abs_diff = torch.abs(mfcc1 - mfcc2)
+    mfcc_dist = abs_diff.mean(dim=(1, 2))
+
     if reduction is not None:
-        res = reduction(res)
+        mfcc_dist = reduction(mfcc_dist)
 
-    return res
+    return mfcc_dist
 
 
 def spectral_convergence(target_spec_batch, pred_spec_batch, reduction=None):
 
     assert target_spec_batch.ndim == 3 and pred_spec_batch.ndim == 3, "Input must be a batch of 2d spectrograms"
 
-    res = []
-    for target_spec, pred_spec in zip(target_spec_batch, pred_spec_batch):
+    abs_diff = torch.abs(target_spec_batch) - torch.abs(pred_spec_batch)
 
-        abs_diff = np.abs(target_spec) - np.abs(pred_spec)
-        nom = np.linalg.norm(abs_diff, ord='fro')
+    nom = torch.linalg.norm(abs_diff, ord='fro', dim=(1, 2))
+    denom = torch.linalg.norm(torch.abs(target_spec_batch), ord='fro', dim=(1, 2))
 
-        denom = np.linalg.norm(np.abs(target_spec), ord='fro')
+    sc_val = nom / denom
+    sc_val[torch.isinf(sc_val)] = 10
 
-        sc_val = nom / denom
-
-        res.append(sc_val)
-        
     if reduction is not None:
-        res = reduction(res)
+        sc_val = reduction(sc_val)
 
-    return res
+    return sc_val
 
 
 def kullback_leibler(y_hat, y):
@@ -111,8 +126,8 @@ def kullback_leibler(y_hat, y):
 
 
 def earth_mover_distance(y_true, y_pred):
-    y_pred_cumsum0 = np.cumsum(y_pred, dim=1)
-    y_true_cumsum0 = np.cumsum(y_true, dim=1)
-    square = np.square(y_true_cumsum0 - y_pred_cumsum0)
-    final = np.mean(square)
+    y_pred_cumsum0 = torch.cumsum(y_pred, dim=1)
+    y_true_cumsum0 = torch.cumsum(y_true, dim=1)
+    square = torch.square(y_true_cumsum0 - y_pred_cumsum0)
+    final = torch.mean(square)
     return final
