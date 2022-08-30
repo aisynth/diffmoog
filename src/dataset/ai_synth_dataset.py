@@ -18,15 +18,12 @@ class AiSynthDataset(Dataset):
     3. All data is saved as GPU tensors
     """
 
-    def __init__(self,
-                 parameters_pickle,
-                 audio_dir,
-                 device_arg):
-        # file = open(parameters_pickle, 'r')
-        # self.params = pickle.load(file)
-        self.params = pd.read_pickle(parameters_pickle)
-        self.audio_dir = audio_dir
-        self.device = device_arg
+    def __init__(self, data_dir: str):
+
+        params_pickle_path = os.path.join(data_dir, 'params_dataset.pkl')
+        self.audio_dir = os.path.join(data_dir, 'wav_files')
+
+        self.params = pd.read_pickle(params_pickle_path)
 
     def __len__(self):
         return len(self.params)
@@ -36,7 +33,6 @@ class AiSynthDataset(Dataset):
         audio_path = self._get_audio_path(index)
 
         signal, _ = torchaudio.load(audio_path)
-        # signal = signal.to(self.device)
 
         return signal, params_dic, index
 
@@ -71,13 +67,10 @@ class NSynthDataset(Dataset):
     3. All data is saved as GPU tensors
     """
 
-    def __init__(self,
-                 audio_dir,
-                 device_arg):
-        self.audio_dir = audio_dir
-        self.wav_files = glob.glob(os.path.join(audio_dir, '**', '*.wav'), recursive=True)
-        print(f"NSynth dataloader found {len(self.wav_files)} wav files in {audio_dir}")
-        self.device = device_arg
+    def __init__(self, data_dir: str):
+
+        self.wav_files = glob.glob(os.path.join(data_dir, '**', '*.wav'), recursive=True)
+        print(f"NSynth dataloader found {len(self.wav_files)} wav files in {data_dir}")
 
     def __len__(self):
         return len(self.wav_files)
@@ -90,9 +83,3 @@ class NSynthDataset(Dataset):
     def _get_audio_path(self, index):
         path = self.wav_files[index]
         return path
-
-
-def create_data_loader(dataset, batch_size, num_workers=0, shuffle=True):
-    dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers,
-                            persistent_workers=num_workers != 0, shuffle=shuffle)
-    return dataloader

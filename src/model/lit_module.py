@@ -9,7 +9,7 @@ from pytorch_lightning.utilities.types import STEP_OUTPUT
 from model.loss.parameters_loss import ParametersLoss
 from model.loss.spectral_loss import SpectralLoss
 from model.model import SynthNetwork
-from synth.parameters_normalizer import Normalizer, clamp_adsr_params
+from synth.parameters_normalizer import Normalizer
 from synth.synth_architecture import SynthModular
 from synth.synth_constants import synth_structure
 from utils.metrics import lsd, pearsonr_dist, mae, mfcc_distance, spectral_convergence
@@ -19,16 +19,17 @@ from utils.visualization_utils import visualize_signal_prediction
 
 class LitModularSynth(LightningModule):
 
-    def __init__(self, train_cfg, device: str = 'cuda:0'):
+    def __init__(self, train_cfg):
 
         super().__init__()
 
         self.cfg = train_cfg
 
-        self.synth = SynthModular(preset_name=train_cfg.synth.preset, synth_structure=synth_structure, device=device)
+        self.synth = SynthModular(preset_name=train_cfg.synth.preset, synth_structure=synth_structure,
+                                  device=self.device)
 
-        self.synth_net = SynthNetwork(train_cfg.model.preset, device, backbone=train_cfg.model.backbone).to(device)
-        self.normalizer = Normalizer(train_cfg.synth.note_off_time, synth_structure)
+        self.synth_net = SynthNetwork(train_cfg.model.preset, backbone=train_cfg.model.backbone, device=self.device)
+        self.normalizer = Normalizer(train_cfg.synth.note_off_time, train_cfg.synth.signal_duration, synth_structure)
 
         if train_cfg.transform.lower() == 'mel':
             self.signal_transform = torchaudio.transforms.MelSpectrogram(sample_rate=synth_structure.sample_rate,
@@ -40,49 +41,66 @@ class LitModularSynth(LightningModule):
             raise NotImplementedError(f'Input transform {train_cfg.transform} not implemented.')
 
         self.spec_loss = SpectralLoss(loss_type=train_cfg.loss.spec_loss_type, preset_name=train_cfg.loss.preset,
-                                      sample_rate=synth_structure.sample_rate, device=device)
+                                      sample_rate=synth_structure.sample_rate, device=self.device)
 
         self.params_loss = ParametersLoss(loss_type=train_cfg.loss.parameters_loss_type,
-                                          synth_structure=synth_structure, device=device)
+                                          synth_structure=synth_structure, device=self.device)
 
         self.epoch_param_diffs, self.epoch_vals_raw, self.epoch_vals_normalized = {}, {}, {}
+
+        self.tb_logger = self.logger.experiment
 
     def forward(self, raw_signal: torch.Tensor, *args, **kwargs) -> Any:
 
         assert len(raw_signal.shape) == 2, f'Expected tensor of dimensions [batch_size, signal_length] ' \
                                            f'but got shape {raw_signal.shape}'
 
+        # Transform raw signal to spectrogram
         spectrograms = self.signal_transform(raw_signal)
 
+        # Run NN model and convert predicted params from (0, 1) to original range
         predicted_parameters_unit_range = self.synth_net(spectrograms)
         predicted_params_full_range = self.normalizer.denormalize(predicted_parameters_unit_range)
-        predicted_params_full_range = clamp_adsr_params(predicted_params_full_range, synth_structure)
 
         return predicted_parameters_unit_range, predicted_params_full_range
 
-    def generate_synth_sound(self, full_range_synth_params: dict, batch_size: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def generate_synth_sound(self, full_range_synth_params: dict, batch_size: int) -> Tuple[torch.Tensor, dict]:
+
+        # Inject synth parameters to the modular synth
         self.synth.update_cells_from_dict(full_range_synth_params)
+
+        # Generate sound
         pred_final_signal, pred_signals_through_chain = \
             self.synth.generate_signal(signal_duration=self.train_cfg.synth.signal_duration, batch_size=batch_size)
+
         return pred_final_signal, pred_signals_through_chain
 
-    def in_domain_step(self, batch, batch_idx, tag: str):
-        if batch_idx == 0:
-            self.log_sounds_batch(batch, f'samples_{tag}')
+    def in_domain_step(self, batch):
 
-        raw_signal, target_params_full_range, signal_index = batch
+        target_signal, target_params_full_range, signal_index = batch
         batch_size = len(signal_index)
 
-        predicted_params_unit_range, predicted_params_full_range = self(raw_signal)
+        predicted_params_unit_range, predicted_params_full_range = self(target_signal)
         target_params_unit_range = self.normalizer.normalize(target_params_full_range)
 
         total_params_loss, per_parameter_loss = self.params_loss.call(predicted_params_unit_range,
                                                                       target_params_unit_range)
 
-        spec_loss, predicted_signal = self.calculate_spectrogram_loss(raw_signal, target_params_full_range,
-                                                                      predicted_params_full_range,
-                                                                      self.train_cfg.loss.use_chain_loss,
-                                                                      batch_size, log=True)
+        params_for_pred_signal_generation = copy.copy(target_params_full_range)
+        params_for_pred_signal_generation.update(predicted_params_full_range)
+        pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(params_for_pred_signal_generation,
+                                                                                  batch_size)
+
+        if self.train_cfg.loss.use_chain_loss:
+            _, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
+            spec_loss = self.calculate_spectrogram_chain_loss(target_signals_through_chain, pred_signals_through_chain,
+                                                              log=True)
+        else:
+            pred_final_signal, _ = self.generate_synth_sound(predicted_params_full_range, batch_size)
+            spec_loss, per_op_loss, per_op_weighted_loss, ret_spectrograms = \
+                self.spec_loss.call(target_signal, pred_final_signal, return_spectrogram=True,
+                                    step=self.global_step)
+            self._log_recursive(per_op_weighted_loss, f'final_spec_losses_weighted')
 
         loss_total, weighted_params_loss, weighted_spec_loss = self.balance_losses(total_params_loss, spec_loss)
         param_diffs = get_param_diffs(predicted_params_full_range.copy(), target_params_full_range.copy())
@@ -90,29 +108,23 @@ class LitModularSynth(LightningModule):
         step_losses = {'raw_params_loss': total_params_loss, 'raw_spec_loss': spec_loss,
                        'weighted_params_loss': weighted_params_loss, 'weighted_spec_loss': weighted_spec_loss}
 
-        step_metrics = self.calculate_audio_metrics(raw_signal, predicted_signal)
+        step_metrics = self.calculate_audio_metrics(target_signal, pred_final_signal)
 
         step_artifacts = {'raw_predicted_parameters': predicted_params_unit_range,
                           'full_range_predicted_parameters': predicted_params_full_range, 'param_diffs': param_diffs}
 
-        # Log step stats
-        self._log_recursive(step_losses, f'losses/{tag}')
-        self._log_recursive(step_metrics, f'metrics/{tag}')
-        self._log_recursive(per_parameter_loss, f'per_param_losses/{tag}')
+        return loss_total, step_losses, step_metrics, step_artifacts
 
-        return loss_total, step_artifacts
+    def out_of_domain_step(self, batch):
 
-    def out_of_domain_step(self, batch, batch_idx, tag: str):
-
-        target_final_signal, _, signal_index = batch
+        target_final_signal, signal_index = batch
         batch_size = len(signal_index)
 
         predicted_params_unit_range, predicted_params_full_range = self(target_final_signal)
-        pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
-                                                                                  batch_size)
+        pred_final_signal, _ = self.generate_synth_sound(predicted_params_full_range, batch_size)
 
-        loss, per_op_loss, per_op_weighted_loss, ret_spectrograms = \
-            self.spec_loss.call(target_final_signal, pred_final_signal, return_spectrogram=True, step=self.global_step)
+        loss, per_op_loss, per_op_weighted_loss = self.spec_loss.call(target_final_signal, pred_final_signal,
+                                                                      step=self.global_step)
 
         weighted_spec_loss = self.cfg.loss.spectrogram_loss_weight * loss
         step_losses = {'raw_spec_loss': loss, 'weighted_spec_loss': weighted_spec_loss}
@@ -120,20 +132,21 @@ class LitModularSynth(LightningModule):
         step_metrics = self.calculate_audio_metrics(target_final_signal, pred_final_signal)
 
         step_artifacts = {'raw_predicted_parameters': predicted_params_unit_range,
-                          'full_range_predicted_parameters': predicted_params_full_range}
+                          'full_range_predicted_parameters': predicted_params_full_range,
+                          'per_op_spec_loss_raw': per_op_loss, 'per_op_spec_loss_weighted': per_op_weighted_loss}
 
-        # Log step stats
-        self._log_recursive(step_losses, f'losses/{tag}')
-        self._log_recursive(step_metrics, f'metrics/{tag}')
-        self._log_recursive(per_op_loss, f'spec_loss/{tag}')
-        self._log_recursive(per_op_weighted_loss, f'spec_loss_weighted/{tag}')
-
-        return weighted_spec_loss, step_artifacts
+        return weighted_spec_loss, step_losses, step_metrics, step_artifacts
 
     def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
 
-        loss, step_artifacts = self.in_domain_step(batch, batch_idx, 'train')
+        if batch_idx == 0:
+            self.log_sounds_batch(batch, f'samples_train')
 
+        loss, step_losses, step_metrics, step_artifacts = self.in_domain_step(batch)
+        
+        self._log_recursive(step_losses, f'train_losses')
+        self._log_recursive(step_metrics, f'train_metrics')
+        
         self._accumulate_batch_values(self.epoch_vals_raw, step_artifacts['raw_predicted_parameters'])
         self._accumulate_batch_values(self.epoch_vals_normalized, step_artifacts['full_range_predicted_parameters'])
         self._accumulate_batch_values(self.epoch_param_diffs, step_artifacts['param_diffs'])
@@ -148,16 +161,21 @@ class LitModularSynth(LightningModule):
             self.log_sounds_batch(batch, val_name)
 
         if 'in_domain' in val_name:
-            loss, step_artifacts = self.in_domain_step(batch, batch_idx, val_name)
+            loss, step_losses, step_metrics, step_artifacts = self.in_domain_step(batch)
         else:
-            loss, step_artifacts = self.out_of_domain_step(batch, batch_idx, val_name)
+            loss, step_losses, step_metrics, step_artifacts = self.out_of_domain_step(batch)
+            
+        self._log_recursive(step_losses, f'{val_name}_losses')
+        self._log_recursive(step_metrics, f'{val_name}_metrics')
+        self._log_recursive(step_artifacts['per_op_spec_loss_raw'], f'{val_name}_per_op_spec_loss/raw')
+        self._log_recursive(step_artifacts['per_op_spec_loss_weighted'], f'{val_name}_per_op_spec_loss/weighted')
 
         return loss
 
     @torch.no_grad()
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:
-        target_final_signal, _, signal_index = batch
-        batch_size = len(signal_index)
+        target_final_signal = batch[0]
+        batch_size = len(target_final_signal)
 
         predicted_params_unit_range, predicted_params_full_range = self(target_final_signal)
         pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
@@ -185,63 +203,46 @@ class LitModularSynth(LightningModule):
         for i in range(self.cfg.n_images_to_log):
             sample_params_orig, sample_params_pred = parse_synth_params(target_params_full_range,
                                                                         predicted_params_full_range, i)
-            self.logger.experiment.add_audio(f'{tag}/input_{i}_target', raw_target_signal[i],
-                                             global_step=self.current_epoch, sample_rate=synth_structure.sample_rate)
-            self.logger.experiment.add_audio(f'{tag}/input_{i}_pred', pred_final_signal[i],
-                                             global_step=self.current_epoch, sample_rate=synth_structure.sample_rate)
+            self.tb_logger.add_audio(f'{tag}/input_{i}_target', raw_target_signal[i],
+                                     global_step=self.current_epoch, sample_rate=synth_structure.sample_rate)
+            self.tb_logger.add_audio(f'{tag}/input_{i}_pred', pred_final_signal[i],
+                                     global_step=self.current_epoch, sample_rate=synth_structure.sample_rate)
 
             signal_vis = visualize_signal_prediction(raw_target_signal[i], pred_final_signal[i], sample_params_orig,
                                                      sample_params_pred, db=True)
             signal_vis_t = torch.tensor(signal_vis, dtype=torch.uint8, requires_grad=False)
 
-            self.logger.experiment.add_image(f'{tag}/{256}_spec/input_{i}',
-                                             signal_vis_t,
-                                             global_step=self.current_epoch,
-                                             dataformats='HWC')
+            self.tb_logger.add_image(f'{tag}/{256}_spec/input_{i}', signal_vis_t, global_step=self.current_epoch,
+                                     dataformats='HWC')
 
-    def calculate_spectrogram_loss(self, target_signal: torch.Tensor, target_params: dict, predicted_params: dict,
-                                   use_chain_loss: bool, batch_size: int = 1, log=False):
+    def calculate_spectrogram_chain_loss(self, target_signals_through_chain: dict, pred_signals_through_chain: dict,
+                                         log=False):
 
-        params_for_pred_signal_generation = copy.copy(target_params)
-        params_for_pred_signal_generation.update(predicted_params)
-        pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(params_for_pred_signal_generation,
-                                                                                  batch_size)
+        chain_losses = torch.zeros(len(target_signals_through_chain))
+        for i, op_index in enumerate(target_signals_through_chain.keys()):
+            op_index = str(op_index)
 
-        if use_chain_loss:
-            target_final_signal, target_signals_through_chain = self.generate_synth_sound(target_params, batch_size)
+            # current_layer = int(op_index[2])
+            # layer_warmup_factor = cfg.chain_warmup_factor * current_layer
+            #
+            # if epoch - cfg.spectrogram_loss_warmup / num_iters < layer_warmup_factor:
+            #     continue
 
-            chain_losses = torch.zeros(len(target_signals_through_chain))
-            for i, op_index in enumerate(predicted_params.keys()):
-                op_index = str(op_index)
+            c_pred_signal = pred_signals_through_chain[op_index]
+            if c_pred_signal is None:
+                continue
 
-                # current_layer = int(op_index[2])
-                # layer_warmup_factor = cfg.chain_warmup_factor * current_layer
-                #
-                # if epoch - cfg.spectrogram_loss_warmup / num_iters < layer_warmup_factor:
-                #     continue
-
-                c_pred_signal = pred_signals_through_chain[op_index]
-                if c_pred_signal is None:
-                    continue
-
-                c_target_signal = target_signals_through_chain[op_index]
-                loss, per_op_loss, per_op_weighted_loss, ret_spectrograms = \
-                    self.spec_loss.call(c_target_signal, c_pred_signal, step=self.global_step, return_spectrogram=True)
-                chain_losses[i] = loss
-
-                if log:
-                    self._log_recursive(per_op_weighted_loss, f'{op_index}_weighted')
-
-            spectrogram_loss = chain_losses.mean() / self.train_cfg.loss.chain_loss_weight
-        else:
+            c_target_signal = target_signals_through_chain[op_index]
             loss, per_op_loss, per_op_weighted_loss, ret_spectrograms = \
-                self.spec_loss.call(target_signal, pred_final_signal, return_spectrogram=True, step=self.global_step)
-            spectrogram_loss = loss
+                self.spec_loss.call(c_target_signal, c_pred_signal, step=self.global_step, return_spectrogram=True)
+            chain_losses[i] = loss
 
             if log:
-                self._log_recursive(per_op_weighted_loss, f'final_spec_losses_weighted')
+                self._log_recursive(per_op_weighted_loss, f'{op_index}_weighted_spec_loss')
 
-        return spectrogram_loss, pred_final_signal
+        spectrogram_loss = chain_losses.mean() * self.train_cfg.loss.chain_loss_weight
+
+        return spectrogram_loss
 
     def balance_losses(self, parameters_loss, spectrogram_loss):
 
@@ -291,7 +292,7 @@ class LitModularSynth(LightningModule):
 
     def _log_recursive(self, items_to_log: dict, tag: str, on_epoch=False):
         interval = self.current_epoch if on_epoch else self.global_step
-        log_dict_recursive(tag, items_to_log, self.logger.experiment, interval)
+        log_dict_recursive(tag, items_to_log, self.tb_logger, interval)
 
     @staticmethod
     def _accumulate_batch_values(accumulator: dict, batch_vals: dict):

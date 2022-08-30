@@ -10,7 +10,12 @@ from synth.synth_constants import SynthConstants
 class Normalizer:
     """ normalize/de-normalise regression parameters"""
 
-    def __init__(self, note_off_time, synth_structure: SynthConstants):
+    def __init__(self, note_off_time: float, signal_duration: int, synth_structure: SynthConstants, clamp_adsr=True):
+
+        self.signal_duration = signal_duration
+        self.clamp_adsr = clamp_adsr
+        self.synth_structure = synth_structure
+
         self.mod_index_normalizer = MinMaxNormaliser(target_min_val=0,
                                                      target_max_val=1,
                                                      original_min_val=0,
@@ -115,7 +120,62 @@ class Normalizer:
                 else:
                     denormalized_params_dict[key]['parameters'][param_name] = params[param_name]
 
+            if operation == 'env_adsr' and self.clamp_adsr:
+                denormalized_params_dict[key]['parameters'] = \
+                    self._clamp_adsr_params(denormalized_params_dict[key]['parameters'])
+
         return denormalized_params_dict
+
+    def _clamp_adsr_params(self, adsr_params: dict):
+        """look for adsr operations to send to clamping function"""
+
+        clamped_attack, clamped_decay, clamped_sustain, clamped_release = \
+            self._clamp_adsr_superposition(**adsr_params)
+
+        ret_params = {'attack_t': clamped_attack, 'decay_t': clamped_decay, 'sustain_t': clamped_sustain,
+                      'sustain_level': torch.clamp(adsr_params['sustain_level'], min=0, max=self.synth_structure.max_amp),
+                      'release_t': clamped_release}
+
+        return ret_params
+
+    def _clamp_adsr_superposition(self, attack_t, decay_t, sustain_t, release_t):
+        """This function clamps the superposition of adsr times, so it does not exceed signal length"""
+
+        adsr_length_in_sec = attack_t + decay_t + sustain_t + release_t
+
+        adsr_clamp_indices = torch.nonzero(adsr_length_in_sec >= self.signal_duration, as_tuple=True)[0]
+
+        normalized_attack_list = []
+        normalized_decay_list = []
+        normalized_sustain_list = []
+        normalized_release_list = []
+
+        for i in range(adsr_length_in_sec.shape[0]):
+            if i in adsr_clamp_indices.tolist():
+                # add small number to normalization to prevent numerical issue where the sum exceeds 1
+                normalization_value = adsr_length_in_sec[i] + 1e-3
+                normalized_attack = attack_t[i] / normalization_value
+                normalized_decay = decay_t[i] / normalization_value
+                normalized_sustain = sustain_t[i] / normalization_value
+                normalized_release = release_t[i] / normalization_value
+
+            else:
+                normalized_attack = attack_t[i]
+                normalized_decay = decay_t[i]
+                normalized_sustain = sustain_t[i]
+                normalized_release = release_t[i]
+
+            normalized_attack_list.append(normalized_attack)
+            normalized_decay_list.append(normalized_decay)
+            normalized_sustain_list.append(normalized_sustain)
+            normalized_release_list.append(normalized_release)
+
+        normalized_attack_tensor = torch.stack(normalized_attack_list)
+        normalized_decay_tensor = torch.stack(normalized_decay_list)
+        normalized_sustain_tensor = torch.stack(normalized_sustain_list)
+        normalized_release_tensor = torch.stack(normalized_release_list)
+
+        return normalized_attack_tensor, normalized_decay_tensor, normalized_sustain_tensor, normalized_release_tensor
 
 
 class MinMaxNormaliser:
@@ -151,92 +211,3 @@ class LogNormaliser:
     def denormalise(self, norm_array):
         array = torch.exp(norm_array) - 1e-10
         return array
-
-
-def clamp_adsr_params(parameters_dict: dict, synth_cfg: SynthConstants, cfg: Config):
-    """look for adsr operations to send to clamping function"""
-
-    for key, val in parameters_dict.items():
-        operation = val['operation']
-        operation_params = val['parameters']
-
-        if operation == 'env_adsr':
-
-            clamped_attack, clamped_decay, clamped_sustain, clamped_release = \
-                clamp_adsr_superposition(cfg=cfg, **operation_params)
-
-            parameters_dict[key] = \
-                {'operation': operation,
-                 'parameters':
-                     {'attack_t': clamped_attack,
-                      'decay_t': clamped_decay,
-                      'sustain_t': clamped_sustain,
-                      'sustain_level': torch.clamp(operation_params['sustain_level'], min=0,
-                                                   max=synth_cfg.max_amp),
-                      'release_t': clamped_release
-                      }
-                 }
-
-        elif operation == 'amplitude_shape':
-            attack_t = operation_params['attack_t']
-            decay_t = operation_params['decay_t']
-            sustain_t = operation_params['sustain_t']
-            release_t = operation_params['release_t']
-
-            clamped_attack, clamped_decay, clamped_sustain, clamped_release = \
-                clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t, cfg)
-
-            parameters_dict[key] = \
-                {'operation': operation,
-                 'parameters':
-                     {'attack_t': clamped_attack,
-                      'decay_t': clamped_decay,
-                      'sustain_t': clamped_sustain,
-                      'sustain_level': torch.clamp(operation_params['sustain_level'], min=0,
-                                                   max=synth_cfg.max_amp),
-                      'release_t': clamped_release,
-                      'envelope': operation_params['envelope']
-                      }
-                 }
-
-    return parameters_dict
-
-
-def clamp_adsr_superposition(attack_t, decay_t, sustain_t, release_t, cfg: Config):
-    """This function clamps the superposition of adsr times, so it does not exceed signal length"""
-
-    adsr_length_in_sec = attack_t + decay_t + sustain_t + release_t
-
-    adsr_clamp_indices = torch.nonzero(adsr_length_in_sec >= cfg.signal_duration_sec, as_tuple=True)[0]
-
-    normalized_attack_list = []
-    normalized_decay_list = []
-    normalized_sustain_list = []
-    normalized_release_list = []
-
-    for i in range(adsr_length_in_sec.shape[0]):
-        if i in adsr_clamp_indices.tolist():
-            # add small number to normalization to prevent numerical issue where the sum exceeds 1
-            normalization_value = adsr_length_in_sec[i] + 1e-3
-            normalized_attack = attack_t[i] / normalization_value
-            normalized_decay = decay_t[i] / normalization_value
-            normalized_sustain = sustain_t[i] / normalization_value
-            normalized_release = release_t[i] / normalization_value
-
-        else:
-            normalized_attack = attack_t[i]
-            normalized_decay = decay_t[i]
-            normalized_sustain = sustain_t[i]
-            normalized_release = release_t[i]
-
-        normalized_attack_list.append(normalized_attack)
-        normalized_decay_list.append(normalized_decay)
-        normalized_sustain_list.append(normalized_sustain)
-        normalized_release_list.append(normalized_release)
-
-    normalized_attack_tensor = torch.stack(normalized_attack_list)
-    normalized_decay_tensor = torch.stack(normalized_decay_list)
-    normalized_sustain_tensor = torch.stack(normalized_sustain_list)
-    normalized_release_tensor = torch.stack(normalized_release_list)
-
-    return normalized_attack_tensor, normalized_decay_tensor, normalized_sustain_tensor, normalized_release_tensor

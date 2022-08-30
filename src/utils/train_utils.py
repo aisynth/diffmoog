@@ -8,8 +8,8 @@ from torch.utils.tensorboard import SummaryWriter
 from sklearn.metrics import confusion_matrix
 from scipy.special import softmax
 
-from config import SynthConfig
-from synth.synth_modular_presets import synth_presets_dict
+from synth.synth_constants import synth_structure
+from synth.synth_presets import synth_presets_dict
 
 
 def log_gradients_in_model(model, writer: SummaryWriter, step):
@@ -117,26 +117,24 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
             if param_name == 'waveform':
                 target_vals = target_vals.squeeze()
                 if target_vals.ndim == 0:
-                    waveform_idx = [SynthConfig.wave_type_dict[target_vals.item()]]
+                    waveform_idx = [synth_structure.wave_type_dict[target_vals.item()]]
                     diff = (1 - pred_vals[0][waveform_idx]).item()
                 else:
-                    waveform_idx = [SynthConfig.wave_type_dict[wt] for wt in target_vals]
+                    waveform_idx = [synth_structure.wave_type_dict[wt] for wt in target_vals]
                     diff = [1 - v[idx] for idx, v in zip(waveform_idx, pred_vals)]
                     diff = np.asarray(diff).squeeze()
             elif param_name == 'filter_type':
                 if target_vals.ndim == 0:
-                    filter_type_idx = [SynthConfig.filter_type_dict[target_vals.item()]]
+                    filter_type_idx = [synth_structure.filter_type_dict[target_vals.item()]]
                     diff = (1 - pred_vals[0][filter_type_idx]).item()
                 else:
-                    filter_type_idx = [SynthConfig.filter_type_dict[ft] for ft in target_vals.squeeze()]
+                    filter_type_idx = [synth_structure.filter_type_dict[ft] for ft in target_vals.squeeze()]
                     diff = [1 - v[idx] for idx, v in zip(filter_type_idx, pred_vals)]
                     diff = np.asarray(diff).squeeze()
             elif param_name in ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']:
                 continue
             elif param_name == 'envelope':
-                # pdist = torch.nn.PairwiseDistance(p=2)
                 diff = [np.linalg.norm(pred_vals[k] - target_vals[k]) for k in range(pred_vals.shape[0])]
-                # diff = dist(pred_vals, target_vals)
             elif param_name in ['active', 'fm_active']:
                 active_targets = [0 if f else 1 for f in target_vals]
                 softmax_pred_vals = softmax(pred_vals, axis=1)
@@ -145,17 +143,9 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
 
                 true_negative = conf_mat[0][0]
                 true_positive = conf_mat[1][1]
-                false_positive = conf_mat[0][1]
-                false_negative = conf_mat[1][0]
 
                 accuracy = (true_negative + true_positive) / len(active_preds)
                 all_diffs[f'{op_index}/{param_name}_accuracy'] = accuracy
-
-                # all_diffs[f'{op_index}/{param_name}_tn'] = true_negative
-                # all_diffs[f'{op_index}/{param_name}_tp'] = true_positive
-                # all_diffs[f'{op_index}/{param_name}_fp'] = false_positive
-                # all_diffs[f'{op_index}/{param_name}_fn'] = false_negative
-
                 diff = [1 - v[idx] for idx, v in zip(active_targets, softmax_pred_vals)]
             else:
                 diff = np.abs(target_vals.squeeze() - pred_vals.squeeze())
@@ -206,7 +196,7 @@ def count_unpredicted_params(synth_preset_name, model_preset_name):
         if index in predicted_indices or operation is None:
             continue
 
-        op_params = SynthConfig.modular_synth_params[operation]
+        op_params = synth_structure.modular_synth_params[operation]
         if op_params is not None:
             n_unpredicted_params += len(op_params)
 
@@ -230,10 +220,10 @@ def vectorize_unpredicted_params(target_params, model_preset, device):
 
         for param_name, param_val in op_params.items():
             if param_name == 'waveform':
-                waveform_idx = [SynthConfig.wave_type_dict[wt] for wt in param_val]
+                waveform_idx = [synth_structure.wave_type_dict[wt] for wt in param_val]
                 param_val = torch.tensor(waveform_idx, device=device)
             elif param_name == 'filter_type':
-                filter_type_idx = [SynthConfig.filter_type_dict[ft] for ft in param_val]
+                filter_type_idx = [synth_structure.filter_type_dict[ft] for ft in param_val]
                 param_val = torch.tensor(filter_type_idx, device=device)
             else:
                 param_val = torch.tensor(param_val, device=device)

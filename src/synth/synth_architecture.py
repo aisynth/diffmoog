@@ -2,7 +2,7 @@ from typing import Tuple, Dict
 
 import torch
 
-from synth import synth_modular_presets
+from synth import synth_presets
 from synth.synth_constants import SynthConstants
 from synth.synth_modules import get_synth_module
 
