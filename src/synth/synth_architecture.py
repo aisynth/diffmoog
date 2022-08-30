@@ -2,9 +2,9 @@ from typing import Tuple, Dict
 
 import torch
 
-from synth import synth_presets
 from synth.synth_constants import SynthConstants
 from synth.synth_modules import get_synth_module
+from synth.synth_presets import synth_presets_dict
 
 from utils.types import TensorLike
 
@@ -84,12 +84,19 @@ class SynthModularCell:
                         ValueError("Illegal parameter for the provided operation")
 
     def generate_signal(self, input_signal, modulator_signal, params, sample_rate, signal_duration, batch_size):
-        self.signal = self.module.process_sound(input_signal, modulator_signal, params, sample_rate, signal_duration,
-                                                batch_size)
+        signal = self.module.process_sound(input_signal, modulator_signal, params, sample_rate, signal_duration,
+                                           batch_size)
+
+        if signal is not None and torch.any(torch.isnan(signal)):
+            raise RuntimeError("Signal contains NaN")
+
+        self.signal = signal
 
 
-class SynthModular:
+class SynthModular(torch.nn.Module):
     def __init__(self, preset_name: str, synth_structure: SynthConstants, device='cuda:0'):
+
+        super().__init__()
 
         self.synth_structure = synth_structure
         self.sample_rate = synth_structure.sample_rate
@@ -155,9 +162,9 @@ class SynthModular:
 
     def _update_cell_parameters(self, index: Tuple[int, int], parameters: dict):
         cell = self.synth_matrix[index[0]][index[1]]
-        if parameters is not None and isinstance(parameters, dict):
+        if parameters is not None and (isinstance(parameters, dict) or isinstance(parameters, list)):
             for key in parameters:
-                if key != 'output' and key not in self.synth_structure.modular_synth_params[cell.operation]:
+                if key not in ['output', 'None'] and key not in self.synth_structure.modular_synth_params[cell.operation]:
                     raise ValueError("Illegal parameter for the provided operation.")
             cell.parameters = parameters
         else:
@@ -199,7 +206,7 @@ class SynthModular:
     def _parse_preset(preset_name: str) -> (dict, Tuple[int, int]):
 
         # Load preset and convert to dictionary of cell_index: cell_parameters
-        preset_list = synth_modular_presets.synth_presets_dict.get(preset_name, None)
+        preset_list = synth_presets_dict.get(preset_name, None)
         if preset_list is None:
             raise ValueError("Unknown PRESET")
 

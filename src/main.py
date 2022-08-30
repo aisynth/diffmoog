@@ -2,6 +2,10 @@ import os
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from shutil import rmtree
 
+import torch
+
+torch.autograd.set_detect_anomaly(True)
+
 from omegaconf import OmegaConf
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
@@ -28,18 +32,21 @@ def run(run_args):
     datamodule = ModularSynthDataModule(cfg.data_dir, cfg.model.batch_size, cfg.model.num_workers)
     datamodule.setup()
 
-    lit_module = LitModularSynth(cfg)
+    device = get_device(run_args.gpu_index)
+    lit_module = LitModularSynth(cfg, device)
 
     callbacks = [ModelCheckpoint(cfg.ckpts_dir, monitor='lsd_value', save_last=True),
                  LearningRateMonitor(logging_interval='step')]
 
     tb_logger = TensorBoardLogger(cfg.logs_dir, name=exp_name)
+    lit_module.tb_logger = tb_logger.experiment
     trainer = Trainer(logger=tb_logger,
                       callbacks=callbacks,
-                      max_epochs=cfg.epochs,
+                      max_epochs=cfg.model.num_epochs,
                       auto_select_gpus=True,
                       devices=[run_args.gpu_index],
-                      accelerator="gpu", )
+                      accelerator="gpu",
+                      detect_anomaly=True)
 
     trainer.fit(lit_module, datamodule=datamodule)
 
@@ -51,9 +58,10 @@ def configure_experiment(exp_name: str, dataset_name: str, config_name: str):
     config_path = os.path.join(root, 'configs', config_name)
 
     if os.path.isdir(exp_dir):
-        overwrite = input(colored(f"Folder {exp_dir} already exists. Overwrite previous experiment (Y/N)?"
-                                  f"\n\tThis will delete all files related to the previous run!",
-                                  'yellow'))
+        # overwrite = input(colored(f"Folder {exp_dir} already exists. Overwrite previous experiment (Y/N)?"
+        #                           f"\n\tThis will delete all files related to the previous run!",
+        #                           'yellow'))
+        overwrite = 'y'
         if overwrite.lower() != 'y':
             print('Exiting...')
             exit()
@@ -68,7 +76,7 @@ def configure_experiment(exp_name: str, dataset_name: str, config_name: str):
     cfg.ckpts_dir = os.path.join(exp_dir, 'checkpoints', '')
     cfg.logs_dir = os.path.join(exp_dir, 'tensorboard', '')
 
-    config_dump_dir = os.path.join(cfg.project_root, 'config_dump', '')
+    config_dump_dir = os.path.join(cfg.exp_dir, 'config_dump', '')
     os.makedirs(config_dump_dir, exist_ok=True)
 
     config_dump_path = os.path.join(config_dump_dir, 'config.yaml')

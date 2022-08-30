@@ -4,7 +4,6 @@ import os.path
 import pandas as pd
 import torchaudio
 from torch.utils.data import Dataset
-from torch.utils.data import DataLoader
 
 
 class AiSynthDataset(Dataset):
@@ -33,6 +32,7 @@ class AiSynthDataset(Dataset):
         audio_path = self._get_audio_path(index)
 
         signal, _ = torchaudio.load(audio_path)
+        signal = signal.squeeze()
 
         return signal, params_dic, index
 
@@ -77,7 +77,10 @@ class NSynthDataset(Dataset):
 
     def __getitem__(self, index):
         audio_path = self._get_audio_path(index)
+
         signal, _ = torchaudio.load(audio_path)
+        signal = signal.squeeze()
+
         return signal, index
 
     def _get_audio_path(self, index):

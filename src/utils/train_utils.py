@@ -1,8 +1,6 @@
 import numpy as np
 import torch
 
-import torchaudio
-
 from torch.utils.tensorboard import SummaryWriter
 
 from sklearn.metrics import confusion_matrix
@@ -107,6 +105,7 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
     target_params_np = to_numpy_recursive(target_params)
 
     for op_index, pred_op_dict in predicted_params_np.items():
+        all_diffs[op_index] = {}
         target_op_dict = target_params_np[op_index]
         for param_name, pred_vals in pred_op_dict['parameters'].items():
 
@@ -145,12 +144,12 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
                 true_positive = conf_mat[1][1]
 
                 accuracy = (true_negative + true_positive) / len(active_preds)
-                all_diffs[f'{op_index}/{param_name}_accuracy'] = accuracy
+                all_diffs[op_index][f'{param_name}_accuracy'] = accuracy
                 diff = [1 - v[idx] for idx, v in zip(active_targets, softmax_pred_vals)]
             else:
                 diff = np.abs(target_vals.squeeze() - pred_vals.squeeze())
 
-            all_diffs[f'{op_index}/{param_name}'] = diff
+            all_diffs[op_index][param_name] = diff
 
     return all_diffs
 

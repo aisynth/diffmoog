@@ -1,7 +1,5 @@
 import torch
 
-from config import Config
-
 import math
 
 from synth.synth_constants import SynthConstants
@@ -18,12 +16,12 @@ class Normalizer:
 
         self.mod_index_normalizer = MinMaxNormaliser(target_min_val=0,
                                                      target_max_val=1,
-                                                     original_min_val=0,
+                                                     original_min_val=synth_structure.min_mod_index,
                                                      original_max_val=synth_structure.max_mod_index)
 
         self.lfo_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                     target_max_val=1,
-                                                    original_min_val=0,
+                                                    original_min_val=synth_structure.min_lfo_freq,
                                                     original_max_val=synth_structure.max_lfo_freq)
 
         self.lfo_phase_normalizer = MinMaxNormaliser(target_min_val=0,
@@ -38,12 +36,12 @@ class Normalizer:
 
         self.filter_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                        target_max_val=1,
-                                                       original_min_val=0,
+                                                       original_min_val=synth_structure.min_filter_freq,
                                                        original_max_val=synth_structure.max_filter_freq)
 
         self.lowpass_filter_resonance_normalizer = MinMaxNormaliser(target_min_val=0,
                                                                     target_max_val=1,
-                                                                    original_min_val=0,
+                                                                    original_min_val=synth_structure.min_resonance_val,
                                                                     original_max_val=synth_structure.max_resonance_val)
 
         self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
@@ -57,7 +55,7 @@ class Normalizer:
             operation = val['operation'] if isinstance(val['operation'], str) else val['operation'][0]
             params = val['params'] if 'params' in val else val['parameters']
 
-            if operation == "None":
+            if operation in ["None", 'mix']:
                 continue
 
             normalized_params_dict[key] = {'operation': operation, 'parameters': {}}
@@ -138,7 +136,7 @@ class Normalizer:
 
         return ret_params
 
-    def _clamp_adsr_superposition(self, attack_t, decay_t, sustain_t, release_t):
+    def _clamp_adsr_superposition(self, attack_t, decay_t, sustain_t, release_t, sustain_level):
         """This function clamps the superposition of adsr times, so it does not exceed signal length"""
 
         adsr_length_in_sec = attack_t + decay_t + sustain_t + release_t

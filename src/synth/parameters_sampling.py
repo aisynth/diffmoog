@@ -29,7 +29,7 @@ class ParametersSampler:
                 cell = synth_matrix[channel_idx][layer_idx]
 
                 operation = cell.operation
-                if operation is None or operation.lower() == 'none':
+                if operation is None or operation.lower() in ['none', 'mix']:
                     continue
 
                 op_params = self.synth_structure.modular_synth_params[operation]

@@ -5,18 +5,21 @@ from scipy.stats import pearsonr
 from scipy.fft import fft
 
 
-def lsd(spec1, spec2):
+def lsd(spec1, spec2, reduction=None):
     """ spec1, spec2 one channel - positive values"""
 
     assert spec1.ndim == 3 and spec2.ndim == 3, "Input must be a batch of 2d spectrograms"
 
     batch_diff = np.log10(spec1 + 1e-5) - np.log10(spec2 + 1e-5)
     lsd_val = [np.linalg.norm(10 * x, ord='fro') / x.shape[-1] for x in batch_diff]
+    
+    if reduction is not None:
+        lsd_val = reduction(lsd_val)
 
     return lsd_val
 
 
-def pearsonr_dist(x1, x2, input_type='spec'):
+def pearsonr_dist(x1, x2, input_type='spec', reduction=None):
 
     if input_type == 'spec':
         assert x1.ndim == 3 and x2.ndim == 3, "Input must be a batch of 2d spectrograms"
@@ -30,21 +33,30 @@ def pearsonr_dist(x1, x2, input_type='spec'):
         AttributeError("Unknown input_type")
 
     pearson_r = [pearsonr(c_x1, c_x2)[0] for c_x1, c_x2 in zip(x1, x2)]
-
+    
+    pearson_r = np.asarray(pearson_r)
+    pearson_r[np.isnan(pearson_r)] = 0
+    
+    if reduction is not None:
+        pearson_r = reduction(pearson_r)
+    
     return pearson_r
 
 
-def mae(spec1, spec2):
+def mae(spec1, spec2, reduction=None):
 
     assert spec1.ndim == 3 and spec2.ndim == 3, "Input must be a batch of 2d spectrograms"
 
     abs_diff = np.abs(np.log10(spec1 + 1e-5) - np.log10(spec2 + 1e-5))
     mae_val = [sample_diff.mean() for sample_diff in abs_diff]
+    
+    if reduction is not None:
+        mae_val = reduction(mae_val)
 
     return mae_val
 
 
-def mfcc_distance(sound_batch1, sound_batch2, sample_rate):
+def mfcc_distance(sound_batch1, sound_batch2, sample_rate, reduction=None):
 
     assert sound_batch1.ndim == 2 and sound_batch2.ndim == 2, "Input must be a batch of 1d wavelet"
 
@@ -56,11 +68,14 @@ def mfcc_distance(sound_batch1, sound_batch2, sample_rate):
         abs_diff = np.abs(mfcc1 - mfcc2)
         mfcc_dist = abs_diff.mean()
         res.append(mfcc_dist)
+        
+    if reduction is not None:
+        res = reduction(res)
 
     return res
 
 
-def spectral_convergence(target_spec_batch, pred_spec_batch):
+def spectral_convergence(target_spec_batch, pred_spec_batch, reduction=None):
 
     assert target_spec_batch.ndim == 3 and pred_spec_batch.ndim == 3, "Input must be a batch of 2d spectrograms"
 
@@ -75,6 +90,9 @@ def spectral_convergence(target_spec_batch, pred_spec_batch):
         sc_val = nom / denom
 
         res.append(sc_val)
+        
+    if reduction is not None:
+        res = reduction(res)
 
     return res
 

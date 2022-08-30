@@ -3,9 +3,7 @@ from typing import Callable
 import torch
 import torchaudio
 from torch import nn
-from torch.utils.tensorboard import SummaryWriter
 
-from config import Config
 from model.loss.spectral_loss_presets import loss_presets
 
 loss_type_to_function = {'mag': lambda x: x,
@@ -16,7 +14,7 @@ loss_type_to_function = {'mag': lambda x: x,
                          'logmag': lambda x: torch.log(x + 1)}
 
 
-class SpectralLoss:
+class SpectralLoss(nn.Module):
     """From DDSP code:
     https://github.com/magenta/ddsp/blob/8536a366c7834908f418a6721547268e8f2083cc/ddsp/losses.py#L144"""
     """Multiscale spectrogram loss.
@@ -53,6 +51,8 @@ class SpectralLoss:
         signals. Very high-level loss signal that is a subset of mag and
         logmag losses.
     """
+
+        super().__init__()
 
         self.preset = loss_presets[preset_name]
         self.device = device

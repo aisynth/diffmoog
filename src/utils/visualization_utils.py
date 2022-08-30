@@ -14,8 +14,8 @@ amp_to_db = AmplitudeToDB()
 
 def visualize_signal_prediction(orig_audio, pred_audio, orig_params, pred_params,
                                 db=False):
-    orig_audio_np = orig_audio.detach().cpu().numpy()
-    pred_audio_np = pred_audio.detach().cpu().numpy()
+    orig_audio_np = orig_audio.detach().cpu().numpy().squeeze()
+    pred_audio_np = pred_audio.detach().cpu().numpy().squeeze()
 
     if db:
         orig_spectrograms = [amp_to_db(spectrogram(orig_audio.cpu()))]
@@ -24,8 +24,8 @@ def visualize_signal_prediction(orig_audio, pred_audio, orig_params, pred_params
         orig_spectrograms = [spectrogram(orig_audio.cpu())]
         pred_spectrograms = [spectrogram(pred_audio.cpu())]
 
-    orig_spectrograms_np = [orig_spectrogram.detach().cpu().numpy() for orig_spectrogram in orig_spectrograms]
-    pred_spectrograms_np = [pred_spectrogram.detach().cpu().numpy() for pred_spectrogram in pred_spectrograms]
+    orig_spectrograms_np = [orig_spectrogram.detach().cpu().numpy().squeeze() for orig_spectrogram in orig_spectrograms]
+    pred_spectrograms_np = [pred_spectrogram.detach().cpu().numpy().squeeze() for pred_spectrogram in pred_spectrograms]
 
     # plot original vs predicted signal
     n_rows = len(orig_spectrograms_np) + 1

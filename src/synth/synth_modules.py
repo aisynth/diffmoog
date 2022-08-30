@@ -21,11 +21,11 @@ from utils.gumble_softmax import gumbel_softmax
 from synth.synth_constants import SynthConstants
 from utils.types import TensorLike
 
-try:
-    from functorch import vmap
-    has_vmap = True
-except ModuleNotFoundError:
-    has_vmap = False
+# try:
+#     from functorch import vmap
+#     has_vmap = True
+# except ModuleNotFoundError:
+has_vmap = False
 
 
 PI = math.pi
@@ -59,7 +59,7 @@ class SynthModule(ABC):
 
         oscillator_tensor = 0
         for i in range(len(waves_tensor)):
-            oscillator_tensor += raw_waveform_selector.transpose()[i].unsqueeze(1) * waves_tensor[i]
+            oscillator_tensor += raw_waveform_selector.t()[i].unsqueeze(1) * waves_tensor[i]
 
         return oscillator_tensor
 
@@ -98,7 +98,6 @@ class SynthModule(ABC):
         return output_tensor
 
     def _verify_input_params(self, params_to_test: dict):
-
         expected_params = self.synth_structure.modular_synth_params[self.name]
         assert set(expected_params).issubset(set(params_to_test.keys())),\
             f'Expected input parameters {expected_params} but got {list(params_to_test.keys())}'
@@ -153,6 +152,9 @@ class Oscillator(SynthModule):
                 :rtype: object
             """
 
+        t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True,
+                           device=self.device)
+
         self._verify_input_params(params)
 
         active_signal = self._process_active_signal(params.get('active', None), batch_size)
@@ -162,11 +164,9 @@ class Oscillator(SynthModule):
         freq = self._standardize_input(params['freq'], requested_dtype=torch.float32, requested_dims=2,
                                        batch_size=batch_size)
 
-        amp *= active_signal
-        freq *= active_signal
+        amp = active_signal * amp
+        freq = active_signal * freq
 
-        t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True,
-                           device=self.device)
         wave_tensors = self._generate_wave_tensors(t, amp, freq, phase_mod=0)
 
         if self.waveform is not None:
@@ -310,13 +310,15 @@ class ADSR(SynthModule):
 
         relative_note_off = relative_params['attack_t'] + relative_params['decay_t'] + relative_params['sustain_t']
 
-        attack = x / relative_params['attack_t']
+        eps = 1e-5
+
+        attack = x / (relative_params['attack_t'] + eps)
         attack = torch.clamp(attack, max=1.0)
 
-        decay = (x - relative_params['attack_t']) * (parsed_params['sustain_level'] - 1) / (relative_params['decay_t'] + 1e-5)
+        decay = (x - relative_params['attack_t']) * (parsed_params['sustain_level'] - 1) / (relative_params['decay_t'] + eps)
         decay = torch.clamp(decay, max=torch.tensor(0).to(decay.device), min=parsed_params['sustain_level'] - 1)
 
-        sustain = (x - relative_note_off) * (-parsed_params['sustain_level'] / (relative_params['release_t'] + 1e-5))
+        sustain = (x - relative_note_off) * (-parsed_params['sustain_level'] / (relative_params['release_t'] + eps))
         sustain = torch.clamp(sustain, max=0.0)
 
         envelope = (attack + decay + sustain)
@@ -371,12 +373,12 @@ class Filter(SynthModule):
         filtered_signals = {}
         if self.filter_type == 'lowpass' or self.filter_type is None:
             if has_vmap:
-                low_pass_signals = vmap(lowpass_biquad)(input_signal.double(), cutoff_freq=filter_freq,
+                low_pass_signals = vmap(lowpass_biquad)(input_signal.double(), filter_freq,
                                                         sample_rate=sample_rate)
             else:
                 low_pass_signals = [self.low_pass(input_signal[i], filter_freq[i].cpu(), sample_rate) for i in
                                     range(batch_size)]
-            filtered_signals['lowpass'] = torch.stack(low_pass_signals)
+                filtered_signals['lowpass'] = torch.stack(low_pass_signals)
 
         if self.filter_type == 'highpass' or self.filter_type is None:
             if has_vmap:

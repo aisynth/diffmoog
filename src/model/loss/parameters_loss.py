@@ -1,14 +1,16 @@
 import torch
 from torch import nn
-from torch.utils.tensorboard import SummaryWriter
 
 from synth.synth_constants import SynthConstants
 
 
-class ParametersLoss:
+class ParametersLoss(nn.Module):
     """This loss compares target and predicted parameters of the modular synthesizer"""
 
     def __init__(self, loss_type: str, synth_structure: SynthConstants, device='cuda:0'):
+
+        super().__init__()
+
         self.synth_structure = synth_structure
         self.device = device
         if loss_type == 'L1':

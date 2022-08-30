@@ -28,7 +28,7 @@ class ModularSynthDataModule(pl.LightningDataModule):
             val_dir = os.path.join(self.data_dir, 'val')
             self.in_domain_val_dataset = AiSynthDataset(val_dir)
 
-            nsynth_val_dir = os.path.join(self.data_dir, 'nsynth_val')
+            nsynth_val_dir = os.path.join(self.data_dir, 'val_nsynth')
             self.out_of_domain_val_dataset = NSynthDataset(nsynth_val_dir)
 
     def train_dataloader(self):
