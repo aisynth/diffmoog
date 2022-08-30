@@ -4,7 +4,7 @@ model:
   preset: MODULAR
   num_workers: 4
   batch_size: 50
-  num_epochs: int = 120
+  num_epochs: 200
   learning_rate: float = 3e-4
 
 loss:

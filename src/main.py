@@ -2,7 +2,7 @@ import os
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from shutil import rmtree
 
-import OmegaConf as OmegaConf
+from omegaconf import OmegaConf
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -44,10 +44,11 @@ def run(run_args):
     trainer.fit(lit_module, datamodule=datamodule)
 
 
-def configure_experiment(exp_name: str, dataset_name: str, config_path: str):
+def configure_experiment(exp_name: str, dataset_name: str, config_name: str):
 
     exp_dir = os.path.join(EXP_ROOT, exp_name, '')
     data_dir = os.path.join(DATA_ROOT, dataset_name, '')
+    config_path = os.path.join(root, 'configs', config_name)
 
     if os.path.isdir(exp_dir):
         overwrite = input(colored(f"Folder {exp_dir} already exists. Overwrite previous experiment (Y/N)?"
