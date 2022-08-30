@@ -1,23 +1,25 @@
 import torch
 
-from config import SynthConfig, Config
+from config import Config
 
 import math
+
+from synth.synth_constants import SynthConstants
 
 
 class Normalizer:
     """ normalize/de-normalise regression parameters"""
 
-    def __init__(self, note_off_time, synth_cfg: SynthConfig):
+    def __init__(self, note_off_time, synth_structure: SynthConstants):
         self.mod_index_normalizer = MinMaxNormaliser(target_min_val=0,
                                                      target_max_val=1,
                                                      original_min_val=0,
-                                                     original_max_val=synth_cfg.max_mod_index)
+                                                     original_max_val=synth_structure.max_mod_index)
 
         self.lfo_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                     target_max_val=1,
                                                     original_min_val=0,
-                                                    original_max_val=synth_cfg.max_lfo_freq)
+                                                    original_max_val=synth_structure.max_lfo_freq)
 
         self.lfo_phase_normalizer = MinMaxNormaliser(target_min_val=0,
                                                      target_max_val=1,
@@ -32,22 +34,17 @@ class Normalizer:
         self.filter_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                        target_max_val=1,
                                                        original_min_val=0,
-                                                       original_max_val=synth_cfg.max_filter_freq)
+                                                       original_max_val=synth_structure.max_filter_freq)
 
         self.lowpass_filter_resonance_normalizer = MinMaxNormaliser(target_min_val=0,
                                                                     target_max_val=1,
                                                                     original_min_val=0,
-                                                                    original_max_val=synth_cfg.max_resonance_val)
-
-        # self.lowpass_tremolo_amount_normalizer = MinMaxNormaliser(target_min_val=0,
-        #                                                             target_max_val=1,
-        #                                                             original_min_val=0,
-        #                                                             original_max_val=synth_cfg.max_amount_tremolo)
+                                                                    original_max_val=synth_structure.max_resonance_val)
 
         self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                            target_max_val=1,
                                                            original_min_val=0,
-                                                           original_max_val=synth_cfg.oscillator_freq)
+                                                           original_max_val=synth_structure.oscillator_freq)
 
     def normalize(self, parameters_dict: dict):
         normalized_params_dict = {}
@@ -156,7 +153,7 @@ class LogNormaliser:
         return array
 
 
-def clamp_adsr_params(parameters_dict: dict, synth_cfg: SynthConfig, cfg: Config):
+def clamp_adsr_params(parameters_dict: dict, synth_cfg: SynthConstants, cfg: Config):
     """look for adsr operations to send to clamping function"""
 
     for key, val in parameters_dict.items():

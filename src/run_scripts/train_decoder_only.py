@@ -127,7 +127,7 @@ def run(args):
     init_params = modular_synth.collect_params()
 
     # Denormalize init params
-    normalizer = helper.Normalizer(signal_duration_sec=cfg.signal_duration_sec, synth_cfg=synth_cfg)
+    normalizer = helper.Normalizer(signal_duration_sec=cfg.signal_duration_sec, synth_structure=synth_cfg)
     denormalized_init_params = normalizer.normalize(init_params)
 
     # construct model and assign it to device

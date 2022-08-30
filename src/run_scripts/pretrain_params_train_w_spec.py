@@ -10,7 +10,7 @@ from run_scripts.inference.inference_helper import lsd, inference_loop, inferenc
 from config import Config, ModelConfig, configure_experiment
 from dataset.ai_synth_dataset import AiSynthDataset, NSynthDataset, create_data_loader
 from run_scripts.inference.inference import visualize_signal_prediction
-from model.model import SimpleSynthNetwork
+from model.model import SynthNetwork
 from model.loss.spectral_loss import SpectralLoss
 from model.loss.parameters_loss import ParametersLoss
 from synth.synth_architecture import SynthModular
@@ -365,7 +365,7 @@ def run(args):
 
     # construct model and assign it to device
     if model_cfg.model_type == 'simple':
-        synth_net = SimpleSynthNetwork(model_cfg.preset, synth_cfg, cfg, device, backbone=model_cfg.backbone).to(device)
+        synth_net = SynthNetwork(model_cfg.preset, synth_cfg, cfg, device, backbone=model_cfg.backbone).to(device)
     else:
         raise NotImplementedError("only SimpleSynthNetwork supported at the moment")
 

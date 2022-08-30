@@ -259,19 +259,3 @@ def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, ckpt_
     text_file = open(txt_path, 'a')
     text_file.write(f"epoch:{cur_epoch}\tloss: " + str(avg_epoch_loss) + "\n")
     text_file.close()
-
-
-def spectrogram_transform():
-    return torchaudio.transforms.Spectrogram(  # win_length default = n_fft. hop_length default = win_length / 2
-        n_fft=512,
-        power=2.0)
-
-
-def mel_spectrogram_transform(sample_rate):
-    return torchaudio.transforms.MelSpectrogram(sample_rate=sample_rate,
-                                                n_fft=1024,
-                                                hop_length=256,
-                                                n_mels=128,
-                                                power=2.0,
-                                                f_min=0,
-                                                f_max=8000)

@@ -26,7 +26,7 @@ class SpectralLoss:
     are magnitudes (mag_weight) and log magnitudes (logmag_weight).
     """
 
-    def __init__(self, cfg: Config, preset_name: str, device='cuda:0', total_train_steps: int = 1):
+    def __init__(self, loss_type: str, preset_name: str, sample_rate: int, device='cuda:0'):
         """Constructor, set loss weights of various components.
     Args:
       fft_sizes: Compare spectrograms at each of this list of fft sizes. Each
@@ -54,7 +54,6 @@ class SpectralLoss:
         logmag losses.
     """
 
-        self.total_train_steps = total_train_steps
         self.preset = loss_presets[preset_name]
         self.device = device
 
@@ -67,19 +66,18 @@ class SpectralLoss:
 
         self.spectrogram_ops = {}
         for size in self.preset['fft_sizes']:
-            if cfg.multi_spectral_loss_spec_type == 'BOTH' or cfg.multi_spectral_loss_spec_type == 'SPECTROGRAM':
+            if loss_type == 'BOTH' or loss_type == 'SPECTROGRAM':
                 spec_transform = torchaudio.transforms.Spectrogram(n_fft=size, hop_length=int(size / 4), power=2.0).to(self.device)
                 self.spectrogram_ops[f'{size}_spectrogram'] = spec_transform
 
-            if cfg.multi_spectral_loss_spec_type == 'BOTH' or cfg.multi_spectral_loss_spec_type == 'MEL_SPECTROGRAM':
-                mel_spec_transform = torchaudio.transforms.MelSpectrogram(sample_rate=cfg.sample_rate, n_fft=size,
+            if loss_type == 'BOTH' or loss_type == 'MEL_SPECTROGRAM':
+                mel_spec_transform = torchaudio.transforms.MelSpectrogram(sample_rate=sample_rate, n_fft=size,
                                                                           hop_length=int(size / 4), n_mels=256,
                                                                           power=2.0, f_min=0, f_max=1300
                                                                           ).to(self.device)
                 self.spectrogram_ops[f'{size}_mel'] = mel_spec_transform
 
-    def call(self, target_audio, predicted_audio, summary_writer: SummaryWriter, signal_chain_index: str,
-             global_step: int, return_spectrogram: bool = False, log: bool = True):
+    def call(self, target_audio, predicted_audio, step: int, return_spectrogram: bool = False):
         """ execute multi-spectral loss computation between two audio signals
 
         Args:
@@ -101,8 +99,7 @@ class SpectralLoss:
 
             c_loss = 0.0
             for loss_type, pre_loss_fn in loss_type_to_function.items():
-                raw_loss, weighted_loss = self.calc_loss(loss_type, pre_loss_fn, target_mag, value_mag, n_fft,
-                                                         global_step)
+                raw_loss, weighted_loss = self.calc_loss(loss_type, pre_loss_fn, target_mag, value_mag, n_fft, step)
 
                 if weighted_loss == 0:
                     continue
@@ -116,26 +113,17 @@ class SpectralLoss:
 
             spectrograms_dict[loss_name] = {'pred': value_mag.detach(), 'target': target_mag.detach()}
 
-        if log:
-            for loss_name, loss_val in loss_dict.items():
-                summary_writer.add_scalar(f"sub_losses/{signal_chain_index}/{loss_name}", loss_val,
-                                          global_step=global_step)
-
-            for loss_name, loss_val in weighted_loss_dict.items():
-                summary_writer.add_scalar(f"weighted_sub_losses/{signal_chain_index}/{loss_name}", loss_val,
-                                          global_step=global_step)
-
         if return_spectrogram:
-            return loss, spectrograms_dict
+            return loss, loss_dict, weighted_loss_dict, spectrograms_dict
 
-        return loss
+        return loss, loss_dict, weighted_loss_dict
 
     def calc_loss(self, loss_type: str, pre_loss_fn: Callable, target_mag: torch.Tensor, value_mag: torch.Tensor,
                   n_fft: int, step: int) -> (float, float):
 
         # If loss weight is 0, or warmup for this loss type is not over
         if self.preset.get(f'multi_spectral_{loss_type}_weight', 0) == 0 or \
-                (step / self.total_train_steps) < self.preset.get(f'multi_spectral_{loss_type}_warmup', -1):
+                step < self.preset.get(f'multi_spectral_{loss_type}_warmup', -1):
             return 0, 0
 
         # Prepare spectrograms according to loss type
@@ -159,9 +147,8 @@ class SpectralLoss:
 
         # Normalize to increase gradually through training if required
         if self.preset.get(f'multi_spectral_{loss_type}_gradual', False):
-            warmup = self.preset.get(f'multi_spectral_{loss_type}_warmup')
-            gradual_loss_factor = (step / self.total_train_steps) - warmup
-            gradual_loss_factor /= 1 - warmup
+            warmup = self.preset.get(f'multi_spectral_{loss_type}_warmup_steps')
+            gradual_loss_factor = min((step / warmup), 1)
             weighted_loss_val *= gradual_loss_factor
 
         return loss_val, weighted_loss_val

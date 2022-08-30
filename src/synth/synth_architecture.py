@@ -3,7 +3,7 @@ from typing import Tuple, Dict
 import torch
 
 from synth import synth_modular_presets
-from synth.synth_constants import SynthConstants, synth_structure
+from synth.synth_constants import SynthConstants
 from synth.synth_modules import get_synth_module
 
 from utils.types import TensorLike
@@ -89,8 +89,9 @@ class SynthModularCell:
 
 
 class SynthModular:
-    def __init__(self, preset_name: str, device='cuda:0'):
+    def __init__(self, preset_name: str, synth_structure: SynthConstants, device='cuda:0'):
 
+        self.synth_structure = synth_structure
         self.sample_rate = synth_structure.sample_rate
 
         self.device = device
@@ -108,7 +109,7 @@ class SynthModular:
             for layer_idx in range(n_layers):
                 cell = preset.get((channel_idx, layer_idx), {'index': (channel_idx, layer_idx)})
                 self.synth_matrix[channel_idx][layer_idx] = SynthModularCell(**cell, device=self.device,
-                                                                             synth_structure=synth_structure)
+                                                                             synth_structure=self.synth_structure)
 
     def generate_signal(self, signal_duration: float, batch_size: int = 1) -> (TensorLike, Dict[str, TensorLike]):
         output_signals = {}
@@ -156,7 +157,7 @@ class SynthModular:
         cell = self.synth_matrix[index[0]][index[1]]
         if parameters is not None and isinstance(parameters, dict):
             for key in parameters:
-                if key != 'output' and key not in synth_structure.modular_synth_params[cell.operation]:
+                if key != 'output' and key not in self.synth_structure.modular_synth_params[cell.operation]:
                     raise ValueError("Illegal parameter for the provided operation.")
             cell.parameters = parameters
         else:

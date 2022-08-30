@@ -49,7 +49,7 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
 
     # Other inits
     np.random.seed(seed)
-    synth_obj = SynthModular(preset, device)
+    synth_obj = SynthModular(preset, synth_structure, device)
     params_sampler = ParametersSampler(synth_structure)
 
     train = (split.lower() == 'train')

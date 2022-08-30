@@ -4,7 +4,7 @@ import torch
 
 from config import SynthConfig, Config
 from dataset.ai_synth_dataset import AiSynthDataset, create_data_loader
-from model.model import SimpleSynthNetwork
+from model.model import SynthNetwork
 from run_scripts.inference.inference_helper import inference_loop
 
 device = 'cuda:3'
@@ -31,7 +31,7 @@ normalizer = helper.Normalizer(cfg.signal_duration_sec, synth_cfg)
 
 ## Load model
 model_ckpt_path = r'experiments/current/basic_flow/ckpts/synth_net_epoch0.pt'
-model = SimpleSynthNetwork(preset, synth_cfg, cfg, device, backbone='resnet').to(device)
+model = SynthNetwork(preset, synth_cfg, cfg, device, backbone='resnet').to(device)
 model.load_state_dict(torch.load(model_ckpt_path))
 
 model.eval()
