@@ -25,10 +25,10 @@ def run(run_args):
 
     cfg = configure_experiment(exp_name, dataset_name, run_args.config)
 
-    datamodule = ModularSynthDataModule(cfg.data_dir, cfg.batch_size, cfg.num_workers)
+    datamodule = ModularSynthDataModule(cfg.data_dir, cfg.model.batch_size, cfg.model.num_workers)
     datamodule.setup()
 
-    lit_module = LitModularSynth(cfg, device=get_device(run_args.gpu_index))
+    lit_module = LitModularSynth(cfg)
 
     callbacks = [ModelCheckpoint(cfg.ckpts_dir, monitor='lsd_value', save_last=True),
                  LearningRateMonitor(logging_interval='step')]

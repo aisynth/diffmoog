@@ -32,7 +32,7 @@ class SpectralLoss:
       fft_sizes: Compare spectrograms at each of this list of fft sizes. Each
         spectrogram has a time-frequency resolution trade-off based on fft size,
         so comparing multiple scales allows multiple resolutions.
-      loss_type: One of 'L1', 'L2', or 'COSINE'.
+      loss_type: One of 'SPECTROGRAM', 'MEL_SPECTROGRAM', or 'BOTH'.
       mag_weight: Weight to compare linear magnitudes of spectrograms. Core
         audio similarity loss. More sensitive to peak magnitudes than log
         magnitudes.

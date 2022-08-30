@@ -91,47 +91,6 @@ class Config:
     use_chain_loss = True
 
 
-    def __init__(self, project_root: str = ''):
-
-        if project_root == '':
-            return
-
-        self.project_root = project_root
-
-        self.tensorboard_logdir = os.path.join(project_root, 'tensorboard', '')
-        self.ckpts_dir = os.path.join(project_root, 'ckpts', '')
-        os.makedirs(self.ckpts_dir, exist_ok=True)
-
-        self.save_model_path = os.path.join(project_root, 'ckpts', 'trained_synth_net.pt')
-        # load_model_path = Path(__file__).parent.parent.joinpath('trained_models', 'trained_synth_net.pt')
-        self.load_model_path = '' #'/home/almogelharar/almog/ai_synth/experiments/current/basic_flow_test/ckpts/synth_net_epoch10.pt'
-
-        self.artifacts_dir = os.path.join(project_root, 'artifacts', '')
-        os.makedirs(self.artifacts_dir, exist_ok=True)
-
-        self.txt_path = os.path.join(project_root, 'artifacts', 'loss_list.txt')
-        self.numpy_path = os.path.join(project_root, 'artifacts', 'loss_list.npy')
-
-        self.__post_init__()
-
-    def __post_init__(self):
-
-        if self.log_spectrogram_mse_loss:
-            self.spectrogram_loss_factor = 1000
-
-        if self.freq_param_loss_type == 'CE':
-            self.model_frequency_output = 'LOGITS'
-
-        if self.spectrogram_loss_type == 'MULTI-SPECTRAL':
-            # one of ['BOTH', 'MEL_SPECTROGRAM', 'SPECTROGRAM']
-            self.multi_spectral_loss_spec_type = 'SPECTROGRAM'
-
-        if self.mode == 1:
-            self.architecture = 'SPECTROGRAM_ONLY'
-            self.spectrogram_loss_type = 'MULTI-SPECTRAL'
-            self.model_frequency_output = 'SINGLE'
-
-
 @dataclass
 class ModelConfig:
     preset: str = 'MODULAR'
@@ -141,41 +100,4 @@ class ModelConfig:
     num_epochs: int = 120
     learning_rate: float = 3e-4
     optimizer_weight_decay: float = 0
-    optimizer_scheduler_lr: float = 0
-    optimizer_scheduler_gamma: float = 0.1
-    reinforcement_epsilon: float = 0.15
     num_workers: int = 0
-
-
-def configure_experiment(exp_name: str, dataset_name: str):
-
-    project_root = os.path.join(EXP_ROOT, 'current', exp_name, '')
-
-    if os.path.isdir(project_root):
-        overwrite = input(colored(f"Folder {project_root} already exists. Overwrite previous experiment (Y/N)?"
-                                  f"\n\tThis will delete all files related to the previous run!",
-                                  'yellow'))
-        if overwrite.lower() != 'y':
-            print('Exiting...')
-            exit()
-        else:
-            print("Deleting previous experiment...")
-            rmtree(project_root)
-
-    cfg = Config(project_root)
-    synth_cfg = synth_structure
-    dataset_cfg = {'dataset_name': dataset_name}
-    model_cfg = ModelConfig()
-
-    config_dump_path = os.path.join(cfg.project_root, 'config_dump', '')
-    os.makedirs(config_dump_path, exist_ok=True)
-
-    for fname, t_cfg in zip(['general', 'model', 'synth', 'dataset'], [cfg, model_cfg, synth_cfg, dataset_cfg]):
-
-        config_output_path = os.path.join(config_dump_path, fname + '.json')
-        cfg_dict = asdict(t_cfg)
-
-        with open(config_output_path, 'w') as f:
-            json.dump(cfg_dict, f)
-
-    return cfg, model_cfg, synth_cfg, dataset_cfg
