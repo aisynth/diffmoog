@@ -128,7 +128,9 @@ class SynthNetwork(nn.Module):
         if backbone in ['lstm', 'gru']:
             self.backbone = RNNBackbone(backbone)
         elif backbone == 'resnet':
-            self.backbone = resnet18(weights=None)
+            # self.backbone = resnet18(weights=None)
+            #todo: ask almog why weights is configured
+            self.backbone = resnet18()
             self.backbone.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
             num_ftrs = self.backbone.fc.in_features
             self.backbone.fc = nn.Linear(num_ftrs, LATENT_SPACE_SIZE)

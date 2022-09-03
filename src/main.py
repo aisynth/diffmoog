@@ -17,7 +17,7 @@ from utils.gpu_utils import get_device
 
 from model.lit_module import LitModularSynth
 
-root = r'/home/almogelharar/almog/ai_synth/'
+root = r'C:\Users\noamk\PycharmProjects\ai_synth'
 EXP_ROOT = os.path.join(root, 'experiments')
 DATA_ROOT = os.path.join(root, 'data')
 

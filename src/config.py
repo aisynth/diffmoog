@@ -15,7 +15,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from synth.synth_constants import synth_structure
 
-root = r'/home/almogelharar/almog/ai_synth/'
+# root = r'/home/almogelharar/almog/ai_synth/'
+root = r'C:\Users\noamk\PycharmProjects\ai_synth'
 EXP_ROOT = os.path.join(root, 'experiments')
 DATA_ROOT = os.path.join(root, 'data')
 
