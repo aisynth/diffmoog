@@ -25,12 +25,11 @@ class SynthConstants:
     max_lfo_freq: float = 20
     min_filter_freq: float = 100
     max_filter_freq: float = 8000
-    min_resonance_val: float = 0.01
-    max_resonance_val: float = 10
     min_amount_tremolo: float = 0.05
     max_amount_tremolo: float = 1
     min_intensity_filter: float = 0
-    max_intensity_filter: float = sample_rate / 2
+    max_intensity_filter: float = 1
+    filter_adsr_frame_size = 512
 
     # non-active operation defaults
     non_active_waveform_default = 'sine'
@@ -38,6 +37,7 @@ class SynthConstants:
     non_active_amp_default = 0
     non_active_mod_index_default = 0
     non_active_tremolo_amount_default = 0
+    non_active_filter_intensity_default = 0
 
     # When predicting oscillator frequency by regression, the defines are used to normalize the output from the model
     margin: float = 200
@@ -64,8 +64,8 @@ class SynthConstants:
                             'fm_saw': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
                             'mix': [],
                             'filter': ['filter_freq', 'filter_type'],
-                            'lowpass_filter': ['filter_freq', 'resonance'],
-                            'lowpass_filter_adsr': ['filter_freq', 'resonance', 'intensity', 'attack_t', 'decay_t',
+                            'lowpass_filter': ['filter_freq'],
+                            'lowpass_filter_adsr': ['filter_freq', 'intensity', 'attack_t', 'decay_t',
                                                     'sustain_t', 'sustain_level', 'release_t'],
                             'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t'],
                             'amplitude_shape': ['envelope', 'attack_t', 'decay_t', 'sustain_t', 'sustain_level',
@@ -123,14 +123,12 @@ class SynthConstants:
                             'values': (self.min_filter_freq, self.max_filter_freq)},
             'filter_type': {'type': 'choice',
                             'values': list(self.filter_type_dict)},
-            'resonance': {'type': 'uniform',
-                          'values': (self.min_resonance_val, self.max_resonance_val)},
             'amount': {'type': 'uniform',
                        'values': (self.min_amount_tremolo, self.max_amount_tremolo),
                        'non_active_default': self.non_active_tremolo_amount_default},
             'intensity': {'type': 'uniform',
-                          'values': (self.min_amount_tremolo, self.max_amount_tremolo),
-                          'non_active_default': self.non_active_tremolo_amount_default}
+                          'values': (self.min_intensity_filter, self.max_intensity_filter),
+                          'non_active_default': self.non_active_filter_intensity_default}
         }
         
         return sampling_configurations
@@ -159,8 +157,9 @@ class SynthConstants:
             'mix': {},
             'filter': {'filter_freq': sampling_configurations['filter_freq'],
                        'filter_type': sampling_configurations['filter_type']},
-            'lowpass_filter': {'filter_freq': sampling_configurations['filter_freq'],
-                               'resonance': sampling_configurations['resonance']},
+            'lowpass_filter': {'filter_freq': sampling_configurations['filter_freq']},
+            'lowpass_filter_adsr': {'filter_freq': sampling_configurations['filter_freq'],
+                                    'intensity': sampling_configurations['intensity']},
             'env_adsr': {'attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t'},
             'amplitude_shape': {'envelope', 'attack_t', 'decay_t', 'sustain_t', 'sustain_level',
                                 'release_t'},
