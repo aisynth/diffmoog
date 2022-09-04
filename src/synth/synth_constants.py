@@ -12,6 +12,9 @@ class SynthConstants:
     filter_type_dict = {"low_pass": 0,
                         "high_pass": 1}
 
+    sample_rate: int = 16000
+    fixed_note_off: bool = True
+
     semitones_max_offset: int = 24
     middle_c_freq: float = 261.6255653005985
     min_amp: float = 0.05
@@ -26,9 +29,8 @@ class SynthConstants:
     max_resonance_val: float = 10
     min_amount_tremolo: float = 0.05
     max_amount_tremolo: float = 1
-
-    sample_rate: int = 16000
-    fixed_note_off: bool = True
+    min_intensity_filter: float = 0
+    max_intensity_filter: float = sample_rate / 2
 
     # non-active operation defaults
     non_active_waveform_default = 'sine'
@@ -63,6 +65,8 @@ class SynthConstants:
                             'mix': [],
                             'filter': ['filter_freq', 'filter_type'],
                             'lowpass_filter': ['filter_freq', 'resonance'],
+                            'lowpass_filter_adsr': ['filter_freq', 'resonance', 'intensity', 'attack_t', 'decay_t',
+                                                    'sustain_t', 'sustain_level', 'release_t'],
                             'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t'],
                             'amplitude_shape': ['envelope', 'attack_t', 'decay_t', 'sustain_t', 'sustain_level',
                                                 'release_t'],
@@ -123,7 +127,10 @@ class SynthConstants:
                           'values': (self.min_resonance_val, self.max_resonance_val)},
             'amount': {'type': 'uniform',
                        'values': (self.min_amount_tremolo, self.max_amount_tremolo),
-                       'non_active_default': self.non_active_tremolo_amount_default}
+                       'non_active_default': self.non_active_tremolo_amount_default},
+            'intensity': {'type': 'uniform',
+                          'values': (self.min_amount_tremolo, self.max_amount_tremolo),
+                          'non_active_default': self.non_active_tremolo_amount_default}
         }
         
         return sampling_configurations
