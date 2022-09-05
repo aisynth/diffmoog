@@ -246,8 +246,9 @@ class FMOscillator(Oscillator):
                                                        batch_size=batch_size)
 
         parsed_params['freq_c'] = parsed_params['freq_c'] * active_signal
-        parsed_params['mod_index'] = parsed_params['mod_index'] * fm_active_signal
-        modulator_signal = modulator_signal * fm_active_signal
+        active_and_fm_active = torch.mul(fm_active_signal, active_signal)
+        parsed_params['mod_index'] = parsed_params['mod_index'] * active_and_fm_active
+        modulator_signal = modulator_signal * active_and_fm_active
 
         t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True,
                            device=self.device)
@@ -448,21 +449,37 @@ class FilterShaper(SynthModule):
 
     @staticmethod
     def low_pass(input_signal, cutoff_freq, intensity, envelope, sample_rate):
-        if cutoff_freq == 0:
+        if cutoff_freq == sample_rate / 2:
             return input_signal
         else:
+            win_size = 512
+            hop_size = 256
+            window = torch.hann_window(512, requires_grad=True)
             synth_conf = SynthConstants()
-            frames = torch.split(input_signal, split_size_or_sections=synth_conf.filter_adsr_frame_size)
-            filtered_signal_list = []
+            frames_old = torch.split(input_signal, split_size_or_sections=synth_conf.filter_adsr_frame_size)
+            # frames = input_signal.unfold(dimension=0, size=win_size, step=hop_size)
+            frames = input_signal.unfold(0, win_size, hop_size)
+            windowed_frames = frames * window
 
-            for i in range(len(frames)):
-                frequency_max_deviation = ((sample_rate / 2) - cutoff_freq) * intensity
-                current_cutoff = cutoff_freq + (frequency_max_deviation * envelope[i * synth_conf.filter_adsr_frame_size])
+            filtered_frames_list = []
+            frequency_max_deviation = ((sample_rate / 2) - cutoff_freq) * intensity
+            filtered_signal = torch.empty_like(input_signal)
+            for i in range(len(windowed_frames)):
+                current_cutoff = cutoff_freq + (frequency_max_deviation * envelope[i * hop_size])
                 current_cutoff_clapmed = torch.clamp(current_cutoff, min=0, max=sample_rate/2)
-                filtered_frame = lowpass_biquad(frames[i], sample_rate, current_cutoff_clapmed)
-                filtered_signal_list.append(filtered_frame)
 
-            filtered_signal = torch.cat(filtered_signal_list)
+                filtered_frame = lowpass_biquad(windowed_frames[i], sample_rate, current_cutoff_clapmed)
+                filtered_signal[i*hop_size: i*hop_size + win_size] = filtered_signal[i*hop_size: i*hop_size + win_size] + filtered_frame
+
+            # for i in range(len(frames_old)):
+            #     current_cutoff = cutoff_freq + (frequency_max_deviation * envelope[i * synth_conf.filter_adsr_frame_size])
+            #     current_cutoff_clapmed = torch.clamp(current_cutoff, min=0, max=sample_rate/2)
+            #
+            #     filtered_frame = lowpass_biquad(frames_old[i], sample_rate, current_cutoff_clapmed)
+            #     # filtered_signal[i*hop_size: i*hop_size + win_size] = filtered_signal[i*hop_size: i*hop_size + win_size] + filtered_frame
+            #     filtered_frames_list.append(filtered_frame)
+            #
+            # filtered_signal_no_window = torch.cat(filtered_frames_list)
 
             return filtered_signal
 
