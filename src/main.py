@@ -4,8 +4,6 @@ from shutil import rmtree
 
 import torch
 
-torch.autograd.set_detect_anomaly(True)
-
 from omegaconf import OmegaConf
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
@@ -38,7 +36,7 @@ def run(run_args):
     lit_module = LitModularSynth(cfg, device)
 
     callbacks = [ModelCheckpoint(cfg.ckpts_dir, monitor='nsynth_validation_metrics/lsd_value/dataloader_idx_1',
-                                 save_last=True),
+                                 save_last=True, save_top_k=3, every_n_epochs=25),
                  LearningRateMonitor(logging_interval='step')]
 
     tb_logger = TensorBoardLogger(cfg.logs_dir, name=exp_name)

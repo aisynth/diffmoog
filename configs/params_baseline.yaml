@@ -2,21 +2,21 @@ model:
   arch: simple
   backbone: resnet
   preset: MODULAR
-  num_workers: 8
-  batch_size: 75
-  num_epochs: 400
+  num_workers: 0
+  batch_size: 128
+  num_epochs: 150
 
   optimizer:
-    base_lr: 6e-6
+    base_lr: 3e-4
     optimizer: adam
-    scheduler: constant
+    scheduler: cosine
 
 loss:
   spec_loss_type: SPECTROGRAM
   preset: cumsum_time
   parameters_loss_type: L1
 
-  parameters_loss_weight: 0.01
+  parameters_loss_weight: 0.1
   spectrogram_loss_weight: 0
 
   spectrogram_loss_warmup: 300000
