@@ -16,10 +16,12 @@ from dataset.synth_datamodule import ModularSynthDataModule
 from utils.gpu_utils import get_device
 
 from model.lit_module import LitModularSynth
+from utils.train_utils import get_project_root
 
-root = r'C:\Users\noamk\PycharmProjects\ai_synth'
-EXP_ROOT = os.path.join(root, 'experiments')
-DATA_ROOT = os.path.join(root, 'data')
+
+root = get_project_root()
+EXP_ROOT = root.joinpath('experiments')
+DATA_ROOT = root.joinpath('data')
 
 
 def run(run_args):

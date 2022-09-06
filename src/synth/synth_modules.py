@@ -447,14 +447,13 @@ class FilterShaper(SynthModule):
 
         return filtered_signals
 
-    @staticmethod
-    def low_pass(input_signal, cutoff_freq, intensity, envelope, sample_rate):
+    def low_pass(self, input_signal, cutoff_freq, intensity, envelope, sample_rate):
         if cutoff_freq == sample_rate / 2:
             return input_signal
         else:
             win_size = 512
             hop_size = 256
-            window = torch.hann_window(512, requires_grad=True)
+            window = torch.hann_window(512, requires_grad=True, device=self.device)
             synth_conf = SynthConstants()
             frames_old = torch.split(input_signal, split_size_or_sections=synth_conf.filter_adsr_frame_size)
             # frames = input_signal.unfold(dimension=0, size=win_size, step=hop_size)

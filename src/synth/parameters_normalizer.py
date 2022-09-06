@@ -39,11 +39,6 @@ class Normalizer:
                                                        original_min_val=synth_structure.min_filter_freq,
                                                        original_max_val=synth_structure.max_filter_freq)
 
-        self.lowpass_filter_resonance_normalizer = MinMaxNormaliser(target_min_val=0,
-                                                                    target_max_val=1,
-                                                                    original_min_val=synth_structure.min_resonance_val,
-                                                                    original_max_val=synth_structure.max_resonance_val)
-
         self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                            target_max_val=1,
                                                            original_min_val=0,
@@ -76,9 +71,6 @@ class Normalizer:
                 elif operation == 'env_adsr' and param_name in ['attack_t', 'decay_t', 'sustain_t']:
                     normalized_params_dict[key]['parameters'][param_name] = \
                         self.adsr_normalizer.normalise(params[param_name])
-                elif param_name in ['resonance']:
-                    normalized_params_dict[key]['parameters'][param_name] = \
-                        self.lowpass_filter_resonance_normalizer.normalise(params[param_name])
                 else:
                     normalized_params_dict[key]['parameters'][param_name] = params[param_name]
 
@@ -112,9 +104,6 @@ class Normalizer:
                 elif operation == 'env_adsr' and param_name in ['attack_t', 'decay_t', 'sustain_t']:
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.adsr_normalizer.denormalise(params[param_name])
-                elif param_name in ['resonance']:
-                    denormalized_params_dict[key]['parameters'][param_name] = \
-                        self.lowpass_filter_resonance_normalizer.denormalise(params[param_name])
                 else:
                     denormalized_params_dict[key]['parameters'][param_name] = params[param_name]
 
