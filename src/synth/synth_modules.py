@@ -451,34 +451,21 @@ class FilterShaper(SynthModule):
         if cutoff_freq == sample_rate / 2:
             return input_signal
         else:
-            win_size = 512
-            hop_size = 256
-            window = torch.hann_window(512, requires_grad=True, device=self.device)
             synth_conf = SynthConstants()
-            frames_old = torch.split(input_signal, split_size_or_sections=synth_conf.filter_adsr_frame_size)
-            # frames = input_signal.unfold(dimension=0, size=win_size, step=hop_size)
+            win_size = synth_conf.filter_adsr_frame_size
+            hop_size = int(win_size / 2)
+            window = torch.hann_window(win_size, requires_grad=True, device=self.device)
             frames = input_signal.unfold(0, win_size, hop_size)
             windowed_frames = frames * window
 
-            filtered_frames_list = []
             frequency_max_deviation = ((sample_rate / 2) - cutoff_freq) * intensity
-            filtered_signal = torch.empty_like(input_signal)
+            filtered_signal = torch.zeros_like(input_signal)
             for i in range(len(windowed_frames)):
                 current_cutoff = cutoff_freq + (frequency_max_deviation * envelope[i * hop_size])
                 current_cutoff_clapmed = torch.clamp(current_cutoff, min=0, max=sample_rate/2)
 
                 filtered_frame = lowpass_biquad(windowed_frames[i], sample_rate, current_cutoff_clapmed)
                 filtered_signal[i*hop_size: i*hop_size + win_size] = filtered_signal[i*hop_size: i*hop_size + win_size] + filtered_frame
-
-            # for i in range(len(frames_old)):
-            #     current_cutoff = cutoff_freq + (frequency_max_deviation * envelope[i * synth_conf.filter_adsr_frame_size])
-            #     current_cutoff_clapmed = torch.clamp(current_cutoff, min=0, max=sample_rate/2)
-            #
-            #     filtered_frame = lowpass_biquad(frames_old[i], sample_rate, current_cutoff_clapmed)
-            #     # filtered_signal[i*hop_size: i*hop_size + win_size] = filtered_signal[i*hop_size: i*hop_size + win_size] + filtered_frame
-            #     filtered_frames_list.append(filtered_frame)
-            #
-            # filtered_signal_no_window = torch.cat(filtered_frames_list)
 
             return filtered_signal
 
@@ -573,6 +560,19 @@ class ADSR(SynthModule):
         self.envelope = self._build_envelope()
 
     def _build_envelope(self):
+        """
+        Build ADSR envelope
+        Variable note_off_time - sustain time is passed as parameter
+
+        params:
+            self: Self object with ['attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level'] parameters
+
+        Returns:
+            A torch with the constructed FM signal
+
+        Raises:
+            ValueError: Provided variables are out of range
+        """
         n_samples = int(self.sample_rate * self.signal_duration)
         x = torch.linspace(0, 1.0, n_samples, device=self.device)[None, :].repeat(self.batch_size, 1)
 

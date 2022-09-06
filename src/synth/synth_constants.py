@@ -20,7 +20,7 @@ class SynthConstants:
     min_amp: float = 0.05
     max_amp: float = 1
     min_mod_index: float = 0.01
-    max_mod_index: float = 0.3
+    max_mod_index: float = 0.1
     min_lfo_freq: float = 0.5
     max_lfo_freq: float = 20
     min_filter_freq: float = 100
