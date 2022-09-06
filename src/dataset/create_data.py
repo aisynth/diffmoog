@@ -10,7 +10,6 @@ import numpy as np
 from torch import device
 import scipy.io.wavfile
 
-from config import DATA_ROOT
 
 from synth.synth_architecture import SynthModular
 from synth.parameters_sampling import ParametersSampler

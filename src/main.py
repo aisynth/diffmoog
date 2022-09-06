@@ -59,10 +59,9 @@ def configure_experiment(exp_name: str, dataset_name: str, config_name: str):
     config_path = os.path.join(root, 'configs', config_name)
 
     if os.path.isdir(exp_dir):
-        # overwrite = input(colored(f"Folder {exp_dir} already exists. Overwrite previous experiment (Y/N)?"
-        #                           f"\n\tThis will delete all files related to the previous run!",
-        #                           'yellow'))
-        overwrite = 'y'
+        overwrite = input(colored(f"Folder {exp_dir} already exists. Overwrite previous experiment (Y/N)?"
+                                  f"\n\tThis will delete all files related to the previous run!",
+                                  'yellow'))
         if overwrite.lower() != 'y':
             print('Exiting...')
             exit()

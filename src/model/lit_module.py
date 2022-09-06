@@ -53,6 +53,8 @@ class LitModularSynth(LightningModule):
         self.epoch_vals_raw = defaultdict(list)
         self.epoch_vals_normalized = defaultdict(list)
 
+        self.val_epoch_param_diffs = defaultdict(list)
+
         self.tb_logger = None
 
     def forward(self, raw_signal: torch.Tensor, *args, **kwargs) -> Any:
@@ -103,13 +105,12 @@ class LitModularSynth(LightningModule):
 
             if self.cfg.loss.use_chain_loss:
                 _, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
-                spec_loss = self._calculate_spectrogram_chain_loss(target_signals_through_chain, pred_signals_through_chain,
-                                                                   log=True)
+                spec_loss = self._calculate_spectrogram_chain_loss(target_signals_through_chain,
+                                                                   pred_signals_through_chain, log=True)
             else:
                 pred_final_signal, _ = self.generate_synth_sound(predicted_params_full_range, batch_size)
-                spec_loss, per_op_loss, per_op_weighted_loss, ret_spectrograms = \
-                    self.spec_loss.call(target_signal, pred_final_signal, return_spectrogram=True,
-                                        step=self.global_step)
+                spec_loss, per_op_loss, per_op_weighted_loss = self.spec_loss.call(target_signal, pred_final_signal,
+                                                                                   step=self.global_step)
                 self._log_recursive(per_op_weighted_loss, f'final_spec_losses_weighted')
 
         loss_total, weighted_params_loss, weighted_spec_loss = self._balance_losses(total_params_loss, spec_loss, log)
@@ -156,7 +157,7 @@ class LitModularSynth(LightningModule):
         if batch_idx == 0:
             self._log_sounds_batch(batch[0], batch[1], f'samples_train')
 
-        loss, step_losses, step_artifacts = self.in_domain_step(batch, log=True, return_metrics=False)
+        loss, step_losses, step_artifacts = self.in_domain_step(batch, log=True)
 
         self._log_recursive(step_losses, f'train_losses')
         # self._log_recursive(step_metrics, f'train_metrics')
@@ -183,6 +184,9 @@ class LitModularSynth(LightningModule):
         self._log_recursive(step_losses, f'{val_name}_losses')
         self._log_recursive(step_metrics, f'{val_name}_metrics')
 
+        if dataloader_idx == 0:
+            self._accumulate_batch_values(self.val_epoch_param_diffs, step_artifacts['param_diffs'])
+
         return loss
 
     @torch.no_grad()
@@ -207,6 +211,10 @@ class LitModularSynth(LightningModule):
 
         return
 
+    def on_validation_epoch_end(self) -> None:
+        self._log_recursive(self.val_epoch_param_diffs, 'validation_param_diff')
+        self.val_epoch_param_diffs = defaultdict(list)
+
     def _calculate_spectrogram_chain_loss(self, target_signals_through_chain: dict, pred_signals_through_chain: dict,
                                           log=False):
 
@@ -230,7 +238,7 @@ class LitModularSynth(LightningModule):
             chain_losses[i] = loss
 
             if log:
-                self._log_recursive(per_op_weighted_loss, f'{op_index}_weighted_spec_loss')
+                self._log_recursive(per_op_weighted_loss, f'weighted_chain_spec_loss/{op_index}')
 
         spectrogram_loss = chain_losses.mean() * self.cfg.loss.chain_loss_weight
 
@@ -280,7 +288,7 @@ class LitModularSynth(LightningModule):
         metrics['pearson_fft'] = pearsonr_dist(target_signal, predicted_signal, input_type='audio', reduction=torch.mean)
         metrics['mean_average_error'] = mae(target_spec, predicted_spec, reduction=torch.mean)
         metrics['mfcc_mae'] = mfcc_distance(target_signal, predicted_signal, sample_rate=synth_structure.sample_rate,
-                                            device=self.device, reduction=torch.mean)
+                                            device=predicted_signal.device, reduction=torch.mean)
         metrics['spectral_convergence_value'] = spectral_convergence(target_spec, predicted_spec, reduction=torch.mean)
 
         return metrics
@@ -325,7 +333,7 @@ class LitModularSynth(LightningModule):
             if len(items_to_log.shape) == 0 or len(items_to_log) <= 1:
                 self.log(tag, items_to_log)
             elif len(items_to_log) > 1:
-                self.tb_logger.add_histogram(tag, items_to_log)
+                self.tb_logger.add_histogram(tag, items_to_log, self.current_epoch)
             else:
                 raise ValueError(f"Unexpected value to log {items_to_log}")
             return
