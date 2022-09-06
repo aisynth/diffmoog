@@ -246,8 +246,9 @@ class FMOscillator(Oscillator):
                                                        batch_size=batch_size)
 
         parsed_params['freq_c'] = parsed_params['freq_c'] * active_signal
-        parsed_params['mod_index'] = parsed_params['mod_index'] * fm_active_signal
-        modulator_signal = modulator_signal * fm_active_signal
+        active_and_fm_active = torch.mul(fm_active_signal, active_signal)
+        parsed_params['mod_index'] = parsed_params['mod_index'] * active_and_fm_active
+        modulator_signal = modulator_signal * active_and_fm_active
 
         t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True,
                            device=self.device)
@@ -283,7 +284,7 @@ class FMOscillator(Oscillator):
         return wave_tensors
 
 
-class ADSR(SynthModule):
+class AmplitudeShaper(SynthModule):
 
     def __init__(self, device: str, synth_structure: SynthConstants):
         super().__init__(name='env_adsr', device=device, synth_structure=synth_structure)
@@ -293,36 +294,10 @@ class ADSR(SynthModule):
 
         self._verify_input_params(params)
 
-        n_samples = int(sample_rate * signal_duration)
-        x = torch.linspace(0, 1.0, n_samples, device=self.device)[None, :].repeat(batch_size, 1)
+        adsr_shape = ADSR(params=params, sample_rate=sample_rate, signal_duration=signal_duration,
+                          device=self.device, synth_structure=self.synth_structure, batch_size=batch_size )
 
-        parsed_params, relative_params = {}, {}
-        total_time = 0
-        for k in ['attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']:
-            parsed_params[k] = self._standardize_input(params[k], requested_dtype=torch.float64, requested_dims=2,
-                                                       batch_size=batch_size)
-            if k != 'sustain_level':
-                relative_params[k] = parsed_params[k] / signal_duration
-                total_time += parsed_params[k]
-
-        if torch.any(total_time > signal_duration):
-            raise ValueError("Provided ADSR durations exceeds signal duration")
-
-        relative_note_off = relative_params['attack_t'] + relative_params['decay_t'] + relative_params['sustain_t']
-
-        eps = 1e-5
-
-        attack = x / (relative_params['attack_t'] + eps)
-        attack = torch.clamp(attack, max=1.0)
-
-        decay = (x - relative_params['attack_t']) * (parsed_params['sustain_level'] - 1) / (relative_params['decay_t'] + eps)
-        decay = torch.clamp(decay, max=torch.tensor(0).to(decay.device), min=parsed_params['sustain_level'] - 1)
-
-        sustain = (x - relative_note_off) * (-parsed_params['sustain_level'] / (relative_params['release_t'] + eps))
-        sustain = torch.clamp(sustain, max=0.0)
-
-        envelope = (attack + decay + sustain)
-        envelope = torch.clamp(envelope, min=0.0, max=1.0)
+        envelope = adsr_shape.envelope
 
         enveloped_signal = input_signal * envelope
 
@@ -408,6 +383,93 @@ class Filter(SynthModule):
             return filtered_waveform_new
 
 
+class FilterShaper(SynthModule):
+
+    def __init__(self, device: str, synth_structure: SynthConstants, filter_type: str = None):
+        super().__init__(name='lowpass_filter_adsr', device=device, synth_structure=synth_structure)
+
+        if filter_type is not None:
+            assert filter_type in ['lowpass', 'highpass'], f'Got unexpected filter type {filter_type} in Filter_ADSR'
+            self.name = f'{filter_type}_filter_adsr'
+
+        self.filter_type = filter_type
+
+        self.filter_type_indices = {k: torch.tensor(v, dtype=torch.long, device=self.device).squeeze()
+                                    for k, v in synth_structure.filter_type_dict.items()}
+
+    def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
+                      sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
+
+        self._verify_input_params(params)
+
+        adsr_shape = ADSR(params=params, sample_rate=sample_rate, signal_duration=signal_duration,
+                          device=self.device, synth_structure=self.synth_structure, batch_size=batch_size)
+
+        envelope = adsr_shape.envelope
+
+        filter_freq = self._standardize_input(params['filter_freq'], requested_dtype=torch.float64, requested_dims=2,
+                                              batch_size=batch_size)
+        filter_intensity = self._standardize_input(params['intensity'], requested_dtype=torch.float64, requested_dims=2,
+                                              batch_size=batch_size)
+
+        assert torch.all(filter_freq <= (sample_rate / 2)), "Filter cutoff frequency higher then Nyquist." \
+                                                            " Please check config"
+
+        filtered_signal = self._generate_filtered_signal(input_signal, filter_freq, filter_intensity,
+                                                         envelope, sample_rate, batch_size)
+        for k, v in filtered_signal.items():
+            if torch.any(torch.isnan(v)):
+                raise RuntimeError("Synth filter module: Signal has NaN. Exiting...")
+
+        if self.filter_type is not None:
+            return filtered_signal[self.filter_type]
+
+        waves_tensor = torch.stack([filtered_signal['lowpass'], filtered_signal['highpass']])
+        filtered_signal_tensor = self._mix_waveforms(waves_tensor, params['filter_type'], self.filter_type_indices)
+
+        return filtered_signal_tensor
+
+    def _generate_filtered_signal(self, input_signal: torch.Tensor, filter_freq: torch.tensor,
+                                  filter_intensity: torch.tensor,
+                                  envelope: torch.tensor, sample_rate: int, batch_size: int) -> dict:
+
+        filtered_signals = {}
+        if self.filter_type == 'lowpass' or self.filter_type is None:
+            if has_vmap:
+                low_pass_signals = vmap(lowpass_biquad)(input_signal.double(), filter_freq,
+                                                        sample_rate=sample_rate)
+            else:
+                low_pass_signals = [self.low_pass(input_signal[i], filter_freq[i],
+                                                  filter_intensity[i],
+                                                  envelope[i], sample_rate) for i in
+                                    range(batch_size)]
+                filtered_signals['lowpass'] = torch.stack(low_pass_signals)
+
+        return filtered_signals
+
+    def low_pass(self, input_signal, cutoff_freq, intensity, envelope, sample_rate):
+        if cutoff_freq == sample_rate / 2:
+            return input_signal
+        else:
+            synth_conf = SynthConstants()
+            win_size = synth_conf.filter_adsr_frame_size
+            hop_size = int(win_size / 2)
+            window = torch.hann_window(win_size, requires_grad=True, device=self.device)
+            frames = input_signal.unfold(0, win_size, hop_size)
+            windowed_frames = frames * window
+
+            frequency_max_deviation = ((sample_rate / 2) - cutoff_freq) * intensity
+            filtered_signal = torch.zeros_like(input_signal)
+            for i in range(len(windowed_frames)):
+                current_cutoff = cutoff_freq + (frequency_max_deviation * envelope[i * hop_size])
+                current_cutoff_clapmed = torch.clamp(current_cutoff, min=0, max=sample_rate/2)
+
+                filtered_frame = lowpass_biquad(windowed_frames[i], sample_rate, current_cutoff_clapmed)
+                filtered_signal[i*hop_size: i*hop_size + win_size] = filtered_signal[i*hop_size: i*hop_size + win_size] + filtered_frame
+
+            return filtered_signal
+
+
 class Tremolo(SynthModule):
 
     def __init__(self, device: str, synth_structure: SynthConstants):
@@ -476,6 +538,80 @@ class Noop(SynthModule):
         return input_signal
 
 
+class ADSR(SynthModule):
+    def __init__(self, params: dict, sample_rate: int, signal_duration: float, device: str,
+                 synth_structure: SynthConstants, batch_size: int = 1):
+        super().__init__(name='env_adsr', device=device, synth_structure=synth_structure)
+    # def __init__(self, params: dict, sample_rate: int, signal_duration: float, device: str,
+    #              batch_size: int = 1) -> torch.Tensor:
+
+        self.params = params
+        # self.attack_t = params['attack_t']
+        # self.decay_t = params['decay_t']
+        # self.sustain_t = params['sustain_t']
+        # self.sustain_level = params['sustain_level']
+        # self.release_t = params['release_t']
+
+        self.sample_rate = sample_rate
+        self.signal_duration = signal_duration
+        self.device = device
+        self.batch_size = batch_size
+
+        self.envelope = self._build_envelope()
+
+    def _build_envelope(self):
+        """
+        Build ADSR envelope
+        Variable note_off_time - sustain time is passed as parameter
+
+        params:
+            self: Self object with ['attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level'] parameters
+
+        Returns:
+            A torch with the constructed FM signal
+
+        Raises:
+            ValueError: Provided variables are out of range
+        """
+        n_samples = int(self.sample_rate * self.signal_duration)
+        x = torch.linspace(0, 1.0, n_samples, device=self.device)[None, :].repeat(self.batch_size, 1)
+
+        parsed_params, relative_params = {}, {}
+        total_time = 0
+        for k in ['attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']:
+            parsed_params[k] = self._standardize_input(self.params[k], requested_dtype=torch.float64, requested_dims=2,
+                                                       batch_size=self.batch_size)
+            if k != 'sustain_level':
+                relative_params[k] = parsed_params[k] / self.signal_duration
+                total_time += parsed_params[k]
+
+        if torch.any(total_time > self.signal_duration):
+            raise ValueError("Provided ADSR durations exceeds signal duration")
+
+        relative_note_off = relative_params['attack_t'] + relative_params['decay_t'] + relative_params['sustain_t']
+
+        eps = 1e-5
+
+        attack = x / (relative_params['attack_t'] + eps)
+        attack = torch.clamp(attack, max=1.0)
+
+        decay = (x - relative_params['attack_t']) * (parsed_params['sustain_level'] - 1) / (
+                    relative_params['decay_t'] + eps)
+        decay = torch.clamp(decay, max=torch.tensor(0).to(decay.device), min=parsed_params['sustain_level'] - 1)
+
+        sustain = (x - relative_note_off) * (-parsed_params['sustain_level'] / (relative_params['release_t'] + eps))
+        sustain = torch.clamp(sustain, max=0.0)
+
+        envelope = (attack + decay + sustain)
+        envelope = torch.clamp(envelope, min=0.0, max=1.0)
+
+        return envelope
+
+    def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
+                      sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
+        pass
+
+
 def get_synth_module(op_name: str, device: str, synth_structure: SynthConstants):
 
     if op_name is None or op_name in ['None', 'none']:
@@ -494,7 +630,7 @@ def get_synth_module(op_name: str, device: str, synth_structure: SynthConstants)
         waveform = op_name.split('_')[1]
         return FMOscillator(op_name, device, synth_structure, waveform)
     elif op_name in ['env_adsr']:
-        return ADSR(device, synth_structure)
+        return AmplitudeShaper(device, synth_structure)
     elif op_name in ['filter', 'lowpass_filter', 'highpass_filter']:
         if op_name != 'filter':
             filter_type = op_name.split('_')[0]
@@ -502,6 +638,8 @@ def get_synth_module(op_name: str, device: str, synth_structure: SynthConstants)
         return Filter(device, synth_structure)
     elif op_name in ['tremolo']:
         return Tremolo(device, synth_structure)
+    elif op_name in ['lowpass_filter_adsr']:
+        return FilterShaper(device, synth_structure, filter_type='lowpass')
     elif op_name in ['mix']:
         return Mix(device, synth_structure)
     else:

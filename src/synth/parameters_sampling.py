@@ -58,9 +58,14 @@ class ParametersSampler:
                     selected_outputs = [selected_outputs[k] if act else [-1, -1] for k, act in enumerate(is_active)]
                     cell_params['output'] = selected_outputs
 
-                if operation in ['env_adsr', 'amplitude_shape']:
+                if operation in ['env_adsr', 'amplitude_shape', 'lowpass_filter_adsr']:
                     sampled_params = self._generate_random_adsr_values(signal_len, note_off_time,
                                                                        num_sounds_=num_sounds_)
+                    if operation == 'lowpass_filter_adsr':
+                        sampled_non_adsr_params = self._sample_parameters(operation, cell_params.get('active', None),
+                                                                 cell_params.get('fm_active', None), num_sounds_)
+                        sampled_params.update(sampled_non_adsr_params)
+
                 else:
                     sampled_params = self._sample_parameters(operation, cell_params.get('active', None),
                                                              cell_params.get('fm_active', None), num_sounds_)

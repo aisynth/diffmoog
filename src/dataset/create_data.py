@@ -10,11 +10,11 @@ import numpy as np
 from torch import device
 import scipy.io.wavfile
 
-
 from synth.synth_architecture import SynthModular
 from synth.parameters_sampling import ParametersSampler
 from synth.synth_constants import synth_structure
 from utils.gpu_utils import get_device
+from utils.train_utils import get_project_root
 
 
 def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_duration: float, note_off_time: float,
@@ -129,6 +129,14 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    root = get_project_root()
+    EXP_ROOT = root.joinpath('experiments')
+    DATA_ROOT = root.joinpath('data')
+    #
+    # EXP_ROOT = os.path.join(root, 'experiments')
+    # DATA_ROOT = os.path.join(root, 'data')
+
+    #todo: change os to Path
     output_dir = os.path.join(DATA_ROOT, args.name, '')
     os.makedirs(output_dir, exist_ok=True)
 

@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from pytorch_lightning.loggers import TensorBoardLogger
+from pathlib import Path
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -11,6 +12,8 @@ from synth.synth_constants import synth_structure
 from synth.synth_presets import synth_presets_dict
 
 
+def get_project_root() -> Path:
+    return Path(__file__).parent.parent.parent
 def log_gradients_in_model(model, writer: SummaryWriter, step):
     for tag, value in model.named_parameters():
         if value.grad is not None:
