@@ -14,6 +14,7 @@ import torch
 import math
 
 from torchaudio.functional.filtering import lowpass_biquad, highpass_biquad
+from torchaudio.transforms import Spectrogram, GriffinLim
 
 import julius
 from julius.lowpass import lowpass_filter_new
@@ -438,6 +439,7 @@ class Filter(SynthModule):
             return filtered_waveform_new
 
 
+#todo: chechk the ADSR parent if shall not be SynthModule
 class FilterShaper(ADSR):
 
     def __init__(self, device: str, synth_structure: SynthConstants, filter_type: str = None):
@@ -491,16 +493,52 @@ class FilterShaper(ADSR):
                 low_pass_signals = vmap(lowpass_biquad)(input_signal.double(), filter_freq,
                                                         sample_rate=sample_rate)
             else:
-                low_pass_signals = [self.low_pass(input_signal[i], filter_freq[i],
-                                                  filter_intensity[i],
-                                                  envelope[i], sample_rate) for i in
+                low_pass_signals = [self.low_pass_frequency(input_signal[i], filter_freq[i],
+                                                            filter_intensity[i],
+                                                            envelope[i], sample_rate) for i in
                                     range(batch_size)]
                 filtered_signals['lowpass'] = torch.stack(low_pass_signals)
 
         return filtered_signals
 
-    def low_pass(self, input_signal, cutoff_freq, intensity, envelope, sample_rate):
-        if cutoff_freq == sample_rate / 2:
+    def low_pass_frequency(self, input_signal, cutoff_freq, intensity, envelope, sample_rate):
+        max_frequency = sample_rate / 2
+        if cutoff_freq == max_frequency:
+            return input_signal
+        else:
+            synth_conf = SynthConstants()
+            n_fft = synth_conf.filter_adsr_frame_size
+            bin_amount = n_fft // 2 + 1
+            win_length = n_fft
+            hop_length = int(win_length / 2)
+            spectrogram_transform = Spectrogram(n_fft=n_fft, win_length=win_length,
+                                                hop_length=hop_length, power=2.0).to(self.device)
+            griffin_lim = GriffinLim(n_fft=n_fft, win_length=win_length, hop_length=hop_length)
+            signal_spectrogram = spectrogram_transform(input_signal)
+            frames = input_signal.unfold(0, win_length, hop_length)
+            frequency_max_deviation = (max_frequency - cutoff_freq) * intensity
+
+            masking_list = []
+            for i in range(len(frames) + 1):
+                current_cutoff = cutoff_freq + (frequency_max_deviation * envelope[i * hop_length])
+                # todo: consider delete clamp
+                current_cutoff_clapmed = torch.clamp(current_cutoff, min=0, max=max_frequency)
+                cutoff_bin = torch.floor((bin_amount/max_frequency) * current_cutoff_clapmed)
+                # todo: get rid of .item(), make differentiable
+                masking_vector = torch.cat((torch.ones(int(cutoff_bin.item())), torch.zeros(bin_amount - int(cutoff_bin.item()))))
+                masking_list.append(masking_vector)
+            masking_filter = torch.stack(masking_list, dim=1)
+
+            fake_to_complete_spec_size = torch.ones(257, 1)
+            final_filter = torch.cat((masking_filter, fake_to_complete_spec_size), dim=1)
+            filtered_spectrogram = signal_spectrogram * final_filter
+            filtered_signal = griffin_lim(filtered_spectrogram)
+
+            return filtered_signal
+
+    def low_pass_time(self, input_signal, cutoff_freq, intensity, envelope, sample_rate):
+        max_frequency = sample_rate / 2
+        if cutoff_freq == max_frequency:
             return input_signal
         else:
             synth_conf = SynthConstants()
