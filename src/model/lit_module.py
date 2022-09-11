@@ -31,6 +31,8 @@ class LitModularSynth(LightningModule):
         self.synth = SynthModular(preset_name=train_cfg.synth.preset, synth_structure=synth_structure,
                                   device=device)
 
+        self.ignore_params = train_cfg.synth.get('ignore_params', None)
+
         self.synth_net = SynthNetwork(train_cfg.model.preset, backbone=train_cfg.model.backbone, device=device)
         self.normalizer = Normalizer(train_cfg.synth.note_off_time, train_cfg.synth.signal_duration, synth_structure)
 
@@ -47,7 +49,8 @@ class LitModularSynth(LightningModule):
                                       sample_rate=synth_structure.sample_rate, device=device)
 
         self.params_loss = ParametersLoss(loss_type=train_cfg.loss.parameters_loss_type,
-                                          synth_structure=synth_structure, device=device)
+                                          synth_structure=synth_structure, ignore_params=self.ignore_params,
+                                          device=device)
 
         self.epoch_param_diffs = defaultdict(list)
         self.epoch_vals_raw = defaultdict(list)
@@ -92,15 +95,17 @@ class LitModularSynth(LightningModule):
         predicted_params_unit_range, predicted_params_full_range = self(target_signal)
         target_params_unit_range = self.normalizer.normalize(target_params_full_range)
 
+        if self.ignore_params is not None:
+            predicted_params_unit_range = self._update_param_dict(target_params_unit_range, predicted_params_unit_range)
+            predicted_params_full_range = self._update_param_dict(target_params_full_range, predicted_params_full_range)
+
         total_params_loss, per_parameter_loss = self.params_loss.call(predicted_params_unit_range,
                                                                       target_params_unit_range)
 
         if self.global_step < self.cfg.loss.spectrogram_loss_warmup and not return_metrics:
             spec_loss = 0
         else:
-            params_for_pred_signal_generation = copy.copy(target_params_full_range)
-            params_for_pred_signal_generation.update(predicted_params_full_range)
-            pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(params_for_pred_signal_generation,
+            pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
                                                                                       batch_size)
 
             if self.cfg.loss.use_chain_loss:
@@ -114,7 +119,8 @@ class LitModularSynth(LightningModule):
                 self._log_recursive(per_op_weighted_loss, f'final_spec_losses_weighted')
 
         loss_total, weighted_params_loss, weighted_spec_loss = self._balance_losses(total_params_loss, spec_loss, log)
-        param_diffs = get_param_diffs(predicted_params_full_range.copy(), target_params_full_range.copy())
+        param_diffs = get_param_diffs(predicted_params_full_range.copy(), target_params_full_range.copy(),
+                                      self.ignore_params)
 
         step_losses = {'raw_params_loss': total_params_loss, 'raw_spec_loss': spec_loss,
                        'weighted_params_loss': weighted_params_loss, 'weighted_spec_loss': weighted_spec_loss}
@@ -176,6 +182,7 @@ class LitModularSynth(LightningModule):
             target_params = batch[1] if dataloader_idx == 0 else None
             self._log_sounds_batch(batch[0], target_params, val_name)
 
+        self.synth_net.train()
         if 'in_domain' in val_name:
             loss, step_losses, step_metrics, step_artifacts = self.in_domain_step(batch, return_metrics=True)
         else:
@@ -319,6 +326,17 @@ class LitModularSynth(LightningModule):
 
             self.tb_logger.add_image(f'{tag}/{256}_spec/input_{i}', signal_vis_t, global_step=self.current_epoch,
                                      dataformats='HWC')
+
+    def _update_param_dict(self, src_dict: dict, target_dict: dict):
+
+        for op_idx, op_dict in src_dict.items():
+            if isinstance(op_dict['parameters'], list) or op_dict['operation'][0] == 'mix':
+                continue
+            for param_name, param_vals in op_dict['parameters'].items():
+                if param_name in self.ignore_params:
+                    target_dict[op_idx]['parameters'][param_name] = param_vals
+
+        return target_dict
 
     def _log_recursive(self, items_to_log: dict, tag: str, on_epoch=False):
         if isinstance(items_to_log, np.float) or isinstance(items_to_log, np.int):

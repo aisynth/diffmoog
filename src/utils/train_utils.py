@@ -1,3 +1,5 @@
+from typing import Sequence
+
 import numpy as np
 import torch
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -104,7 +106,7 @@ def log_dict_recursive(tag: str, data_to_log, writer: TensorBoardLogger, step: i
     return
 
 
-def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
+def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: Sequence[str]) -> dict:
 
     all_diffs = {}
     predicted_params_np = to_numpy_recursive(predicted_params)
@@ -114,6 +116,9 @@ def get_param_diffs(predicted_params: dict, target_params: dict) -> dict:
         all_diffs[op_index] = {}
         target_op_dict = target_params_np[op_index]
         for param_name, pred_vals in pred_op_dict['parameters'].items():
+
+            if ignore_params is not None and param_name in ignore_params:
+                continue
 
             target_vals = target_op_dict['parameters'][param_name]
             if pred_vals.ndim == 0 or (pred_vals.ndim == 1 and len(pred_vals) > 1):

@@ -17,12 +17,14 @@ class Normalizer:
         self.mod_index_normalizer = MinMaxNormaliser(target_min_val=0,
                                                      target_max_val=1,
                                                      original_min_val=synth_structure.min_mod_index,
-                                                     original_max_val=synth_structure.max_mod_index)
+                                                     original_max_val=synth_structure.max_mod_index,
+                                                     clip=True)
 
         self.lfo_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                     target_max_val=1,
                                                     original_min_val=synth_structure.min_lfo_freq,
-                                                    original_max_val=synth_structure.max_lfo_freq)
+                                                    original_max_val=synth_structure.max_lfo_freq,
+                                                    clip=True)
 
         self.lfo_phase_normalizer = MinMaxNormaliser(target_min_val=0,
                                                      target_max_val=1,
@@ -37,7 +39,8 @@ class Normalizer:
         self.filter_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                        target_max_val=1,
                                                        original_min_val=synth_structure.min_filter_freq,
-                                                       original_max_val=synth_structure.max_filter_freq)
+                                                       original_max_val=synth_structure.max_filter_freq,
+                                                       clip=True)
 
         self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                            target_max_val=1,
@@ -168,17 +171,26 @@ class Normalizer:
 class MinMaxNormaliser:
     """MinMaxNormaliser applies min max normalisation to a tensor"""
 
-    def __init__(self, target_min_val, target_max_val, original_min_val, original_max_val):
+    def __init__(self, target_min_val, target_max_val, original_min_val, original_max_val, clip=False):
         self.target_min_val = target_min_val
         self.target_max_val = target_max_val
         self.original_max_val = original_max_val
         self.original_min_val = original_min_val
+        self.clip = clip
 
     def normalise(self, array):
+        """
+        From full range to (0-1)
+        """
         norm_array = (array - self.original_min_val) / (self.original_max_val - self.original_min_val)
+        if self.clip:
+            norm_array[norm_array < 0] = 0
         return norm_array
 
     def denormalise(self, norm_array):
+        """
+        From (0-1) range to full range
+        """
         array = (norm_array - self.target_min_val) / (self.target_max_val - self.target_min_val)
         array = array * (self.original_max_val - self.original_min_val) + self.original_min_val
         return array

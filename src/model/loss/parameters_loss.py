@@ -1,3 +1,5 @@
+from typing import Sequence
+
 import torch
 from torch import nn
 
@@ -7,7 +9,8 @@ from synth.synth_constants import SynthConstants
 class ParametersLoss(nn.Module):
     """This loss compares target and predicted parameters of the modular synthesizer"""
 
-    def __init__(self, loss_type: str, synth_structure: SynthConstants, device='cuda:0'):
+    def __init__(self, loss_type: str, synth_structure: SynthConstants, ignore_params: Sequence[str] = None,
+                 device='cuda:0'):
 
         super().__init__()
 
@@ -19,6 +22,8 @@ class ParametersLoss(nn.Module):
             self.criterion = nn.MSELoss()
         else:
             raise ValueError("unknown loss type")
+
+        self.ignore_params = ignore_params if ignore_params is not None else []
 
         self.cls_loss = nn.CrossEntropyLoss()
 
@@ -33,39 +38,58 @@ class ParametersLoss(nn.Module):
         loss_dict = {}
         for key in predicted_parameters_dict.keys():
             operation = predicted_parameters_dict[key]['operation']
+            op_config = self.synth_structure.param_configs[operation]
+
             predicted_parameters = predicted_parameters_dict[key]['parameters']
-            target_parameters = target_parameters_dict[key]['parameters'].copy()
+            target_parameters = target_parameters_dict[key]['parameters']
 
             for param in predicted_parameters.keys():
+
+                if param in self.ignore_params:
+                    continue
 
                 if param == 'waveform':
                     waveform_list = [self.synth_structure.wave_type_dict[waveform] for waveform
                                      in target_parameters[param]]
-                    target_parameters[param] = torch.tensor(waveform_list)
-
+                    target = torch.tensor(waveform_list)
                 elif param == 'filter_type':
                     filter_type_list = [self.synth_structure.filter_type_dict[filter_type] for
                                         filter_type in target_parameters[param]]
-                    target_parameters[param] = torch.tensor(filter_type_list)
-
+                    target = torch.tensor(filter_type_list)
                 elif param in ['active', 'fm_active']:
                     active_list = [0 if is_active else 1 for is_active in target_parameters[param]]
-                    target_parameters[param] = torch.tensor(active_list)
-
-                target_parameters[param] = target_parameters[param].type(torch.FloatTensor).to(self.device)
-                if predicted_parameters[param].dim() > 1 and predicted_parameters[param].shape[0] == 1:
-                    predicted_parameters[param] = predicted_parameters[param].squeeze(dim=0)
+                    target = torch.tensor(active_list)
                 else:
-                    predicted_parameters[param] = predicted_parameters[param].squeeze()
+                    target = target_parameters[param].clone()
 
-                if target_parameters[param].dim() > 1:
-                    target_parameters[param] = target_parameters[param].squeeze(dim=0)
+                target = target.type(torch.FloatTensor).to(self.device)
+                if predicted_parameters[param].dim() > 1 and predicted_parameters[param].shape[0] == 1:
+                    pred = predicted_parameters[param].squeeze(dim=0)
+                else:
+                    pred = predicted_parameters[param].squeeze()
+
+                if param not in ['active', 'fm_active'] and operation not in ['env_adsr']:
+                    if op_config[param].get('activity_signal', None) == 'fm_active':
+                        activity_signal = target_parameters['fm_active']
+                    elif 'active' in target_parameters:
+                        activity_signal = target_parameters['active']
+                    else:
+                        activity_signal = None
+
+                    if activity_signal is not None:
+                        if pred.dim() > 1:
+                            pred = pred * activity_signal.long().squeeze().unsqueeze(-1)
+                        else:
+                            pred = pred * activity_signal.long().squeeze()
+
+                if target.dim() > 1:
+                    target = target.squeeze(dim=0)
 
                 if param in ['waveform', 'filter_type', 'active', 'fm_active']:
-                    target_parameters[param] = target_parameters[param].type(torch.LongTensor).to(self.device)
-                    loss = self.cls_loss(predicted_parameters[param], target_parameters[param])
+                    target = target.type(torch.LongTensor).to(self.device)
+                    loss = self.cls_loss(pred, target)
                 else:
-                    loss = self.criterion(predicted_parameters[param], target_parameters[param])
+                    loss = self.criterion(pred, target)
 
                 total_loss += loss
 
