@@ -57,10 +57,10 @@ class SynthConstants:
                                 'fm_sine', 'fm_square', 'fm_saw', 'lowpass_filter']
 
     modular_synth_params = {'osc': ['amp', 'freq', 'waveform'],
-                            'lfo_sine': ['active', 'freq'],
-                            'lfo_non_sine': ['freq', 'waveform'],
-                            'lfo': ['freq', 'waveform'],
-                            'fm_lfo': ['active', 'fm_active', 'freq_c', 'waveform', 'fm_lfo_mod_index'],
+                            'lfo_sine': ['amp', 'active', 'freq'],
+                            'lfo_non_sine': ['amp', 'freq', 'waveform'],
+                            'lfo': ['amp', 'freq', 'waveform'],
+                            'fm_lfo': ['active', 'fm_active', 'freq_c', 'waveform', 'fm_lfo_mod_index', 'amp_c'],
                             'fm': ['freq_c', 'waveform', 'mod_index'],
                             'fm_sine': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
                             'fm_square': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
@@ -73,7 +73,7 @@ class SynthConstants:
                             'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t'],
                             'amplitude_shape': ['envelope', 'attack_t', 'decay_t', 'sustain_t', 'sustain_level',
                                                 'release_t'],
-                            'tremolo': ['amount', 'active']}
+                            'tremolo': ['amount', 'active', 'fm_active']}
 
     def __post_init__(self):
         self.wave_type_dic_inv = {v: k for k, v in self.wave_type_dict.items()}
