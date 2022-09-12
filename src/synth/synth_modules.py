@@ -131,6 +131,7 @@ class Oscillator(SynthModule):
         self.waveform = waveform
         self.wave_type_indices = {k: torch.tensor(v, dtype=torch.long, device=self.device).squeeze()
                                   for k, v in self.synth_structure.wave_type_dict.items()}
+        self.warning_sent = False
 
     def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
                       sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
@@ -160,8 +161,12 @@ class Oscillator(SynthModule):
 
         active_signal = self._process_active_signal(params.get('active', None), batch_size)
 
-        amp = self._standardize_input(params['amp'], requested_dtype=torch.float32, requested_dims=2,
-                                      batch_size=batch_size)
+        if 'amp' not in params:
+            self._amp_warning()
+            amp = torch.ones((batch_size, 1), dtype=torch.float32, device=self.device)
+        else:
+            amp = self._standardize_input(params['amp'], requested_dtype=torch.float32, requested_dims=2,
+                                          batch_size=batch_size)
         freq = self._standardize_input(params['freq'], requested_dtype=torch.float32, requested_dims=2,
                                        batch_size=batch_size)
 
@@ -200,6 +205,12 @@ class Oscillator(SynthModule):
             wave_tensors['saw'] = sawtooth_wave
 
         return wave_tensors
+
+    def _amp_warning(self):
+        if not self.warning_sent:
+            print(f'Missing amp param in Oscillator module {self.name}. Assuming fixed amp.'
+                  f' Please check Synth structure if this is unexpected.')
+            self.warning_sent = True
 
 
 class FMOscillator(Oscillator):
@@ -243,8 +254,12 @@ class FMOscillator(Oscillator):
 
         parsed_params = {}
         for k in ['amp_c', 'freq_c', 'mod_index']:
-            parsed_params[k] = self._standardize_input(params[k], requested_dtype=torch.float32, requested_dims=2,
-                                                       batch_size=batch_size)
+            if k == 'amp_c' and k not in params:
+                self._amp_warning()
+                parsed_params[k] = torch.ones((batch_size, 1), dtype=torch.float32, device=self.device)
+            else:
+                parsed_params[k] = self._standardize_input(params[k], requested_dtype=torch.float32, requested_dims=2,
+                                                           batch_size=batch_size)
 
         parsed_params['freq_c'] = parsed_params['freq_c'] * active_signal
         active_and_fm_active = torch.mul(fm_active_signal, active_signal)

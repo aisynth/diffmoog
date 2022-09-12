@@ -164,7 +164,7 @@ class SynthModular(torch.nn.Module):
         cell = self.synth_matrix[index[0]][index[1]]
         if parameters is not None and (isinstance(parameters, dict) or isinstance(parameters, list)):
             for key in parameters:
-                if key not in ['output', 'None'] and key not in self.synth_structure.modular_synth_params[cell.operation]:
+                if key not in ['output'] and key not in self.synth_structure.modular_synth_params[cell.operation]:
                     raise ValueError("Illegal parameter for the provided operation.")
             cell.parameters = parameters
         else:

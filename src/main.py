@@ -27,7 +27,7 @@ def run(run_args):
     exp_name = run_args.experiment
     dataset_name = run_args.dataset
 
-    cfg = configure_experiment(exp_name, dataset_name, run_args.config)
+    cfg = configure_experiment(exp_name, dataset_name, run_args.config, run_args.debug)
 
     datamodule = ModularSynthDataModule(cfg.data_dir, cfg.model.batch_size, cfg.model.num_workers)
     datamodule.setup()
@@ -52,22 +52,23 @@ def run(run_args):
     trainer.fit(lit_module, datamodule=datamodule)
 
 
-def configure_experiment(exp_name: str, dataset_name: str, config_name: str):
+def configure_experiment(exp_name: str, dataset_name: str, config_name: str, debug: bool = False):
 
     exp_dir = os.path.join(EXP_ROOT, exp_name, '')
     data_dir = os.path.join(DATA_ROOT, dataset_name, '')
     config_path = os.path.join(root, 'configs', config_name)
 
     if os.path.isdir(exp_dir):
-        overwrite = input(colored(f"Folder {exp_dir} already exists. Overwrite previous experiment (Y/N)?"
-                                  f"\n\tThis will delete all files related to the previous run!",
-                                  'yellow'))
-        if overwrite.lower() != 'y':
-            print('Exiting...')
-            exit()
-        else:
-            print("Deleting previous experiment...")
-            rmtree(exp_dir)
+        if not debug:
+            overwrite = input(colored(f"Folder {exp_dir} already exists. Overwrite previous experiment (Y/N)?"
+                                      f"\n\tThis will delete all files related to the previous run!",
+                                      'yellow'))
+            if overwrite.lower() != 'y':
+                print('Exiting...')
+                exit()
+
+        print("Deleting previous experiment...")
+        rmtree(exp_dir)
 
     cfg = OmegaConf.load(config_path)
 
@@ -96,6 +97,8 @@ if __name__ == "__main__":
                         help='Dataset name')
     parser.add_argument('-c', '--config', required=True, type=str,
                         help='configuration file path')
+    parser.add_argument('-de', '--debug', required=False, action='store_true',
+                        help='run in debug mode', default=False)
 
     args = parser.parse_args()
     run(args)
