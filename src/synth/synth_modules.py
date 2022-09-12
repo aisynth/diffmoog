@@ -498,25 +498,41 @@ class FilterShaper(ADSR):
             hop_length = int(win_length / 2)
             spectrogram_transform = Spectrogram(n_fft=n_fft, win_length=win_length,
                                                 hop_length=hop_length, power=2.0).to(self.device)
-            griffin_lim = GriffinLim(n_fft=n_fft, win_length=win_length, hop_length=hop_length)
+            griffin_lim = GriffinLim(n_fft=n_fft, win_length=win_length, hop_length=hop_length).to(self.device)
             signal_spectrogram = spectrogram_transform(input_signal)
             frames = input_signal.unfold(0, win_length, hop_length)
             frequency_max_deviation = (max_frequency - cutoff_freq) * intensity
 
+            eps = 1e-5
+            filter_linear_slope = -3
+            filter_slope_curvature = 10
             masking_list = []
+            x = torch.linspace(0, 1.0, bin_amount, device=self.device)
+
             for i in range(len(frames) + 1):
                 current_cutoff = cutoff_freq + (frequency_max_deviation * envelope[i * hop_length])
                 # todo: consider delete clamp
                 current_cutoff_clapmed = torch.clamp(current_cutoff, min=0, max=max_frequency)
-                cutoff_bin = torch.floor((bin_amount/max_frequency) * current_cutoff_clapmed)
-                # todo: get rid of .item(), make differentiable
-                masking_vector = torch.cat((torch.ones(int(cutoff_bin.item())), torch.zeros(bin_amount - int(cutoff_bin.item()))))
+                # cutoff_bin = torch.floor((bin_amount/max_frequency) * current_cutoff_clapmed)
+                cutoff_bin = (bin_amount/max_frequency) * current_cutoff_clapmed
+                relative_cutoff_bin = cutoff_bin / bin_amount
+                ''' 
+                First, the masking vector is a ramp from 0 to -1, starting at the cutoff point
+                (Similar to decay implementation in ADSR). Second, we add 1 to make it in range [1, 0],
+                and powered by filter_slope_curvature so the slope is sharper near 1 values and shallow near 0 values,
+                to approximate linear slope in a typical filter diagram plotted in log scale 
+                (resulting approximation of arbitrary Db per decade attenuation 
+                by tuning filter_linear_slope and filter_slope_curvature)
+                '''
+                masking_vector = (x - relative_cutoff_bin) * filter_linear_slope
+                masking_vector = torch.pow(torch.clamp(masking_vector, max=0, min=-1) + 1, filter_slope_curvature)
+                # masking_vector = torch.cat((torch.ones(int(cutoff_bin.item())), torch.zeros(bin_amount - int(cutoff_bin.item()))))
                 masking_list.append(masking_vector)
+
+            masking_list.append(masking_vector) # add again last filter column to match spectrogram size
             masking_filter = torch.stack(masking_list, dim=1)
 
-            fake_to_complete_spec_size = torch.ones(257, 1)
-            final_filter = torch.cat((masking_filter, fake_to_complete_spec_size), dim=1)
-            filtered_spectrogram = signal_spectrogram * final_filter
+            filtered_spectrogram = torch.mul(signal_spectrogram, masking_filter)
             filtered_signal = griffin_lim(filtered_spectrogram)
 
             return filtered_signal

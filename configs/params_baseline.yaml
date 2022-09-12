@@ -1,7 +1,7 @@
 model:
   arch: simple
   backbone: resnet
-  preset: MODULAR
+  preset: MODULAR_NEW
   num_workers: 0
   batch_size: 128
   num_epochs: 150
@@ -27,7 +27,7 @@ loss:
   chain_loss_weight: 1.0
 
 synth:
-  preset: MODULAR
+  preset: MODULAR_NEW
   transform: MEL
   signal_duration: 4
   note_off_time: 3.0
