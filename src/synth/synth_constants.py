@@ -21,6 +21,8 @@ class SynthConstants:
     max_amp: float = 1
     min_mod_index: float = 0.01
     max_mod_index: float = 0.1
+    min_fm_lfo_mod_index: float = 0.0001
+    max_fm_lfo_mod_index: float = 0.01
     min_lfo_freq: float = 0.5
     max_lfo_freq: float = 20
     min_filter_freq: float = 100
@@ -36,6 +38,7 @@ class SynthConstants:
     non_active_freq_default = 0
     non_active_amp_default = 0
     non_active_mod_index_default = 0
+    non_active_fm_lfo_mod_index_default = 0
     non_active_tremolo_amount_default = 0
     non_active_filter_intensity_default = 0
 
@@ -57,7 +60,7 @@ class SynthConstants:
                             'lfo_sine': ['active', 'freq'],
                             'lfo_non_sine': ['freq', 'waveform'],
                             'lfo': ['freq', 'waveform'],
-                            'fm_lfo': ['active', 'fm_active', 'freq_c', 'waveform', 'mod_index'],
+                            'fm_lfo': ['active', 'fm_active', 'freq_c', 'waveform', 'fm_lfo_mod_index'],
                             'fm': ['freq_c', 'waveform', 'mod_index'],
                             'fm_sine': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
                             'fm_square': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
@@ -119,6 +122,10 @@ class SynthConstants:
                           'values': (self.min_mod_index, self.max_mod_index),
                           'non_active_default': self.non_active_mod_index_default,
                           'activity_signal': 'fm_active'},
+            'fm_lfo_mod_index': {'type': 'uniform',
+                                 'values': (self.min_fm_lfo_mod_index, self.max_fm_lfo_mod_index),
+                                 'non_active_default': self.non_active_fm_lfo_mod_index_default,
+                                 'activity_signal': 'fm_active'},
             'filter_freq': {'type': 'uniform',
                             'values': (self.min_filter_freq, self.max_filter_freq)},
             'filter_type': {'type': 'choice',
@@ -143,7 +150,7 @@ class SynthConstants:
                              'waveform': sampling_configurations['non_sine_waveform']},
             'lfo': {'freq': sampling_configurations['lfo_freq'], 'waveform': sampling_configurations['waveform']},
             'fm_lfo': {'freq_c': sampling_configurations['lfo_freq'], 'waveform': sampling_configurations['waveform'],
-                       'mod_index': sampling_configurations['mod_index']},
+                       'fm_lfo_mod_index': sampling_configurations['fm_lfo_mod_index']},
             'fm': {'freq_c': sampling_configurations['fm_freq'], 'waveform': sampling_configurations['waveform'],
                    'mod_index': sampling_configurations['mod_index']},
             'fm_sine': {'amp_c': sampling_configurations['uniform_amp'], 'freq_c': sampling_configurations['fm_freq'],

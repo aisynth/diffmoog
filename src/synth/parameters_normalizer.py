@@ -20,6 +20,12 @@ class Normalizer:
                                                      original_max_val=synth_structure.max_mod_index,
                                                      clip=True)
 
+        self.fm_lfo_mod_index_normalizer = MinMaxNormaliser(target_min_val=0,
+                                                            target_max_val=1,
+                                                            original_min_val=synth_structure.min_fm_lfo_mod_index,
+                                                            original_max_val=synth_structure.max_fm_lfo_mod_index,
+                                                            clip=True)
+
         self.lfo_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                     target_max_val=1,
                                                     original_min_val=synth_structure.min_lfo_freq,

@@ -299,6 +299,93 @@ class FMOscillator(Oscillator):
 
         return wave_tensors
 
+# todo: remove code duplication (FMLfoOscillator is the same as FMOscillator, just with fm_lfo_mod_index instead of mod_index
+class FMLfoOscillator(Oscillator):
+
+    def __init__(self, name: str, device: str, synth_structure: SynthConstants, waveform: str = None):
+
+        if waveform is not None:
+            assert waveform in ['sine', 'square', 'saw'], f'Unexpected waveform {waveform} given to FMOscillator'
+
+        super().__init__(name=name, device=device, synth_structure=synth_structure)
+
+        self.waveform = waveform
+
+    def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
+                      sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
+
+        """
+        Batch oscillator with FM modulation
+
+        Creates an oscillator and modulates its frequency by a given modulator
+        Args come as vector of values, with length of the numer of sounds to create
+        params:
+            self: Self object
+            amp_c: Vector of amplitude in range [0, 1]
+            freq_c: Vector of Frequencies in range [0, 22000]
+            waveform: Vector of waveform with type from [sine, square, triangle, sawtooth]
+            mod_index: Vector of modulation indexes, which affects the amount of modulation
+            modulator: Vector of modulator signals, to affect carrier frequency
+
+        Returns:
+            A torch with the constructed FM signal
+
+        Raises:
+            ValueError: Provided variables are out of range
+        """
+
+        self._verify_input_params(params)
+
+        active_signal = self._process_active_signal(params.get('active', None), batch_size)
+        fm_active_signal = self._process_active_signal(params.get('fm_active', None), batch_size)
+
+        parsed_params = {}
+        for k in ['amp_c', 'freq_c', 'fm_lfo_mod_index']:
+            if k == 'amp_c' and k not in params:
+                self._amp_warning()
+                parsed_params[k] = torch.ones((batch_size, 1), dtype=torch.float32, device=self.device)
+            else:
+                parsed_params[k] = self._standardize_input(params[k], requested_dtype=torch.float32, requested_dims=2,
+                                                           batch_size=batch_size)
+
+        parsed_params['freq_c'] = parsed_params['freq_c'] * active_signal
+        active_and_fm_active = torch.mul(fm_active_signal, active_signal)
+        parsed_params['fm_lfo_mod_index'] = parsed_params['fm_lfo_mod_index'] * active_and_fm_active
+        modulator_signal = modulator_signal * active_and_fm_active
+
+        t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True,
+                           device=self.device)
+        wave_tensors = self._generate_modulated_wave_tensors(t, modulator=modulator_signal, **parsed_params)
+
+        if self.waveform is not None:
+            return wave_tensors[self.waveform]
+
+        waves_tensor = torch.stack([wave_tensors['sine'], wave_tensors['square'], wave_tensors['saw']])
+        oscillator_tensor = self._mix_waveforms(waves_tensor, params['waveform'], self.wave_type_indices)
+
+        return oscillator_tensor
+
+    def _generate_modulated_wave_tensors(self, t, amp_c, freq_c, fm_lfo_mod_index, modulator):
+
+        wave_tensors = {}
+
+        if self.waveform == 'sine' or self.waveform is None:
+            fm_sine_wave = amp_c * torch.sin(TWO_PI * freq_c * t + fm_lfo_mod_index * torch.cumsum(modulator, dim=1))
+            wave_tensors['sine'] = fm_sine_wave
+
+        if self.waveform == 'square' or self.waveform is None:
+            fm_square_wave = amp_c * torch.sign(torch.sin(TWO_PI * freq_c * t + fm_lfo_mod_index *
+                                                          torch.cumsum(modulator, dim=1)))
+            wave_tensors['square'] = fm_square_wave
+
+        if self.waveform == 'saw' or self.waveform is None:
+            fm_sawtooth_wave = 2 * (t * freq_c - torch.floor(0.5 + t * freq_c))
+            fm_sawtooth_wave = (((fm_sawtooth_wave + 1) / 2) + fm_lfo_mod_index * torch.cumsum(modulator, dim=1) / TWO_PI) % 1
+            fm_sawtooth_wave = amp_c * (fm_sawtooth_wave * 2 - 1)
+            wave_tensors['saw'] = fm_sawtooth_wave
+
+        return wave_tensors
+
 
 class ADSR(SynthModule):
     def __init__(self, name: str, device: str, synth_structure: SynthConstants):
@@ -513,25 +600,41 @@ class FilterShaper(ADSR):
             hop_length = int(win_length / 2)
             spectrogram_transform = Spectrogram(n_fft=n_fft, win_length=win_length,
                                                 hop_length=hop_length, power=2.0).to(self.device)
-            griffin_lim = GriffinLim(n_fft=n_fft, win_length=win_length, hop_length=hop_length)
+            griffin_lim = GriffinLim(n_fft=n_fft, win_length=win_length, hop_length=hop_length).to(self.device)
             signal_spectrogram = spectrogram_transform(input_signal)
             frames = input_signal.unfold(0, win_length, hop_length)
             frequency_max_deviation = (max_frequency - cutoff_freq) * intensity
 
+            eps = 1e-5
+            filter_linear_slope = -3
+            filter_slope_curvature = 10
             masking_list = []
+            x = torch.linspace(0, 1.0, bin_amount, device=self.device)
+
             for i in range(len(frames) + 1):
                 current_cutoff = cutoff_freq + (frequency_max_deviation * envelope[i * hop_length])
                 # todo: consider delete clamp
                 current_cutoff_clapmed = torch.clamp(current_cutoff, min=0, max=max_frequency)
-                cutoff_bin = torch.floor((bin_amount/max_frequency) * current_cutoff_clapmed)
-                # todo: get rid of .item(), make differentiable
-                masking_vector = torch.cat((torch.ones(int(cutoff_bin.item())), torch.zeros(bin_amount - int(cutoff_bin.item()))))
+                # cutoff_bin = torch.floor((bin_amount/max_frequency) * current_cutoff_clapmed)
+                cutoff_bin = (bin_amount/max_frequency) * current_cutoff_clapmed
+                relative_cutoff_bin = cutoff_bin / bin_amount
+                ''' 
+                First, the masking vector is a ramp from 0 to -1, starting at the cutoff point
+                (Similar to decay implementation in ADSR). Second, we add 1 to make it in range [1, 0],
+                and powered by filter_slope_curvature so the slope is sharper near 1 values and shallow near 0 values,
+                to approximate linear slope in a typical filter diagram plotted in log scale 
+                (resulting approximation of arbitrary Db per decade attenuation 
+                by tuning filter_linear_slope and filter_slope_curvature)
+                '''
+                masking_vector = (x - relative_cutoff_bin) * filter_linear_slope
+                masking_vector = torch.pow(torch.clamp(masking_vector, max=0, min=-1) + 1, filter_slope_curvature)
+                # masking_vector = torch.cat((torch.ones(int(cutoff_bin.item())), torch.zeros(bin_amount - int(cutoff_bin.item()))))
                 masking_list.append(masking_vector)
+
+            masking_list.append(masking_vector) # add again last filter column to match spectrogram size
             masking_filter = torch.stack(masking_list, dim=1)
 
-            fake_to_complete_spec_size = torch.ones(257, 1)
-            final_filter = torch.cat((masking_filter, fake_to_complete_spec_size), dim=1)
-            filtered_spectrogram = signal_spectrogram * final_filter
+            filtered_spectrogram = torch.mul(signal_spectrogram, masking_filter)
             filtered_signal = griffin_lim(filtered_spectrogram)
 
             return filtered_signal
@@ -641,7 +744,7 @@ def get_synth_module(op_name: str, device: str, synth_structure: SynthConstants)
         waveform = op_name.split('_')[1]
         return Oscillator(op_name, device, synth_structure, waveform)
     elif op_name in ['fm', 'fm_lfo']:
-        return FMOscillator(op_name, device, synth_structure)
+        return FMLfoOscillator(op_name, device, synth_structure)
     elif op_name in ['fm_sine', 'fm_square', 'fm_saw']:
         waveform = op_name.split('_')[1]
         return FMOscillator(op_name, device, synth_structure, waveform)
