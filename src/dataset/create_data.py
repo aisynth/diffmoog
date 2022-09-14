@@ -55,8 +55,8 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
     dataset_parameters = []
 
     # Create data
-    num_batches = size // batch_size
-    for batch_idx in range(num_batches):
+    samples_created = 0
+    while samples_created < size:
 
         # Generate batch
         sampled_parameters = params_sampler.generate_activations_and_chains(synth_obj.synth_matrix, signal_duration,
@@ -67,9 +67,12 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
 
         # Save samples
         for j in range(batch_size):
-            sample_idx = (batch_size * batch_idx) + j
+            sample_idx = samples_created
 
             sample_params = extract_single_sample_params(sampled_parameters, j)
+            if not _verify_activity(sample_params):
+                continue
+
             dataset_parameters.append(sample_params)
 
             file_name = f"sound_{sample_idx}"
@@ -87,9 +90,24 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
             scipy.io.wavfile.write(audio_path, synth_structure.sample_rate, c_audio)
             print(f"Generated {file_name}")
 
+            samples_created += 1
+            if samples_created >= size:
+                break
+
     parameters_dataframe = pd.DataFrame(dataset_parameters)
     parameters_dataframe.to_pickle(str(parameters_pickle_path))
     parameters_dataframe.to_csv(parameters_csv_path)
+
+
+def _verify_activity(sample_params_dict):
+
+    sine_osc_activeness = sample_params_dict[(0, 2)]['parameters']['active']
+    saw_osc_activeness = sample_params_dict[(1, 2)]['parameters']['active']
+    square_osc_activeness = sample_params_dict[(2, 2)]['parameters']['active']
+
+    has_active_osc = sine_osc_activeness or square_osc_activeness or saw_osc_activeness
+
+    return has_active_osc
 
 
 def extract_single_sample_params(params_dict, idx):

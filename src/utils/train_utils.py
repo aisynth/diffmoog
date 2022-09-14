@@ -106,15 +106,18 @@ def log_dict_recursive(tag: str, data_to_log, writer: TensorBoardLogger, step: i
     return
 
 
-def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: Sequence[str]) -> dict:
+def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: Sequence[str]) -> (dict, dict):
 
-    all_diffs = {}
+    all_diffs, active_only_diffs = {}, {}
     predicted_params_np = to_numpy_recursive(predicted_params)
     target_params_np = to_numpy_recursive(target_params)
 
     for op_index, pred_op_dict in predicted_params_np.items():
         all_diffs[op_index] = {}
+        active_only_diffs[op_index] = {}
         target_op_dict = target_params_np[op_index]
+        op_config = synth_structure.param_configs[target_op_dict['operation'].squeeze()[0]]
+
         for param_name, pred_vals in pred_op_dict['parameters'].items():
 
             if ignore_params is not None and param_name in ignore_params:
@@ -141,8 +144,8 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
                     filter_type_idx = [synth_structure.filter_type_dict[ft] for ft in target_vals.squeeze()]
                     diff = [1 - v[idx] for idx, v in zip(filter_type_idx, pred_vals)]
                     diff = np.asarray(diff).squeeze()
-            elif param_name in ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']:
-                continue
+            # elif param_name in ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']:
+            #     continue
             elif param_name == 'envelope':
                 diff = [np.linalg.norm(pred_vals[k] - target_vals[k]) for k in range(pred_vals.shape[0])]
             elif param_name in ['active', 'fm_active']:
@@ -160,9 +163,20 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
             else:
                 diff = np.abs(target_vals.squeeze() - pred_vals.squeeze())
 
+            if param_name not in ['active', 'fm_active'] and pred_op_dict['operation'] not in ['env_adsr']:
+                if op_config[param_name].get('activity_signal', None) == 'fm_active':
+                    activity_signal = target_op_dict['parameters']['fm_active']
+                else:
+                    activity_signal = target_op_dict['parameters'].get('active', None)
+
+                if activity_signal is not None:
+                    active_only_diffs[op_index][param_name] = [v for i, v in enumerate(diff) if activity_signal[i]]
+                else:
+                    active_only_diffs[op_index][param_name] = diff
+
             all_diffs[op_index][param_name] = diff
 
-    return all_diffs
+    return all_diffs, active_only_diffs
 
 
 def get_activation(name, activations_dict: dict):

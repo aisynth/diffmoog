@@ -70,7 +70,7 @@ class SynthConstants:
                             'env_adsr': ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t'],
                             'amplitude_shape': ['envelope', 'attack_t', 'decay_t', 'sustain_t', 'sustain_level',
                                                 'release_t'],
-                            'tremolo': ['amount', 'active']}
+                            'tremolo': ['amount', 'active', 'fm_active']}
 
     def __post_init__(self):
         self.wave_type_dic_inv = {v: k for k, v in self.wave_type_dict.items()}
@@ -138,14 +138,12 @@ class SynthConstants:
         op_types = {
             'osc': {'amp': sampling_configurations['uniform_amp'], 'freq': sampling_configurations['osc_freq'],
                     'waveform': sampling_configurations['waveform']},
-            'lfo_sine': {'freq': sampling_configurations['lfo_freq'], 'amp': sampling_configurations['constant_amp']},
-            'lfo_non_sine': {'freq': sampling_configurations['lfo_freq'], 'amp': sampling_configurations['constant_amp'],
+            'lfo_sine': {'freq': sampling_configurations['lfo_freq']},
+            'lfo_non_sine': {'freq': sampling_configurations['lfo_freq'],
                              'waveform': sampling_configurations['non_sine_waveform']},
-            'lfo': {'freq': sampling_configurations['lfo_freq'], 'waveform': sampling_configurations['waveform'],
-                    'amp': sampling_configurations['constant_amp']},
+            'lfo': {'freq': sampling_configurations['lfo_freq'], 'waveform': sampling_configurations['waveform']},
             'fm_lfo': {'freq_c': sampling_configurations['lfo_freq'], 'waveform': sampling_configurations['waveform'],
-                       'mod_index': sampling_configurations['mod_index'],
-                       'amp_c': sampling_configurations['constant_amp']},
+                       'mod_index': sampling_configurations['mod_index']},
             'fm': {'freq_c': sampling_configurations['fm_freq'], 'waveform': sampling_configurations['waveform'],
                    'mod_index': sampling_configurations['mod_index']},
             'fm_sine': {'amp_c': sampling_configurations['uniform_amp'], 'freq_c': sampling_configurations['fm_freq'],
