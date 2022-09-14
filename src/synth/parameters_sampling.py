@@ -1,5 +1,6 @@
 import random
 from typing import List
+from itertools import chain, combinations
 
 import numpy as np
 
@@ -37,7 +38,7 @@ class ParametersSampler:
                 if cell.control_input is not None:
                     assert len(cell.control_input) == 1
                     control_input_cell = synth_matrix[cell.control_input[0][0]][cell.control_input[0][1]]
-                    has_control_input = [tuple(cell.index) == tuple(control_cell_output) for control_cell_output
+                    has_control_input = [tuple(cell.index) in control_cell_output for control_cell_output
                                          in control_input_cell.parameters['output']]
                     cell_params['fm_active'] = has_control_input
                 else:
@@ -54,8 +55,14 @@ class ParametersSampler:
                     is_active = [True for _ in range(num_sounds_)]
 
                 if cell.switch_outputs is not None:
-                    selected_outputs = rng.choice(cell.outputs, size=num_sounds_, axis=0).tolist()
-                    selected_outputs = [selected_outputs[k] if act else [-1, -1] for k, act in enumerate(is_active)]
+                    if cell.allow_multiple_outputs:
+                        outputs_powerset = self.powerset(cell.outputs)
+                        selected_outputs = rng.choice(outputs_powerset, size=num_sounds_, axis=0).tolist()
+                    else:
+                        selected_outputs = rng.choice(cell.outputs, size=num_sounds_, axis=0).tolist()
+                        selected_outputs = [[tuple(x)] for x in selected_outputs]
+
+                    selected_outputs = [selected_outputs[k] if act else [(-1, -1)] for k, act in enumerate(is_active)]
                     cell_params['output'] = selected_outputs
 
                 if operation in ['env_adsr', 'amplitude_shape', 'lowpass_filter_adsr']:
@@ -161,3 +168,10 @@ class ParametersSampler:
         idx = np.searchsorted(synth_structure.osc_freq_list, base_freqs, side="left")
         idx = idx - (np.abs(base_freqs - osc_freq_list[idx - 1]) < np.abs(base_freqs - osc_freq_list[idx]))
         return osc_freq_list[idx]
+
+    @staticmethod
+    def powerset(iterable):
+        "powerset([1,2,3]) --> (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+        s = list(iterable)
+        powerset = chain.from_iterable(combinations(s, r) for r in range(1, len(s) + 1))
+        return list(powerset)

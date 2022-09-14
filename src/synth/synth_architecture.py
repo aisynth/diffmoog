@@ -20,6 +20,7 @@ class SynthModularCell:
                  signal=None,
                  outputs=None,
                  switch_outputs=None,
+                 allow_multiple=None,
                  active_prob=None,
                  default_connection=False,
                  synth_structure: SynthConstants = None,
@@ -36,11 +37,13 @@ class SynthModularCell:
             self.control_input = None
             self.outputs = None
             self.switch_outputs = None
+            self.allow_multiple_outputs = None
         else:
             self.audio_input = audio_input
             self.control_input = control_input
             self.outputs = outputs
             self.switch_outputs = switch_outputs
+            self.allow_multiple_outputs = allow_multiple
 
         self.operation = operation
         self.parameters = parameters

@@ -26,20 +26,20 @@ BASIC_FLOW = [
 ]
 
 MODULAR = [
-    {'index': (0, 0), 'operation': 'lfo_sine', 'audio_input': None, 'control_input': None, 'outputs': [[0, 6], [1, 1]], 'switch_outputs': True, 'active_prob': 0.75},
-    {'index': (1, 1), 'operation': 'fm_lfo', 'audio_input': None, 'control_input': [[0, 0]], 'outputs': [[0, 2], [1, 2], [2, 2]], 'switch_outputs': True, 'active_prob': 0.75},
-    {'index': (0, 2), 'operation': 'fm_sine', 'audio_input': None, 'control_input': [[1, 1]], 'outputs': [[0, 3]]},
-    {'index': (1, 2), 'operation': 'fm_saw', 'audio_input': None, 'control_input': [[1, 1]], 'outputs': [[0, 3]]},
-    {'index': (2, 2), 'operation': 'fm_square', 'audio_input': None, 'control_input': [[1, 1]], 'outputs': [[0, 3]]},
+    {'index': (0, 0), 'operation': 'lfo_sine', 'audio_input': None, 'control_input': None, 'outputs': [(0, 6), (1, 1)], 'switch_outputs': True, 'active_prob': 0.25},
+    {'index': (1, 1), 'operation': 'fm_lfo', 'audio_input': None, 'control_input': [[0, 0]], 'outputs': [(0, 2), (1, 2), (2, 2)], 'switch_outputs': True, 'allow_multiple': False, 'active_prob': 0.75},
+    {'index': (0, 2), 'operation': 'fm_sine', 'audio_input': None, 'control_input': [[1, 1]], 'outputs': [(0, 3)]},
+    {'index': (1, 2), 'operation': 'fm_saw', 'audio_input': None, 'control_input': [[1, 1]], 'outputs': [(0, 3)]},
+    {'index': (2, 2), 'operation': 'fm_square', 'audio_input': None, 'control_input': [[1, 1]], 'outputs': [(0, 3)]},
     {'index': (0, 1), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
     {'index': (1, 0), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
     {'index': (2, 0), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
     {'index': (2, 1), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
     {'index': (1, 3), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
     {'index': (2, 3), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
-    {'index': (0, 3), 'operation': 'mix', 'audio_input': [[0, 2], [1, 2], [2, 2]], 'control_input': None, 'outputs': [[0, 4]]},
-    {'index': (0, 4), 'operation': 'env_adsr', 'audio_input': [[0, 3]], 'control_input': None, 'outputs': [[0, 5]]},
-    {'index': (0, 5), 'operation': 'lowpass_filter', 'audio_input': [[0, 4]], 'control_input': None, 'outputs': [[0, 6]]},
+    {'index': (0, 3), 'operation': 'mix', 'audio_input': [[0, 2], [1, 2], [2, 2]], 'control_input': None, 'outputs': [(0, 4)]},
+    {'index': (0, 4), 'operation': 'env_adsr', 'audio_input': [[0, 3]], 'control_input': None, 'outputs': [(0, 5)]},
+    {'index': (0, 5), 'operation': 'lowpass_filter', 'audio_input': [[0, 4]], 'control_input': None, 'outputs': [(0, 6)]},
     {'index': (0, 6), 'operation': 'tremolo', 'audio_input': [[0, 5]], 'control_input': [[0, 0]], 'outputs': None, 'active_prob': 0}
 ]
 

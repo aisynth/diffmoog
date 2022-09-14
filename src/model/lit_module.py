@@ -55,8 +55,10 @@ class LitModularSynth(LightningModule):
         self.epoch_param_diffs = defaultdict(list)
         self.epoch_vals_raw = defaultdict(list)
         self.epoch_vals_normalized = defaultdict(list)
+        self.epoch_param_active_diffs = defaultdict(list)
 
         self.val_epoch_param_diffs = defaultdict(list)
+        self.val_epoch_param_active_diffs = defaultdict(list)
 
         self.tb_logger = None
 
@@ -119,14 +121,15 @@ class LitModularSynth(LightningModule):
                 self._log_recursive(per_op_weighted_loss, f'final_spec_losses_weighted')
 
         loss_total, weighted_params_loss, weighted_spec_loss = self._balance_losses(total_params_loss, spec_loss, log)
-        param_diffs = get_param_diffs(predicted_params_full_range.copy(), target_params_full_range.copy(),
-                                      self.ignore_params)
+        param_diffs, active_only_diffs = get_param_diffs(predicted_params_full_range.copy(),
+                                                         target_params_full_range.copy(), self.ignore_params)
 
         step_losses = {'raw_params_loss': total_params_loss, 'raw_spec_loss': spec_loss,
                        'weighted_params_loss': weighted_params_loss, 'weighted_spec_loss': weighted_spec_loss}
 
         step_artifacts = {'raw_predicted_parameters': predicted_params_unit_range,
-                          'full_range_predicted_parameters': predicted_params_full_range, 'param_diffs': param_diffs}
+                          'full_range_predicted_parameters': predicted_params_full_range, 'param_diffs': param_diffs,
+                          'active_only_diffs': active_only_diffs}
 
         if return_metrics:
             step_metrics = self._calculate_audio_metrics(target_signal, pred_final_signal)
@@ -171,6 +174,7 @@ class LitModularSynth(LightningModule):
         self._accumulate_batch_values(self.epoch_vals_raw, step_artifacts['raw_predicted_parameters'])
         self._accumulate_batch_values(self.epoch_vals_normalized, step_artifacts['full_range_predicted_parameters'])
         self._accumulate_batch_values(self.epoch_param_diffs, step_artifacts['param_diffs'])
+        self._accumulate_batch_values(self.epoch_param_active_diffs, step_artifacts['active_only_diffs'])
 
         return loss
 
@@ -193,6 +197,7 @@ class LitModularSynth(LightningModule):
 
         if dataloader_idx == 0:
             self._accumulate_batch_values(self.val_epoch_param_diffs, step_artifacts['param_diffs'])
+            self._accumulate_batch_values(self.val_epoch_param_active_diffs, step_artifacts['active_only_diffs'])
 
         return loss
 
@@ -209,18 +214,22 @@ class LitModularSynth(LightningModule):
 
     def on_train_epoch_end(self) -> None:
         self._log_recursive(self.epoch_param_diffs, 'param_diff')
+        self._log_recursive(self.epoch_param_active_diffs, 'active_param_diff')
         self._log_recursive(self.epoch_vals_raw, 'param_values_raw')
         self._log_recursive(self.epoch_vals_normalized, 'param_values_normalized')
 
         self.epoch_param_diffs = defaultdict(list)
         self.epoch_vals_raw = defaultdict(list)
         self.epoch_vals_normalized = defaultdict(list)
+        self.epoch_param_active_diffs = defaultdict(list)
 
         return
 
     def on_validation_epoch_end(self) -> None:
         self._log_recursive(self.val_epoch_param_diffs, 'validation_param_diff')
+        self._log_recursive(self.val_epoch_param_active_diffs, 'validation_active_param_diff')
         self.val_epoch_param_diffs = defaultdict(list)
+        self.val_epoch_param_active_diffs = defaultdict(list)
 
     def _calculate_spectrogram_chain_loss(self, target_signals_through_chain: dict, pred_signals_through_chain: dict,
                                           log=False):

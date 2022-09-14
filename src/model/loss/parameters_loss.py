@@ -68,19 +68,19 @@ class ParametersLoss(nn.Module):
                 else:
                     pred = predicted_parameters[param].squeeze()
 
-                if param not in ['active', 'fm_active'] and operation not in ['env_adsr']:
-                    if op_config[param].get('activity_signal', None) == 'fm_active':
-                        activity_signal = target_parameters['fm_active']
-                    elif 'active' in target_parameters:
-                        activity_signal = target_parameters['active']
-                    else:
-                        activity_signal = None
-
-                    if activity_signal is not None:
-                        if pred.dim() > 1:
-                            pred = pred * activity_signal.long().squeeze().unsqueeze(-1)
-                        else:
-                            pred = pred * activity_signal.long().squeeze()
+                # if param not in ['active', 'fm_active'] and operation not in ['env_adsr']:
+                #     if op_config[param].get('activity_signal', None) == 'fm_active':
+                #         activity_signal = target_parameters['fm_active']
+                #     elif 'active' in target_parameters:
+                #         activity_signal = target_parameters['active']
+                #     else:
+                #         activity_signal = None
+                #
+                #     if activity_signal is not None:
+                #         if pred.dim() > 1:
+                #             pred = pred * activity_signal.long().squeeze().unsqueeze(-1)
+                #         else:
+                #             pred = pred * activity_signal.long().squeeze()
 
                 if target.dim() > 1:
                     target = target.squeeze(dim=0)
