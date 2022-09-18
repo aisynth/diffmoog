@@ -164,17 +164,21 @@ class LitModularSynth(LightningModule):
     def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
 
         if batch_idx == 0:
-            self._log_sounds_batch(batch[0], batch[1], f'samples_train')
+            target_params = batch[1] if len(batch) == 3 else None
+            self._log_sounds_batch(batch[0], target_params, f'samples_train')
 
-        loss, step_losses, step_artifacts = self.in_domain_step(batch, log=True)
+        if self.cfg.loss.in_domain_epochs < self.current_epoch:
+            assert len(batch) == 2, "Tried to run OOD step on in domain batch"
+            loss, step_losses, step_artifacts = self.out_of_domain_step(batch)
+        else:
+            loss, step_losses, step_artifacts = self.in_domain_step(batch, log=True)
+            self._accumulate_batch_values(self.epoch_param_diffs, step_artifacts['param_diffs'])
+            self._accumulate_batch_values(self.epoch_param_active_diffs, step_artifacts['active_only_diffs'])
 
         self._log_recursive(step_losses, f'train_losses')
-        # self._log_recursive(step_metrics, f'train_metrics')
 
         self._accumulate_batch_values(self.epoch_vals_raw, step_artifacts['raw_predicted_parameters'])
         self._accumulate_batch_values(self.epoch_vals_normalized, step_artifacts['full_range_predicted_parameters'])
-        self._accumulate_batch_values(self.epoch_param_diffs, step_artifacts['param_diffs'])
-        self._accumulate_batch_values(self.epoch_param_active_diffs, step_artifacts['active_only_diffs'])
 
         return loss
 

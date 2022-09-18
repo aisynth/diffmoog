@@ -47,7 +47,8 @@ def run(run_args):
                       auto_select_gpus=True,
                       devices=[run_args.gpu_index],
                       accelerator="gpu",
-                      detect_anomaly=True)
+                      detect_anomaly=True,
+                      reload_dataloaders_every_n_epochs=1)
 
     trainer.fit(lit_module, datamodule=datamodule)
 

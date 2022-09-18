@@ -1,7 +1,7 @@
 model:
   arch: simple
   backbone: resnet
-  preset: MODULAR
+  preset: MODULAR_NEW
   num_workers: 4
   batch_size: 100
   num_epochs: 400
@@ -9,8 +9,7 @@ model:
   optimizer:
     base_lr: 3e-4
     optimizer: adam
-    scheduler: cosine
-
+    scheduler: constant
 
 loss:
   spec_loss_type: SPECTROGRAM
@@ -20,16 +19,15 @@ loss:
   parameters_loss_weight: 0.1
   spectrogram_loss_weight: 0
 
-  spectrogram_loss_warmup: 3333333333333333
-  loss_switch_steps: 0
+  spectrogram_loss_warmup: 25000
+  loss_switch_steps: 5000
   min_parameters_loss_decay: 0
-  in_domain_epochs: 400
 
   use_chain_loss: true
   chain_loss_weight: 1.0
 
 synth:
-  preset: MODULAR
+  preset: MODULAR_NEW
   transform: MEL
   signal_duration: 4
   note_off_time: 3.0

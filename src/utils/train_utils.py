@@ -163,7 +163,8 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
             else:
                 diff = np.abs(target_vals.squeeze() - pred_vals.squeeze())
 
-            if param_name not in ['active', 'fm_active'] and pred_op_dict['operation'] not in ['env_adsr']:
+            if param_name not in ['active', 'fm_active'] and pred_op_dict['operation'] not in ['env_adsr',
+                                                                                               'lowpass_filter_adsr']:
                 if op_config[param_name].get('activity_signal', None) == 'fm_active':
                     activity_signal = target_op_dict['parameters']['fm_active']
                 else:
