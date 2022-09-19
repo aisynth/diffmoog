@@ -3,7 +3,7 @@ model:
   backbone: resnet
   preset: MODULAR
   num_workers: 4
-  batch_size: 100
+  batch_size: 50
   num_epochs: 200
 
   optimizer:
@@ -19,8 +19,8 @@ loss:
   parameters_loss_weight: 0.1
   spectrogram_loss_weight: 0
 
-  spectrogram_loss_warmup: 12500
-  loss_switch_steps: 37500
+  spectrogram_loss_warmup: 25000
+  loss_switch_steps: 75000
   min_parameters_loss_decay: 0
   in_domain_epochs: 200
 
