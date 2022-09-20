@@ -187,4 +187,5 @@ synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW, 'LFO': LFO, 'OSC': OSC, 'FM': FM
                       'NON_SINE_LFO': NON_SINE_LFO,
                       'SINE_LFO': SINE_LFO,
                       'MODULAR': MODULAR,
-                      'MODULAR_NEW': MODULAR_NEW}
+                      'MODULAR_NEW': MODULAR_NEW,
+                      'REDUCED': REDUCED}

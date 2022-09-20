@@ -101,9 +101,20 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
 
 def _verify_activity(sample_params_dict):
 
-    sine_osc_activeness = sample_params_dict[(0, 2)]['parameters']['active']
-    saw_osc_activeness = sample_params_dict[(1, 2)]['parameters']['active']
-    square_osc_activeness = sample_params_dict[(2, 2)]['parameters']['active']
+    if sample_params_dict.get((0, 2)):
+        sine_osc_activeness = sample_params_dict[(0, 2)]['parameters']['active']
+    else:
+        sine_osc_activeness = False
+
+    if sample_params_dict.get((1, 2)):
+        saw_osc_activeness = sample_params_dict[(1, 2)]['parameters']['active']
+    else:
+        sine_osc_activeness = False
+
+    if sample_params_dict.get((2, 2)):
+        square_osc_activeness = sample_params_dict[(2, 2)]['parameters']['active']
+    else:
+        sine_osc_activeness = False
 
     has_active_osc = sine_osc_activeness or square_osc_activeness or saw_osc_activeness
 
