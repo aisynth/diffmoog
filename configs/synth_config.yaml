@@ -17,7 +17,7 @@ loss:
   parameters_loss_type: L1
 
   parameters_loss_weight: 0.1
-  spectrogram_loss_weight: 0
+  spectrogram_loss_weight: 0.01
 
   spectrogram_loss_warmup: 25000
   loss_switch_steps: 75000

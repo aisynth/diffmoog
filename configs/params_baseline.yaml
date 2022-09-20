@@ -3,14 +3,13 @@ model:
   backbone: resnet
   preset: MODULAR
   num_workers: 4
-  batch_size: 100
+  batch_size: 50
   num_epochs: 200
 
   optimizer:
     base_lr: 3e-4
     optimizer: adam
     scheduler: constant
-
 
 loss:
   spec_loss_type: SPECTROGRAM
