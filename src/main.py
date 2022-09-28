@@ -34,7 +34,10 @@ def run(run_args):
     datamodule.setup()
 
     device = get_device(run_args.gpu_index)
+
     lit_module = LitModularSynth(cfg, device)
+    if cfg.model.get('ckpt_path', None):
+        lit_module.load_from_checkpoint(checkpoint_path=cfg.model.ckpt_path, train_cfg=cfg, device=device)
 
     callbacks = [ModelCheckpoint(cfg.ckpts_dir, monitor='nsynth_validation_metrics/lsd_value/dataloader_idx_1',
                                  save_last=True, save_top_k=3, every_n_epochs=25),
