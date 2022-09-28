@@ -15,7 +15,7 @@ class SynthConstants:
     sample_rate: int = 16000
     fixed_note_off: bool = True
 
-    semitones_max_offset: int = 24
+    semitones_max_offset: int = 36
     middle_c_freq: float = 261.6255653005985
     min_amp: float = 0.05
     max_amp: float = 1
