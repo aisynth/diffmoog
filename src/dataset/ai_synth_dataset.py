@@ -2,6 +2,7 @@ import glob
 import os
 import os.path
 import pandas as pd
+import numpy as np
 import torchaudio
 from torch.utils.data import Dataset
 
@@ -17,12 +18,14 @@ class AiSynthDataset(Dataset):
     3. All data is saved as GPU tensors
     """
 
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, noise_std: float = 0.0):
 
         params_pickle_path = os.path.join(data_dir, 'params_dataset.pkl')
         self.audio_dir = os.path.join(data_dir, 'wav_files')
 
         self.params = pd.read_pickle(params_pickle_path)
+
+        self.noise_std = noise_std
 
     def __len__(self):
         return len(self.params)
@@ -33,6 +36,10 @@ class AiSynthDataset(Dataset):
 
         signal, _ = torchaudio.load(audio_path)
         signal = signal.squeeze()
+
+        if self.noise_std > 0:
+            noise = np.random.normal(0, self.noise_std, signal)
+            signal = signal + noise
 
         return signal, params_dic, index
 

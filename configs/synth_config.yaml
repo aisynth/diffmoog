@@ -17,7 +17,7 @@ loss:
   parameters_loss_type: L1
 
   parameters_loss_weight: 0.1
-  spectrogram_loss_weight: 0.01
+  spectrogram_loss_weight: 0.001
 
   spectrogram_loss_warmup: 25000
   loss_switch_steps: 75000
@@ -32,6 +32,7 @@ synth:
   transform: MEL
   signal_duration: 4
   note_off_time: 3.0
+  added_noise_std: 0.001
 
 logging:
   n_images_to_log: 5
