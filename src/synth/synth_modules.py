@@ -264,6 +264,9 @@ class FMOscillator(Oscillator):
         parsed_params['freq_c'] = parsed_params['freq_c'] * active_signal
         active_and_fm_active = torch.mul(fm_active_signal, active_signal)
         parsed_params['mod_index'] = parsed_params['mod_index'] * active_and_fm_active
+
+        if modulator_signal is None:
+            modulator_signal = torch.zeros(int(sample_rate * signal_duration), requires_grad=False, device=self.device)
         modulator_signal = modulator_signal * active_and_fm_active
 
         t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True,

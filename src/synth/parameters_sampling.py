@@ -43,6 +43,8 @@ class ParametersSampler:
                     cell_params['fm_active'] = has_control_input
                 else:
                     has_control_input = [False for _ in range(num_sounds_)]
+                    if 'fm_active' in op_params:
+                        cell_params['fm_active'] = has_control_input
 
                 if 'active' in op_params:
                     active_prob = cell.active_prob if cell.active_prob is not None else 0.5

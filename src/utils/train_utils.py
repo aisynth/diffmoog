@@ -171,7 +171,9 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
                     activity_signal = target_op_dict['parameters'].get('active', None)
 
                 if activity_signal is not None:
-                    active_only_diffs[op_index][param_name] = [v for i, v in enumerate(diff) if activity_signal[i]]
+                    active_diff = [v for i, v in enumerate(diff) if activity_signal[i]]
+                    if len(active_diff) > 0:
+                        active_only_diffs[op_index][param_name] = active_diff
                 else:
                     active_only_diffs[op_index][param_name] = diff
 
