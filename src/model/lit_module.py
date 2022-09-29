@@ -416,6 +416,11 @@ class LitModularSynth(LightningModule):
             scheduler_config = {"scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(
                 optimizer, T_max=self.cfg.model.num_epochs),
                                 "interval": "epoch"}
+        elif optimizer_params.scheduler.lower() == 'cyclic':
+            scheduler_config = {"scheduler": torch.optim.lr_scheduler.CyclicLR(
+                optimizer, base_lr=self.cfg.model.optimizer.base_lr, max_lr=self.cfg.model.optimizer.max_lr,
+                step_size_up=self.cfg.model.optimizer.cyclic_step_size_up),
+                "interval": "step"}
         else:
             raise NotImplementedError(f"Scheduler {self.optimizer_params['scheduler']} not implemented")
 
