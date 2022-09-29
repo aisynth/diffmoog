@@ -2,15 +2,14 @@ model:
   arch: simple
   backbone: resnet
   preset: MODULAR
-  num_workers: 0
+  num_workers: 4
   batch_size: 50
   num_epochs: 200
-  ckpt_path: /home/almogelharar/almog/ai_synth/experiments/baseline_200epochs_old_filter/checkpoints/last.ckpt
 
   optimizer:
     base_lr: 3e-4
     optimizer: adam
-    scheduler: constant
+    scheduler: cosine
 
 loss:
   spec_loss_type: SPECTROGRAM

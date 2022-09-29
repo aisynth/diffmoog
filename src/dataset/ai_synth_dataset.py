@@ -38,7 +38,7 @@ class AiSynthDataset(Dataset):
         signal = signal.squeeze()
 
         if self.noise_std > 0:
-            noise = np.random.normal(0, self.noise_std, signal)
+            noise = np.random.normal(0, self.noise_std, signal.shape).astype(np.float32)
             signal = signal + noise
 
         return signal, params_dic, index
