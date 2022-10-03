@@ -30,6 +30,8 @@ loss:
 
   use_chain_loss: true
   chain_loss_weight: 1.0
+  use_gradual_chain_loss: false
+  chain_warmup_factor: 5
 
 synth:
   preset: MODULAR_NEW
