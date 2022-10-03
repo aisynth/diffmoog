@@ -5,6 +5,7 @@ from typing import Any, Tuple, Optional
 import numpy as np
 import torch
 import torchaudio
+import ast
 from pytorch_lightning import LightningModule
 from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch.optim.lr_scheduler import ConstantLR, ReduceLROnPlateau
@@ -242,11 +243,13 @@ class LitModularSynth(LightningModule):
         for i, op_index in enumerate(target_signals_through_chain.keys()):
             op_index = str(op_index)
 
-            # current_layer = int(op_index[2])
-            # layer_warmup_factor = cfg.chain_warmup_factor * current_layer
-            #
-            # if epoch - cfg.spectrogram_loss_warmup / num_iters < layer_warmup_factor:
-            #     continue
+            if self.cfg.loss.use_gradual_chain_loss:
+                op_index_tuple = ast.literal_eval(op_index)
+                current_layer = int(op_index_tuple[1])
+                layer_warmup_factor = self.cfg.loss.chain_warmup_factor * current_layer + self.cfg.loss.spectrogram_loss_warmup
+
+                if self.global_step < layer_warmup_factor:
+                    continue
 
             c_pred_signal = pred_signals_through_chain[op_index]
             if c_pred_signal is None:
@@ -305,7 +308,8 @@ class LitModularSynth(LightningModule):
         metrics['paper_lsd_value'] = paper_lsd(target_signal, predicted_signal)
         metrics['lsd_value'] = lsd(target_spec, predicted_spec, reduction=torch.mean)
         metrics['pearson_stft'] = pearsonr_dist(target_spec, predicted_spec, input_type='spec', reduction=torch.mean)
-        metrics['pearson_fft'] = pearsonr_dist(target_signal, predicted_signal, input_type='audio', reduction=torch.mean)
+        metrics['pearson_fft'] = pearsonr_dist(target_signal, predicted_signal, input_type='audio',
+                                               reduction=torch.mean)
         metrics['mean_average_error'] = mae(target_spec, predicted_spec, reduction=torch.mean)
         metrics['mfcc_mae'] = mfcc_distance(target_signal, predicted_signal, sample_rate=synth_structure.sample_rate,
                                             device=predicted_signal.device, reduction=torch.mean)
@@ -415,7 +419,7 @@ class LitModularSynth(LightningModule):
         elif optimizer_params.scheduler.lower() == 'cosine':
             scheduler_config = {"scheduler": torch.optim.lr_scheduler.CosineAnnealingLR(
                 optimizer, T_max=self.cfg.model.num_epochs),
-                                "interval": "epoch"}
+                "interval": "epoch"}
         elif optimizer_params.scheduler.lower() == 'cyclic':
             scheduler_config = {"scheduler": torch.optim.lr_scheduler.CyclicLR(
                 optimizer, base_lr=self.cfg.model.optimizer.base_lr, max_lr=self.cfg.model.optimizer.max_lr,
