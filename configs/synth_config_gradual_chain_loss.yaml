@@ -7,7 +7,7 @@ model:
   num_epochs: 200
 
   optimizer:
-    base_lr: 2e-4
+    base_lr: 1e-4
     optimizer: adam
     scheduler: cosine
 
@@ -19,6 +19,13 @@ loss:
   parameters_loss_weight: 0.1
   spectrogram_loss_weight: 0.001
 
+  dataset_size: 50000
+  spectrogram_switch_epoc_start: 25
+  spectrogram_switch_epoc_end: 75
+  gradual_chain_warmup_epochs: 5
+
+  # spectrogram_loss_warmup shall be defined by (dataset_size / batch_size) * spectrogram_switch_epoc_start
+  # loss_switch_steps shall be defined by (dataset_size / batch_size) * spectrogram_switch_epoc_end
   spectrogram_loss_warmup: 25000
   loss_switch_steps: 75000
   min_parameters_loss_decay: 0
@@ -26,8 +33,9 @@ loss:
 
   use_chain_loss: true
   chain_loss_weight: 1.0
-  use_gradual_chain_loss: false
-  chain_warmup_factor: 5
+  use_gradual_chain_loss: true
+  # chain_warmup_factor shall be defined by (dataset_size / batch_size) * gradual_chain_warmup_epochs
+  chain_warmup_factor: 5000
 
 synth:
   preset: MODULAR
