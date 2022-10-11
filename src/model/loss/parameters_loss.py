@@ -9,12 +9,12 @@ from synth.synth_constants import SynthConstants
 class ParametersLoss(nn.Module):
     """This loss compares target and predicted parameters of the modular synthesizer"""
 
-    def __init__(self, loss_type: str, synth_structure: SynthConstants, ignore_params: Sequence[str] = None,
+    def __init__(self, loss_type: str, synth_constants: SynthConstants, ignore_params: Sequence[str] = None,
                  device='cuda:0'):
 
         super().__init__()
 
-        self.synth_structure = synth_structure
+        self.synth_constants = synth_constants
         self.device = device
         if loss_type == 'L1':
             self.criterion = nn.L1Loss()
@@ -38,7 +38,7 @@ class ParametersLoss(nn.Module):
         loss_dict = {}
         for key in predicted_parameters_dict.keys():
             operation = predicted_parameters_dict[key]['operation']
-            op_config = self.synth_structure.param_configs[operation]
+            op_config = self.synth_constants.param_configs[operation]
 
             predicted_parameters = predicted_parameters_dict[key]['parameters']
             target_parameters = target_parameters_dict[key]['parameters']
@@ -49,11 +49,11 @@ class ParametersLoss(nn.Module):
                     continue
 
                 if param == 'waveform':
-                    waveform_list = [self.synth_structure.wave_type_dict[waveform] for waveform
+                    waveform_list = [self.synth_constants.wave_type_dict[waveform] for waveform
                                      in target_parameters[param]]
                     target = torch.tensor(waveform_list)
                 elif param == 'filter_type':
-                    filter_type_list = [self.synth_structure.filter_type_dict[filter_type] for
+                    filter_type_list = [self.synth_constants.filter_type_dict[filter_type] for
                                         filter_type in target_parameters[param]]
                     target = torch.tensor(filter_type_list)
                 elif param in ['active', 'fm_active']:

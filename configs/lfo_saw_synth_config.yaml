@@ -1,0 +1,41 @@
+model:
+  arch: simple
+  backbone: resnet
+  preset: LFO_SAW
+  num_workers: 4
+  batch_size: 10
+  num_epochs: 60
+
+  optimizer:
+    base_lr: 2e-4
+    optimizer: adam
+    scheduler: cosine
+
+loss:
+  spec_loss_type: MEL_SPECTROGRAM
+  preset: mag_logmag
+  control_spec_preset: cumsum_freq
+  parameters_loss_type: L1
+
+  parameters_loss_weight: 0.1
+  spectrogram_loss_weight: 0.001
+
+  spectrogram_loss_warmup: 10000
+  loss_switch_steps: 10000
+  min_parameters_loss_decay: 0
+  in_domain_epochs: 60
+
+  use_chain_loss: true
+  chain_loss_weight: 1.0
+  use_gradual_chain_loss: false
+  chain_warmup_factor: 5
+
+synth:
+  preset: LFO_SAW
+  transform: MEL
+  signal_duration: 4.0
+  note_off_time: 3.0
+  added_noise_std: 0.001
+
+logging:
+  n_images_to_log: 5

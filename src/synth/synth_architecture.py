@@ -23,14 +23,14 @@ class SynthModularCell:
                  allow_multiple=None,
                  active_prob=None,
                  default_connection=False,
-                 synth_structure: SynthConstants = None,
+                 synth_constants: SynthConstants = None,
                  device: str = 'cuda:0'):
 
-        self.check_inputs(index, audio_input, outputs, switch_outputs, operation, parameters, synth_structure)
+        self.check_inputs(index, audio_input, outputs, switch_outputs, operation, parameters, synth_constants)
 
         self.index = index
 
-        self.module = get_synth_module(operation, device, synth_structure)
+        self.module = get_synth_module(operation, device, synth_constants)
 
         if default_connection:
             self.audio_input = None
@@ -52,7 +52,7 @@ class SynthModularCell:
 
     @staticmethod
     def check_inputs(index, audio_input, outputs, switch_outputs, operation, parameters,
-                     synth_structure: SynthConstants):
+                     synth_constants: SynthConstants):
         layer = index[1]
 
         if audio_input is not None:
@@ -78,12 +78,12 @@ class SynthModularCell:
                     ValueError("Illegal output chain. Output must be chained to a layer > cell.layer")
 
         if operation is not None:
-            if operation not in synth_structure.modular_synth_operations:
+            if operation not in synth_constants.modular_synth_operations:
                 ValueError("Illegal operation")
 
             if parameters is not None:
                 for key in parameters:
-                    if key not in synth_structure.modular_synth_params[operation]:
+                    if key not in synth_constants.modular_synth_params[operation]:
                         ValueError("Illegal parameter for the provided operation")
 
     def generate_signal(self, input_signal, modulator_signal, params, sample_rate, signal_duration, batch_size):
@@ -97,12 +97,12 @@ class SynthModularCell:
 
 
 class SynthModular(torch.nn.Module):
-    def __init__(self, preset_name: str, synth_structure: SynthConstants, device='cuda:0'):
+    def __init__(self, preset_name: str, synth_constants: SynthConstants, device='cuda:0'):
 
         super().__init__()
 
-        self.synth_structure = synth_structure
-        self.sample_rate = synth_structure.sample_rate
+        self.synth_constants = synth_constants
+        self.sample_rate = synth_constants.sample_rate
 
         self.device = device
 
@@ -119,7 +119,7 @@ class SynthModular(torch.nn.Module):
             for layer_idx in range(n_layers):
                 cell = preset.get((channel_idx, layer_idx), {'index': (channel_idx, layer_idx)})
                 self.synth_matrix[channel_idx][layer_idx] = SynthModularCell(**cell, device=self.device,
-                                                                             synth_structure=self.synth_structure)
+                                                                             synth_constants=self.synth_constants)
 
     def generate_signal(self, signal_duration: float, batch_size: int = 1) -> (TensorLike, Dict[str, TensorLike]):
         output_signals = {}
@@ -167,7 +167,7 @@ class SynthModular(torch.nn.Module):
         cell = self.synth_matrix[index[0]][index[1]]
         if parameters is not None and (isinstance(parameters, dict) or isinstance(parameters, list)):
             for key in parameters:
-                if key not in ['output'] and key not in self.synth_structure.modular_synth_params[cell.operation]:
+                if key not in ['output'] and key not in self.synth_constants.modular_synth_params[cell.operation]:
                     raise ValueError("Illegal parameter for the provided operation.")
             cell.parameters = parameters
         else:

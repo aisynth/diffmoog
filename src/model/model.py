@@ -5,7 +5,7 @@ from torch import nn
 from torchvision.models import resnet18, resnet34
 from synth.synth_presets import synth_presets_dict
 
-from synth.synth_constants import synth_structure
+from synth.synth_constants import synth_constants
 
 LATENT_SPACE_SIZE = 128
 
@@ -35,7 +35,7 @@ class DecoderOnlyNetwork(nn.Module):
                     SimpleWeightLayer(torch.tensor(init_values['freq'], dtype=torch.float, device=self.device,
                                                    requires_grad=True), do_sigmoid=True)
                 self.parameters_dict[self.get_key(index, operation, 'waveform')] = \
-                    SimpleWeightLayer(torch.rand(len(synth_structure.wave_type_dict), device=self.device,
+                    SimpleWeightLayer(torch.rand(len(synth_constants.wave_type_dict), device=self.device,
                                                  requires_grad=True), do_softmax=True)
 
             if operation == 'lfo':
@@ -153,14 +153,14 @@ class SynthNetwork(nn.Module):
             if operation in ['None', 'mix'] or operation is None:
                 continue
 
-            op_params = synth_structure.modular_synth_params[operation]
+            op_params = synth_constants.modular_synth_params[operation]
             for param in op_params:
                 if param == 'waveform':
                     param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10,
-                                           len(synth_structure.wave_type_dict)])
+                                           len(synth_constants.wave_type_dict)])
                 elif param == 'filter_type':
                     param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10,
-                                           len(synth_structure.filter_type_dict)])
+                                           len(synth_constants.filter_type_dict)])
                 elif param in ['active', 'fm_active']:
                     param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 2])
                 else:
@@ -183,7 +183,7 @@ class SynthNetwork(nn.Module):
             output_dict[index] = {'operation': operation,
                                   'parameters': {}}
 
-            for param in synth_structure.modular_synth_params[operation]:
+            for param in synth_constants.modular_synth_params[operation]:
 
                 param_head = self.heads_module_dict[self.get_key(index, operation, param)]
                 model_output = param_head(latent)

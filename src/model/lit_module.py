@@ -11,11 +11,11 @@ from pytorch_lightning.utilities.types import STEP_OUTPUT
 from torch.optim.lr_scheduler import ConstantLR, ReduceLROnPlateau
 
 from model.loss.parameters_loss import ParametersLoss
-from model.loss.spectral_loss import SpectralLoss
+from model.loss.spectral_loss import SpectralLoss, ControlSpectralLoss
 from model.model import SynthNetwork
 from synth.parameters_normalizer import Normalizer
 from synth.synth_architecture import SynthModular
-from synth.synth_constants import synth_structure
+from synth.synth_constants import synth_constants
 from utils.metrics import lsd, pearsonr_dist, mae, mfcc_distance, spectral_convergence, paper_lsd
 from utils.train_utils import log_dict_recursive, parse_synth_params, get_param_diffs, to_numpy_recursive
 from utils.visualization_utils import visualize_signal_prediction
@@ -29,16 +29,16 @@ class LitModularSynth(LightningModule):
 
         self.cfg = train_cfg
 
-        self.synth = SynthModular(preset_name=train_cfg.synth.preset, synth_structure=synth_structure,
+        self.synth = SynthModular(preset_name=train_cfg.synth.preset, synth_constants=synth_constants,
                                   device=device)
 
         self.ignore_params = train_cfg.synth.get('ignore_params', None)
 
         self.synth_net = SynthNetwork(train_cfg.model.preset, backbone=train_cfg.model.backbone, device=device)
-        self.normalizer = Normalizer(train_cfg.synth.note_off_time, train_cfg.synth.signal_duration, synth_structure)
+        self.normalizer = Normalizer(train_cfg.synth.note_off_time, train_cfg.synth.signal_duration, synth_constants)
 
         if train_cfg.synth.transform.lower() == 'mel':
-            self.signal_transform = torchaudio.transforms.MelSpectrogram(sample_rate=synth_structure.sample_rate,
+            self.signal_transform = torchaudio.transforms.MelSpectrogram(sample_rate=synth_constants.sample_rate,
                                                                          n_fft=1024, hop_length=256, n_mels=128,
                                                                          power=2.0, f_min=0, f_max=8000).to(device)
         elif train_cfg.synth.transform.lower() == 'spec':
@@ -46,11 +46,18 @@ class LitModularSynth(LightningModule):
         else:
             raise NotImplementedError(f'Input transform {train_cfg.transform} not implemented.')
 
-        self.spec_loss = SpectralLoss(loss_type=train_cfg.loss.spec_loss_type, preset_name=train_cfg.loss.preset,
-                                      sample_rate=synth_structure.sample_rate, device=device)
+        self.spec_loss = SpectralLoss(loss_type=train_cfg.loss.spec_loss_type,
+                                      preset_name=train_cfg.loss.preset,
+                                      synth_constants=synth_constants, device=device)
+
+        self.control_spec_loss = ControlSpectralLoss(signal_duration=train_cfg.synth.signal_duration,
+                                                     loss_type=train_cfg.loss.spec_loss_type,
+                                                     preset_name=train_cfg.loss.control_spec_preset,
+                                                     synth_constants=synth_constants,
+                                                     device=device)
 
         self.params_loss = ParametersLoss(loss_type=train_cfg.loss.parameters_loss_type,
-                                          synth_structure=synth_structure, ignore_params=self.ignore_params,
+                                          synth_constants=synth_constants, ignore_params=self.ignore_params,
                                           device=device)
 
         self.epoch_param_diffs = defaultdict(list)
@@ -243,9 +250,12 @@ class LitModularSynth(LightningModule):
         for i, op_index in enumerate(target_signals_through_chain.keys()):
             op_index = str(op_index)
 
+            op_index_tuple = ast.literal_eval(op_index)
+            current_layer = int(op_index_tuple[1])
+            current_channel = int(op_index_tuple[0])
+            c_target_operation = self.synth.synth_matrix[current_channel][current_layer].operation
+
             if self.cfg.loss.use_gradual_chain_loss:
-                op_index_tuple = ast.literal_eval(op_index)
-                current_layer = int(op_index_tuple[1])
                 layer_warmup_factor = self.cfg.loss.chain_warmup_factor * current_layer + self.cfg.loss.spectrogram_loss_warmup
 
                 if self.global_step < layer_warmup_factor:
@@ -254,10 +264,20 @@ class LitModularSynth(LightningModule):
             c_pred_signal = pred_signals_through_chain[op_index]
             if c_pred_signal is None:
                 continue
-
             c_target_signal = target_signals_through_chain[op_index]
-            loss, per_op_loss, per_op_weighted_loss, ret_spectrograms = \
-                self.spec_loss.call(c_target_signal, c_pred_signal, step=self.global_step, return_spectrogram=True)
+
+            if 'lfo' in c_target_operation:
+                loss, per_op_loss, per_op_weighted_loss, ret_spectrograms = \
+                    self.control_spec_loss.call(c_target_signal,
+                                                c_pred_signal,
+                                                step=self.global_step,
+                                                return_spectrogram=True)
+            else:
+                loss, per_op_loss, per_op_weighted_loss, ret_spectrograms = \
+                    self.spec_loss.call(c_target_signal,
+                                        c_pred_signal,
+                                        step=self.global_step,
+                                        return_spectrogram=True)
             chain_losses[i] = loss
 
             if log:
@@ -311,7 +331,7 @@ class LitModularSynth(LightningModule):
         metrics['pearson_fft'] = pearsonr_dist(target_signal, predicted_signal, input_type='audio',
                                                reduction=torch.mean)
         metrics['mean_average_error'] = mae(target_spec, predicted_spec, reduction=torch.mean)
-        metrics['mfcc_mae'] = mfcc_distance(target_signal, predicted_signal, sample_rate=synth_structure.sample_rate,
+        metrics['mfcc_mae'] = mfcc_distance(target_signal, predicted_signal, sample_rate=synth_constants.sample_rate,
                                             device=predicted_signal.device, reduction=torch.mean)
         metrics['spectral_convergence_value'] = spectral_convergence(target_spec, predicted_spec, reduction=torch.mean)
 
@@ -333,9 +353,9 @@ class LitModularSynth(LightningModule):
                 sample_params_orig, sample_params_pred = {}, {}
 
             self.tb_logger.add_audio(f'{tag}/input_{i}_target', target_signals[i],
-                                     global_step=self.current_epoch, sample_rate=synth_structure.sample_rate)
+                                     global_step=self.current_epoch, sample_rate=synth_constants.sample_rate)
             self.tb_logger.add_audio(f'{tag}/input_{i}_pred', pred_final_signal[i],
-                                     global_step=self.current_epoch, sample_rate=synth_structure.sample_rate)
+                                     global_step=self.current_epoch, sample_rate=synth_constants.sample_rate)
 
             signal_vis = visualize_signal_prediction(target_signals[i], pred_final_signal[i], sample_params_orig,
                                                      sample_params_pred, db=True)

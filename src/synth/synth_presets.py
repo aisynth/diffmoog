@@ -123,7 +123,23 @@ BASIC_FLOW_NO_ADSR_NO_FILTER = [
 ]
 
 SINE_LFO = [
-    {'index': (0, 0), 'operation': 'lfo_sine', 'default_connection': True},
+    {'index': (0, 0), 'operation': 'lfo_sine', 'default_connection': True, 'active_prob': 1},
+]
+
+TWO_LFO_SAW = [
+    {'index': (0, 0), 'operation': 'lfo_sine', 'audio_input': None, 'control_input': None, 'outputs': [(1, 1)],
+     'switch_outputs': True, 'active_prob': 0.25},
+    {'index': (1, 1), 'operation': 'fm_lfo', 'audio_input': None, 'control_input': [[0, 0]],
+     'outputs': [(0, 2)], 'switch_outputs': True, 'allow_multiple': False, 'active_prob': 0.5},
+    {'index': (0, 2), 'operation': 'fm_saw', 'audio_input': None, 'control_input': [[1, 1]], 'outputs': [(0, 3)]},
+]
+
+LFO_SAW = [
+    {'index': (0, 0), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (0, 1), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (1, 1), 'operation': 'lfo', 'audio_input': None, 'control_input': None,
+     'outputs': [(0, 2)], 'switch_outputs': False, 'allow_multiple': False, 'active_prob': 0.5},
+    {'index': (0, 2), 'operation': 'fm_saw', 'audio_input': None, 'control_input': [[1, 1]], 'outputs': [(0, 3)]},
 ]
 
 NON_SINE_LFO = [
@@ -207,4 +223,6 @@ synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW, 'LFO': LFO, 'OSC': OSC, 'FM': FM
                       'MODULAR': MODULAR,
                       'MODULAR_NEW': MODULAR_NEW,
                       'REDUCED': REDUCED,
-                      'NO_FILTER': NO_FILTER}
+                      'NO_FILTER': NO_FILTER,
+                      'TWO_LFO_SAW': TWO_LFO_SAW,
+                      'LFO_SAW': LFO_SAW}
