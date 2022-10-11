@@ -31,6 +31,8 @@ def run(run_args):
 
     datamodule = ModularSynthDataModule(cfg.data_dir, cfg.model.batch_size, cfg.model.num_workers,
                                         added_noise_std=cfg.synth.added_noise_std)
+
+    # todo: allow config of out of domain data
     datamodule.setup()
 
     device = get_device(run_args.gpu_index)

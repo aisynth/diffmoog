@@ -33,8 +33,8 @@ loss:
 synth:
   preset: LFO_SAW
   transform: MEL
-  signal_duration: 4.0
-  note_off_time: 3.0
+  signal_duration: 1.0
+  note_off_time: 0.75
   added_noise_std: 0.001
 
 logging:
