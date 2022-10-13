@@ -116,7 +116,13 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
         all_diffs[op_index] = {}
         active_only_diffs[op_index] = {}
         target_op_dict = target_params_np[op_index]
-        op_config = synth_constants.param_configs[target_op_dict['operation'].squeeze()[0]]
+        if target_op_dict['operation'].ndim > 1:
+            if target_op_dict['operation'].shape == (1, 1):
+                op_config = synth_constants.param_configs[target_op_dict['operation'].squeeze(axis=0)[0]]
+            else:
+                op_config = synth_constants.param_configs[target_op_dict['operation'].squeeze()[0]]
+        else:
+            op_config = synth_constants.param_configs[target_op_dict['operation'][0]]
 
         for param_name, pred_vals in pred_op_dict['parameters'].items():
 
@@ -131,7 +137,11 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
                 target_vals = target_vals.squeeze()
                 if target_vals.ndim == 0:
                     waveform_idx = [synth_constants.wave_type_dict[target_vals.item()]]
-                    diff = (1 - pred_vals[0][waveform_idx]).item()
+                    if pred_vals[0][waveform_idx].ndim == 1:
+                        diff = (1 - pred_vals[0][waveform_idx])
+                    else:
+                        diff = (1 - pred_vals[0][waveform_idx]).item()
+
                 else:
                     waveform_idx = [synth_constants.wave_type_dict[wt] for wt in target_vals]
                     diff = [1 - v[idx] for idx, v in zip(waveform_idx, pred_vals)]
@@ -161,7 +171,11 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
                 all_diffs[op_index][f'{param_name}_accuracy'] = accuracy
                 diff = [1 - v[idx] for idx, v in zip(active_targets, softmax_pred_vals)]
             else:
-                diff = np.abs(target_vals.squeeze() - pred_vals.squeeze())
+                if pred_vals.shape == (1, 1):
+                    diff = np.abs(target_vals - pred_vals.squeeze(axis=0))
+                else:
+                    diff = np.abs(target_vals.squeeze() - pred_vals.squeeze())
+
 
             if param_name not in ['active', 'fm_active'] and pred_op_dict['operation'] not in ['env_adsr',
                                                                                                'lowpass_filter_adsr']:

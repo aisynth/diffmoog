@@ -87,6 +87,8 @@ class ParametersLoss(nn.Module):
 
                 if param in ['waveform', 'filter_type', 'active', 'fm_active']:
                     target = target.type(torch.LongTensor).to(self.device)
+                    if pred.dim() == 1:
+                       pred = pred.unsqueeze(dim=0)
                     loss = self.cls_loss(pred, target)
                 else:
                     loss = self.criterion(pred, target)

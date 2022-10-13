@@ -319,8 +319,8 @@ class LitModularSynth(LightningModule):
 
         metrics = {}
 
-        target_signal = target_signal.squeeze().float()
-        predicted_signal = predicted_signal.squeeze().float()
+        target_signal = target_signal.float()
+        predicted_signal = predicted_signal.float()
 
         target_spec = self.signal_transform(target_signal)
         predicted_spec = self.signal_transform(predicted_signal)
@@ -386,7 +386,9 @@ class LitModularSynth(LightningModule):
         if type(items_to_log) in [torch.Tensor, np.ndarray, int, float]:
             items_to_log = items_to_log.squeeze()
             if len(items_to_log.shape) == 0 or len(items_to_log) <= 1:
-                self.log(tag, items_to_log)
+                if isinstance(items_to_log, (np.ndarray, np.generic)):
+                    items_to_log = torch.tensor(items_to_log)
+                self.log(tag, items_to_log, batch_size=self.cfg.model.batch_size)
             elif len(items_to_log) > 1:
                 self.tb_logger.add_histogram(tag, items_to_log, self.current_epoch)
             else:

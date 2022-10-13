@@ -47,6 +47,11 @@ def run(run_args):
 
     tb_logger = TensorBoardLogger(cfg.logs_dir, name=exp_name)
     lit_module.tb_logger = tb_logger.experiment
+
+    if len(datamodule.train_dataset.params) < 50:
+        log_every_n_steps = len(datamodule.train_dataset.params)
+    else:
+        log_every_n_steps = 50
     trainer = Trainer(logger=tb_logger,
                       callbacks=callbacks,
                       max_epochs=cfg.model.num_epochs,
@@ -54,6 +59,7 @@ def run(run_args):
                       devices=[run_args.gpu_index],
                       accelerator="gpu",
                       detect_anomaly=True,
+                      log_every_n_steps=log_every_n_steps,
                       reload_dataloaders_every_n_epochs=1)
 
     trainer.fit(lit_module, datamodule=datamodule)
