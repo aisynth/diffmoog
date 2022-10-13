@@ -52,7 +52,8 @@ def run(run_args):
                       devices=[run_args.gpu_index],
                       accelerator="gpu",
                       detect_anomaly=True,
-                      reload_dataloaders_every_n_epochs=1)
+                      reload_dataloaders_every_n_epochs=1,
+                      resume_from_checkpoint=cfg.model.get('resume_training', None))
 
     trainer.fit(lit_module, datamodule=datamodule)
 
@@ -63,19 +64,22 @@ def configure_experiment(exp_name: str, dataset_name: str, config_name: str, deb
     data_dir = os.path.join(DATA_ROOT, dataset_name, '')
     config_path = os.path.join(root, 'configs', config_name)
 
-    if os.path.isdir(exp_dir):
-        if not debug:
-            overwrite = input(colored(f"Folder {exp_dir} already exists. Overwrite previous experiment (Y/N)?"
-                                      f"\n\tThis will delete all files related to the previous run!",
-                                      'yellow'))
-            if overwrite.lower() != 'y':
-                print('Exiting...')
-                exit()
-
-        print("Deleting previous experiment...")
-        rmtree(exp_dir)
-
     cfg = OmegaConf.load(config_path)
+
+    if os.path.isdir(exp_dir):
+        if cfg.model.get('resume_training', None) is not None:
+            print(f'Resuming training from {cfg.model.get("resume_training", None)}')
+        else:
+            if not debug:
+                overwrite = input(colored(f"Folder {exp_dir} already exists. Overwrite previous experiment (Y/N)?"
+                                          f"\n\tThis will delete all files related to the previous run!",
+                                          'yellow'))
+                if overwrite.lower() != 'y':
+                    print('Exiting...')
+                    exit()
+
+            print("Deleting previous experiment...")
+            rmtree(exp_dir)
 
     cfg.exp_dir = exp_dir
     cfg.data_dir = data_dir

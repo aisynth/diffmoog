@@ -6,6 +6,8 @@ model:
   batch_size: 50
   num_epochs: 200
 
+  resume_training: /home/almogelharar/almog/ai_synth/experiments/baseline_old_fltr_full_range_w_noise/checkpoints/last.ckpt
+
   optimizer:
     base_lr: 3e-4
     optimizer: adam
