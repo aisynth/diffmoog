@@ -6,6 +6,8 @@ from torchvision.models import resnet18, resnet34
 from synth.synth_presets import synth_presets_dict
 
 from synth.synth_constants import synth_constants
+from model.loss.spectral_loss_presets import loss_presets
+
 
 LATENT_SPACE_SIZE = 128
 
@@ -116,10 +118,15 @@ class DecoderOnlyNetwork(nn.Module):
 
 class SynthNetwork(nn.Module):
 
-    def __init__(self, preset: str, device, backbone='resnet'):
+    def __init__(self, cfg, synth_preset: str, loss_preset: str, device, backbone='resnet'):
         super().__init__()
 
-        self.preset = synth_presets_dict.get(preset, None)
+        self.preset = synth_presets_dict.get(synth_preset, None)
+        self.loss_preset = loss_presets[loss_preset]
+        if cfg.synth.use_multi_spec_input == True:
+            in_channels = len(self.loss_preset['fft_sizes'])
+        else:
+            in_channels = 1
         if self.preset is None:
             ValueError("Unknown self.cfg.PRESET")
 
@@ -131,7 +138,7 @@ class SynthNetwork(nn.Module):
             # self.backbone = resnet18(weights=None)
             #todo: ask almog why weights is configured
             self.backbone = resnet18()
-            self.backbone.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+            self.backbone.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
             num_ftrs = self.backbone.fc.in_features
             self.backbone.fc = nn.Linear(num_ftrs, LATENT_SPACE_SIZE)
 

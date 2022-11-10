@@ -18,7 +18,7 @@ from utils.train_utils import get_project_root
 
 
 root = get_project_root()
-EXP_ROOT = root.joinpath('experiments')
+EXP_ROOT = root.joinpath('experiments', 'current')
 DATA_ROOT = root.joinpath('data')
 
 
@@ -41,9 +41,7 @@ def run(run_args):
     if cfg.model.get('ckpt_path', None):
         lit_module.load_from_checkpoint(checkpoint_path=cfg.model.ckpt_path, train_cfg=cfg, device=device)
 
-    callbacks = [ModelCheckpoint(cfg.ckpts_dir, monitor='nsynth_validation_metrics/lsd_value/dataloader_idx_1',
-                                 save_last=True, save_top_k=3, every_n_epochs=25),
-                 LearningRateMonitor(logging_interval='step')]
+    callbacks = [LearningRateMonitor(logging_interval='step')]
 
     tb_logger = TensorBoardLogger(cfg.logs_dir, name=exp_name)
     lit_module.tb_logger = tb_logger.experiment
@@ -60,8 +58,7 @@ def run(run_args):
                       accelerator="gpu",
                       detect_anomaly=True,
                       log_every_n_steps=log_every_n_steps,
-                      reload_dataloaders_every_n_epochs=1)
-
+                      check_val_every_n_epoch=500)
     trainer.fit(lit_module, datamodule=datamodule)
 
 

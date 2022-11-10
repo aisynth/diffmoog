@@ -17,7 +17,7 @@ from synth.parameters_normalizer import Normalizer
 from synth.synth_architecture import SynthModular
 from synth.synth_constants import synth_constants
 from utils.metrics import lsd, pearsonr_dist, mae, mfcc_distance, spectral_convergence, paper_lsd
-from utils.train_utils import log_dict_recursive, parse_synth_params, get_param_diffs, to_numpy_recursive
+from utils.train_utils import log_dict_recursive, parse_synth_params, get_param_diffs, to_numpy_recursive, MultiSpecTransform
 from utils.visualization_utils import visualize_signal_prediction
 
 
@@ -34,8 +34,15 @@ class LitModularSynth(LightningModule):
 
         self.ignore_params = train_cfg.synth.get('ignore_params', None)
 
-        self.synth_net = SynthNetwork(train_cfg.model.preset, backbone=train_cfg.model.backbone, device=device)
+        self.synth_net = SynthNetwork(cfg=self.cfg,
+                                      synth_preset=train_cfg.model.preset,
+                                      loss_preset=train_cfg.loss.preset,
+                                      device=device,
+                                      backbone=train_cfg.model.backbone
+                                      )
         self.normalizer = Normalizer(train_cfg.synth.note_off_time, train_cfg.synth.signal_duration, synth_constants)
+
+        self.use_multi_spec_input = train_cfg.synth.use_multi_spec_input
 
         if train_cfg.synth.transform.lower() == 'mel':
             self.signal_transform = torchaudio.transforms.MelSpectrogram(sample_rate=synth_constants.sample_rate,
@@ -45,6 +52,10 @@ class LitModularSynth(LightningModule):
             self.signal_transform = torchaudio.transforms.Spectrogram(n_fft=512, power=2.0).to(device)
         else:
             raise NotImplementedError(f'Input transform {train_cfg.transform} not implemented.')
+
+        self.multi_spec_transform = MultiSpecTransform(loss_type=train_cfg.loss.spec_loss_type,
+                                                       preset_name=train_cfg.loss.preset,
+                                                       synth_constants=synth_constants, device=device)
 
         self.spec_loss = SpectralLoss(loss_type=train_cfg.loss.spec_loss_type,
                                       preset_name=train_cfg.loss.preset,
@@ -78,7 +89,10 @@ class LitModularSynth(LightningModule):
         raw_signal = torch.unsqueeze(raw_signal, 1)
 
         # Transform raw signal to spectrogram
-        spectrograms = self.signal_transform(raw_signal)
+        if self.use_multi_spec_input:
+            spectrograms = self.multi_spec_transform.call(raw_signal)
+        else:
+            spectrograms = self.signal_transform(raw_signal)
 
         # Run NN model and convert predicted params from (0, 1) to original range
         predicted_parameters_unit_range = self.synth_net(spectrograms)

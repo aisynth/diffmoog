@@ -33,6 +33,7 @@ loss:
 synth:
   preset: LFO_SAW
   transform: MEL
+  use_multi_spec_input: True
   signal_duration: 1.0
   note_off_time: 0.75
   added_noise_std: 0.001

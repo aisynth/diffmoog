@@ -14,6 +14,7 @@ model:
 loss:
   spec_loss_type: SPECTROGRAM
   preset: cumsum_time
+  control_spec_preset: cumsum_freq
   parameters_loss_type: L1
 
   parameters_loss_weight: 0.1
@@ -32,6 +33,7 @@ loss:
 synth:
   preset: MODULAR
   transform: MEL
+  use_multi_spec_input: True
   signal_duration: 4
   note_off_time: 3.0
   added_noise_std: 0.001

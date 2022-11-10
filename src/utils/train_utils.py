@@ -2,6 +2,8 @@ from typing import Sequence
 
 import numpy as np
 import torch
+import torchaudio
+
 from pytorch_lightning.loggers import TensorBoardLogger
 from pathlib import Path
 
@@ -12,6 +14,8 @@ from scipy.special import softmax
 
 from synth.synth_constants import synth_constants
 from synth.synth_presets import synth_presets_dict
+from synth.synth_constants import SynthConstants
+from model.loss.spectral_loss_presets import loss_presets
 
 
 def get_project_root() -> Path:
@@ -290,3 +294,63 @@ def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, ckpt_
     text_file = open(txt_path, 'a')
     text_file.write(f"epoch:{cur_epoch}\tloss: " + str(avg_epoch_loss) + "\n")
     text_file.close()
+
+
+class MultiSpecTransform:
+
+    def __init__(self, loss_type: str, preset_name: str, synth_constants: SynthConstants, device='cuda:0'):
+
+        super().__init__()
+
+        self.loss_preset = loss_presets[preset_name]
+        self.device = device
+        self.sample_rate = synth_constants.sample_rate
+
+        self.spectrogram_ops = {}
+        for size in self.loss_preset['fft_sizes']:
+            if loss_type == 'BOTH' or loss_type == 'SPECTROGRAM':
+                spec_transform = torchaudio.transforms.Spectrogram(n_fft=size, hop_length=int(size / 4), power=2.0).to(self.device)
+
+                self.spectrogram_ops[f'{size}_spectrogram'] = spec_transform
+
+            if loss_type == 'BOTH' or loss_type == 'MEL_SPECTROGRAM':
+                mel_spec_transform = torchaudio.transforms.MelSpectrogram(sample_rate=self.sample_rate, n_fft=size,
+                                                                          hop_length=int(size / 4), n_mels=256,
+                                                                          power=2.0).to(self.device)
+
+                self.spectrogram_ops[f'{size}_mel'] = mel_spec_transform
+
+    def call(self, input_audio):
+        if input_audio.shape[1] == 1:
+            input_audio = torch.squeeze(input_audio, dim=1)
+        max_row_size = 0
+        max_col_size = 0
+        spectrograms_dict = {}
+        for loss_name, loss_op in self.spectrogram_ops.items():
+            n_fft = loss_op.n_fft
+            output_spec_mag = loss_op(input_audio.float())
+            spectrograms_dict[str(n_fft)] = output_spec_mag
+
+            row_size = output_spec_mag.shape[1]
+            col_size = output_spec_mag.shape[2]
+            if row_size > max_row_size:
+                max_row_size = row_size
+            if col_size > max_col_size:
+                max_col_size = col_size
+
+        self.zero_pad(spectrograms_dict, max_row_size, max_col_size)
+        specs_list = []
+        for key, spec in spectrograms_dict.items():
+            specs_list.append(spec)
+
+        specs_tuple = tuple(specs_list)
+        specs_tensor = torch.stack(specs_tuple, dim=1)
+        return specs_tensor
+
+    def zero_pad(self, spectrograms_dict, target_row_size, target_col_size):
+        for key, spec in spectrograms_dict.items():
+            spec_row_size = spec.shape[1]
+            spec_col_size = spec.shape[2]
+            sizing_tuple = (0, target_col_size - spec_col_size, target_row_size - spec_row_size, 0)
+            padding_fn = torch.nn.ConstantPad2d(sizing_tuple, value=0)
+            spectrograms_dict[key] = padding_fn(spec)
