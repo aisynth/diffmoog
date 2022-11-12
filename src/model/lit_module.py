@@ -23,12 +23,12 @@ from utils.visualization_utils import visualize_signal_prediction
 
 class LitModularSynth(LightningModule):
 
-    def __init__(self, train_cfg, device):
+    def __init__(self, train_cfg, device, tuning_mode=False):
 
         super().__init__()
 
         self.cfg = train_cfg
-
+        self.tuning_mode = tuning_mode
         self.synth = SynthModular(preset_name=train_cfg.synth.preset, synth_constants=synth_constants,
                                   device=device)
 
@@ -125,13 +125,12 @@ class LitModularSynth(LightningModule):
 
         total_params_loss, per_parameter_loss = self.params_loss.call(predicted_params_unit_range,
                                                                       target_params_unit_range)
-
+        pred_final_signal = None
         if self.global_step < self.cfg.loss.spectrogram_loss_warmup and not return_metrics:
             spec_loss = 0
         else:
             pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
                                                                                       batch_size)
-
             if self.cfg.loss.use_chain_loss:
                 _, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
                 spec_loss = self._calculate_spectrogram_chain_loss(target_signals_through_chain,
@@ -156,6 +155,14 @@ class LitModularSynth(LightningModule):
         if return_metrics:
             step_metrics = self._calculate_audio_metrics(target_signal, pred_final_signal)
             return loss_total, step_losses, step_metrics, step_artifacts
+
+        if self.tuning_mode:
+            if pred_final_signal is None:
+                pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
+                                                                                          batch_size)
+            lsd_val = paper_lsd(target_signal, pred_final_signal)
+
+            step_losses['train_lsd'] = lsd_val
 
         return loss_total, step_losses, step_artifacts
 
@@ -201,8 +208,8 @@ class LitModularSynth(LightningModule):
 
         self._accumulate_batch_values(self.epoch_vals_raw, step_artifacts['raw_predicted_parameters'])
         self._accumulate_batch_values(self.epoch_vals_normalized, step_artifacts['full_range_predicted_parameters'])
-
-        return loss
+        step_losses['loss'] = loss
+        return step_losses
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx, dataloader_idx) -> Optional[STEP_OUTPUT]:
