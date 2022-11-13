@@ -78,7 +78,6 @@ class LitModularSynth(LightningModule):
 
         self.val_epoch_param_diffs = defaultdict(list)
         self.val_epoch_param_active_diffs = defaultdict(list)
-
         self.tb_logger = None
 
     def forward(self, raw_signal: torch.Tensor, *args, **kwargs) -> Any:

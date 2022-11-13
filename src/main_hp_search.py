@@ -9,7 +9,7 @@ import argparse
 from omegaconf import OmegaConf
 from optuna.integration import PyTorchLightningPruningCallback
 from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, Callback
 from pytorch_lightning.loggers import TensorBoardLogger
 from termcolor import colored
 
@@ -84,6 +84,16 @@ DATA_ROOT = root.joinpath('data')
 #
 #
 
+# todo: consider delete
+class MetricsCallback(Callback):
+    """PyTorch Lightning metric callback."""
+
+    def __init__(self):
+        super().__init__()
+        self.metrics = []
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        self.metrics.append(trainer.callback_metrics['train_losses/train_lsd'])
 
 def objective(trial: optuna.trial.Trial, run_args) -> float:
 
@@ -106,8 +116,9 @@ def objective(trial: optuna.trial.Trial, run_args) -> float:
     lit_module = LitModularSynth(cfg, device, tuning_mode=True)
     if cfg.model.get('ckpt_path', None):
         lit_module.load_from_checkpoint(checkpoint_path=cfg.model.ckpt_path, train_cfg=cfg, device=device)
-
+    lsd_metrics = MetricsCallback()
     callbacks = [LearningRateMonitor(logging_interval='step'),
+                 MetricsCallback(),
                  PyTorchLightningPruningCallback(trial, monitor="train_lsd_val")]
 
     tb_logger = TensorBoardLogger(cfg.logs_dir, name=exp_name)
@@ -133,6 +144,9 @@ def objective(trial: optuna.trial.Trial, run_args) -> float:
     trainer.logger.log_hyperparams(hyperparameters)
 
     trainer.fit(lit_module, datamodule=datamodule)
+    lsd = trainer.callback_metrics['train_losses/train_lsd']
+
+    return lsd
 
 
 def configure_experiment(exp_name: str, dataset_name: str, config_name: str, debug: bool = False):
