@@ -21,7 +21,7 @@ from utils.train_utils import log_dict_recursive, parse_synth_params, get_param_
 from utils.visualization_utils import visualize_signal_prediction
 
 
-class LitModularSynth(LightningModule):
+class LitModularSynthDecOnly(LightningModule):
 
     def __init__(self, train_cfg, device, tuning_mode=False):
 
@@ -115,12 +115,12 @@ class LitModularSynth(LightningModule):
         target_signal, target_params_full_range, signal_index = batch
         batch_size = len(signal_index)
 
-        predicted_params_unit_range, predicted_params_full_range = self(target_signal)
         target_params_unit_range = self.normalizer.normalize(target_params_full_range)
 
-        if self.ignore_params is not None:
-            predicted_params_unit_range = self._update_param_dict(target_params_unit_range, predicted_params_unit_range)
-            predicted_params_full_range = self._update_param_dict(target_params_full_range, predicted_params_full_range)
+        #todo: replace tensor with trainable one
+        predicted_params_full_range = torch.zeros(44100)
+        predicted_params_unit_range = self.normalizer.normalize(predicted_params_full_range)
+
 
         total_params_loss, per_parameter_loss = self.params_loss.call(predicted_params_unit_range,
                                                                       target_params_unit_range)
