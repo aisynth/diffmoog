@@ -12,18 +12,20 @@ from torch.optim.lr_scheduler import ConstantLR, ReduceLROnPlateau
 
 from model.loss.parameters_loss import ParametersLoss
 from model.loss.spectral_loss import SpectralLoss, ControlSpectralLoss
-from model.model import SynthNetwork
+from model.model import SynthNetwork, DecoderOnlyNetwork
 from synth.parameters_normalizer import Normalizer
 from synth.synth_architecture import SynthModular
 from synth.synth_constants import synth_constants
 from utils.metrics import lsd, pearsonr_dist, mae, mfcc_distance, spectral_convergence, paper_lsd
 from utils.train_utils import log_dict_recursive, parse_synth_params, get_param_diffs, to_numpy_recursive, MultiSpecTransform
 from utils.visualization_utils import visualize_signal_prediction
+from synth.parameters_sampling import ParametersSampler
+
 
 
 class LitModularSynthDecOnly(LightningModule):
 
-    def __init__(self, train_cfg, device, tuning_mode=False):
+    def __init__(self, train_cfg, device, run_args, tuning_mode=False):
 
         super().__init__()
 
@@ -40,6 +42,22 @@ class LitModularSynthDecOnly(LightningModule):
                                       device=device,
                                       backbone=train_cfg.model.backbone
                                       )
+
+        self.decoder_only_net = DecoderOnlyNetwork(preset=self.cfg.synth.preset, device=device)
+        params_sampler = ParametersSampler(synth_constants)
+        self.sampled_parameters = params_sampler.generate_activations_and_chains(self.synth.synth_matrix,
+                                                                                 self.cfg.synth.signal_duration,
+                                                                                 self.cfg.synth.note_off_time,
+                                                                                 num_sounds_=self.cfg.model.batch_size)
+        self.decoder_only_net.apply_params(self.sampled_parameters)
+
+        # todo: add freeze capability
+        # if run_args.params_to_freeze is not None:
+        #     target_params = sample[1]
+        #     normalized_target_params = normalizer.normalize(target_params)
+        #     freeze_params = parse_args_to_freeze(run_args.params_to_freeze, normalized_target_params)
+        #     self.decoder_only_net.freeze_params(freeze_params)
+
         self.normalizer = Normalizer(train_cfg.synth.note_off_time, train_cfg.synth.signal_duration, synth_constants)
 
         self.use_multi_spec_input = train_cfg.synth.use_multi_spec_input
@@ -70,6 +88,8 @@ class LitModularSynthDecOnly(LightningModule):
         self.params_loss = ParametersLoss(loss_type=train_cfg.loss.parameters_loss_type,
                                           synth_constants=synth_constants, ignore_params=self.ignore_params,
                                           device=device)
+
+
 
         self.epoch_param_diffs = defaultdict(list)
         self.epoch_vals_raw = defaultdict(list)
@@ -117,8 +137,7 @@ class LitModularSynthDecOnly(LightningModule):
 
         target_params_unit_range = self.normalizer.normalize(target_params_full_range)
 
-        #todo: replace tensor with trainable one
-        predicted_params_full_range = torch.zeros(44100)
+        predicted_params_full_range = self.decoder_only_net()
         predicted_params_unit_range = self.normalizer.normalize(predicted_params_full_range)
 
 

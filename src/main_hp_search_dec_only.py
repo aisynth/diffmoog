@@ -55,7 +55,7 @@ def objective(trial: optuna.trial.Trial, run_args) -> float:
 
     device = get_device(run_args.gpu_index)
 
-    lit_module = LitModularSynthDecOnly(cfg, device, tuning_mode=True)
+    lit_module = LitModularSynthDecOnly(cfg, device, run_args, tuning_mode=True)
     if cfg.model.get('ckpt_path', None):
         lit_module.load_from_checkpoint(checkpoint_path=cfg.model.ckpt_path, train_cfg=cfg, device=device)
     lsd_metrics = MetricsCallback()
@@ -142,6 +142,8 @@ if __name__ == "__main__":
                         help='use pruning in optuna', default=False)
 
     args = parser.parse_args()
+
+    args.params_to_freeze = {(0, 0): ['freq'], (0, 1): ['waveform', 'mod_index']}
 
     pruner: optuna.pruners.BasePruner = (
         optuna.pruners.MedianPruner() if args.pruning else optuna.pruners.NopPruner()
