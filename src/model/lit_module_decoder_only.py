@@ -36,13 +36,6 @@ class LitModularSynthDecOnly(LightningModule):
 
         self.ignore_params = train_cfg.synth.get('ignore_params', None)
 
-        self.synth_net = SynthNetwork(cfg=self.cfg,
-                                      synth_preset=train_cfg.model.preset,
-                                      loss_preset=train_cfg.loss.preset,
-                                      device=device,
-                                      backbone=train_cfg.model.backbone
-                                      )
-
         self.decoder_only_net = DecoderOnlyNetwork(preset=self.cfg.synth.preset, device=device)
         params_sampler = ParametersSampler(synth_constants)
         self.sampled_parameters = params_sampler.generate_activations_and_chains(self.synth.synth_matrix,
@@ -72,11 +65,11 @@ class LitModularSynthDecOnly(LightningModule):
             raise NotImplementedError(f'Input transform {train_cfg.transform} not implemented.')
 
         self.multi_spec_transform = MultiSpecTransform(loss_type=train_cfg.loss.spec_loss_type,
-                                                       preset_name=train_cfg.loss.preset,
+                                                       loss_preset=train_cfg.loss.preset,
                                                        synth_constants=synth_constants, device=device)
 
         self.spec_loss = SpectralLoss(loss_type=train_cfg.loss.spec_loss_type,
-                                      preset_name=train_cfg.loss.preset,
+                                      loss_preset=train_cfg.loss.preset,
                                       synth_constants=synth_constants, device=device)
 
         self.control_spec_loss = ControlSpectralLoss(signal_duration=train_cfg.synth.signal_duration,
@@ -102,19 +95,8 @@ class LitModularSynthDecOnly(LightningModule):
 
     def forward(self, raw_signal: torch.Tensor, *args, **kwargs) -> Any:
 
-        assert len(raw_signal.shape) == 2, f'Expected tensor of dimensions [batch_size, signal_length]' \
-                                           f' but got shape {raw_signal.shape}'
-
-        raw_signal = torch.unsqueeze(raw_signal, 1)
-
-        # Transform raw signal to spectrogram
-        if self.use_multi_spec_input:
-            spectrograms = self.multi_spec_transform.call(raw_signal)
-        else:
-            spectrograms = self.signal_transform(raw_signal)
-
         # Run NN model and convert predicted params from (0, 1) to original range
-        predicted_parameters_unit_range = self.synth_net(spectrograms)
+        predicted_parameters_unit_range = self.decoder_only_net()
         predicted_params_full_range = self.normalizer.denormalize(predicted_parameters_unit_range)
 
         return predicted_parameters_unit_range, predicted_params_full_range
@@ -237,7 +219,7 @@ class LitModularSynthDecOnly(LightningModule):
             target_params = batch[1] if dataloader_idx == 0 else None
             self._log_sounds_batch(batch[0], target_params, val_name)
 
-        self.synth_net.train()
+        self.decoder_only_net.train()
         if 'in_domain' in val_name:
             loss, step_losses, step_metrics, step_artifacts = self.in_domain_step(batch, return_metrics=True)
         else:

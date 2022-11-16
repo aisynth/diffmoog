@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Sequence, Union
 
 import numpy as np
 import torch
@@ -298,11 +298,11 @@ def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, ckpt_
 
 class MultiSpecTransform:
 
-    def __init__(self, loss_type: str, preset_name: str, synth_constants: SynthConstants, device='cuda:0'):
+    def __init__(self, loss_type: str, loss_preset: Union[str, dict], synth_constants: SynthConstants, device='cuda:0'):
 
         super().__init__()
 
-        self.loss_preset = loss_presets[preset_name]
+        self.loss_preset = loss_presets[loss_preset] if isinstance(loss_preset, str) else loss_preset
         self.device = device
         self.sample_rate = synth_constants.sample_rate
 
