@@ -170,10 +170,6 @@ class LitModularSynthDecOnly(LightningModule):
                           'full_range_predicted_parameters': predicted_params_full_range, 'param_diffs': param_diffs,
                           'active_only_diffs': active_only_diffs}
 
-        if return_metrics:
-            step_metrics = self._calculate_audio_metrics(target_signal, pred_final_signal)
-            return loss_total, step_losses, step_metrics, step_artifacts
-
         if self.tuning_mode:
             if pred_final_signal is None:
                 pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
@@ -181,6 +177,10 @@ class LitModularSynthDecOnly(LightningModule):
             lsd_val = paper_lsd(target_signal, pred_final_signal)
 
             step_losses['train_lsd'] = lsd_val
+
+        if return_metrics:
+            step_metrics = self._calculate_audio_metrics(target_signal, pred_final_signal)
+            return loss_total, step_losses, step_metrics, step_artifacts
 
         return loss_total, step_losses, step_artifacts
 
