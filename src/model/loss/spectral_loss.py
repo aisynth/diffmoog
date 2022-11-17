@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Callable, Union
 
 import torch
 import torchaudio
@@ -25,7 +25,7 @@ class SpectralLoss(nn.Module):
     are magnitudes (mag_weight) and log magnitudes (logmag_weight).
     """
 
-    def __init__(self, loss_type: str, preset_name: str, synth_constants: SynthConstants, device='cuda:0'):
+    def __init__(self, loss_type: str, loss_preset: Union[str, dict], synth_constants: SynthConstants, device='cuda:0'):
         """Constructor, set loss weights of various components.
     Args:
       fft_sizes: Compare spectrograms at each of this list of fft sizes. Each
@@ -55,7 +55,7 @@ class SpectralLoss(nn.Module):
 
         super().__init__()
 
-        self.preset = loss_presets[preset_name]
+        self.preset = loss_presets[loss_preset] if isinstance(loss_preset, str) else loss_preset
         self.device = device
         self.sample_rate = synth_constants.sample_rate
 

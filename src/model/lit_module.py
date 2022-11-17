@@ -54,11 +54,11 @@ class LitModularSynth(LightningModule):
             raise NotImplementedError(f'Input transform {train_cfg.transform} not implemented.')
 
         self.multi_spec_transform = MultiSpecTransform(loss_type=train_cfg.loss.spec_loss_type,
-                                                       preset_name=train_cfg.loss.preset,
+                                                       loss_preset=train_cfg.loss.preset,
                                                        synth_constants=synth_constants, device=device)
 
         self.spec_loss = SpectralLoss(loss_type=train_cfg.loss.spec_loss_type,
-                                      preset_name=train_cfg.loss.preset,
+                                      loss_preset=train_cfg.loss.preset,
                                       synth_constants=synth_constants, device=device)
 
         self.control_spec_loss = ControlSpectralLoss(signal_duration=train_cfg.synth.signal_duration,

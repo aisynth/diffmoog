@@ -44,8 +44,26 @@ def objective(trial: optuna.trial.Trial, run_args) -> float:
 
     cfg = configure_experiment(exp_name, dataset_name, run_args.config, run_args.debug)
 
+    loss_preset = {'fft_sizes': (2048, 1024, 512, 256, 128, 64),
+                                 'multi_spectral_loss_type': 'L1',
+                                 'multi_spectral_cumsum_time_weight': trial.suggest_float("cumsum_time_weight", 0, 1),
+                                 'multi_spectral_cumsum_freq_weight': trial.suggest_float("cumsum_freq_weight", 0, 1),
+                                 'multi_spectral_mag_weight': trial.suggest_float("mag_weight", 0, 1),
+                                 'multi_spectral_delta_time_weight': trial.suggest_float("delta_time_weight", 0, 1),
+                                 'multi_spectral_delta_freq_weight': trial.suggest_float("delta_freq_weight", 0, 1),
+                                 'multi_spectral_logmag_weight': trial.suggest_float("logmag_weight", 0, 1),
+                                 'normalize_loss_by_nfft': True}
+
     lr = trial.suggest_float("lr", 1e-6, 1e-2)
+
+    param_loss_weight = trial.suggest_float("param_loss_weight", 0, 1)
+    spec_loss_weight = trial.suggest_float("spec_loss_weight", 0, 1)
+
+
     cfg.model.optimizer.base_lr = lr
+    cfg.loss.preset = loss_preset
+    cfg.loss.parameters_loss_weight = param_loss_weight
+    cfg.loss.spectrogram_loss_weight = spec_loss_weight
 
     datamodule = ModularSynthDataModule(cfg.data_dir, cfg.model.batch_size, cfg.model.num_workers,
                                         added_noise_std=cfg.synth.added_noise_std)
@@ -150,7 +168,7 @@ if __name__ == "__main__":
     )
 
     study = optuna.create_study(direction="minimize", pruner=pruner)
-    study.optimize(lambda x: objective(x, args), n_trials=3, timeout=600)
+    study.optimize(lambda x: objective(x, args), n_trials=500, timeout=600)
 
     print("Number of finished trials: {}".format(len(study.trials)))
 
