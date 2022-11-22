@@ -168,7 +168,7 @@ if __name__ == "__main__":
     )
 
     study = optuna.create_study(direction="minimize", pruner=pruner)
-    study.optimize(lambda x: objective(x, args), n_trials=500, timeout=600)
+    study.optimize(lambda x: objective(x, args), n_trials=500)
 
     print("Number of finished trials: {}".format(len(study.trials)))
 

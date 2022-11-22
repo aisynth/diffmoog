@@ -42,6 +42,17 @@ class LitModularSynthDecOnly(LightningModule):
                                                                                  self.cfg.synth.signal_duration,
                                                                                  self.cfg.synth.note_off_time,
                                                                                  num_sounds_=self.cfg.model.batch_size)
+        # self.sampled_parameters = {(1, 1): {'operation': 'lfo',
+        #                                     'parameters': {'active': [-1000.0],
+        #                                                    'output': [[(-1, -1)]],
+        #                                                    'freq': [14.285357442943784],
+        #                                                    'waveform': [1000.0, 0, 0]}},
+        #                            (0, 2): {'operation': 'fm_saw',
+        #                                     'parameters': {'fm_active': [-1000.0],
+        #                                      'active': [-1000.0],
+        #                                      'amp_c': [0.6187255599871848],
+        #                                      'freq_c': [349.22823143300377],
+        #                                      'mod_index': [0.02403950683025824]}}}
         self.decoder_only_net.apply_params(self.sampled_parameters)
 
         # todo: add freeze capability
@@ -96,10 +107,10 @@ class LitModularSynthDecOnly(LightningModule):
     def forward(self, raw_signal: torch.Tensor, *args, **kwargs) -> Any:
 
         # Run NN model and convert predicted params from (0, 1) to original range
-        predicted_parameters_unit_range = self.decoder_only_net()
-        predicted_params_full_range = self.normalizer.denormalize(predicted_parameters_unit_range)
+        predicted_params_full_range = self.decoder_only_net()
+        # predicted_params_full_range = self.normalizer.denormalize(predicted_parameters_unit_range)
 
-        return predicted_parameters_unit_range, predicted_params_full_range
+        return predicted_params_full_range
 
     def generate_synth_sound(self, full_range_synth_params: dict, batch_size: int) -> Tuple[torch.Tensor, dict]:
 
@@ -222,8 +233,8 @@ class LitModularSynthDecOnly(LightningModule):
         self.decoder_only_net.train()
         if 'in_domain' in val_name:
             loss, step_losses, step_metrics, step_artifacts = self.in_domain_step(batch, return_metrics=True)
-        else:
-            loss, step_losses, step_metrics, step_artifacts = self.out_of_domain_step(batch, return_metrics=True)
+        if val_name == 'nsynth_validation':
+            return 0
 
         self._log_recursive(step_losses, f'{val_name}_losses')
         self._log_recursive(step_metrics, f'{val_name}_metrics')
@@ -362,7 +373,7 @@ class LitModularSynthDecOnly(LightningModule):
 
         batch_size = len(target_signals)
 
-        predicted_params_unit_range, predicted_params_full_range = self(target_signals)
+        predicted_params_full_range = self(target_signals)
         pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
                                                                                   batch_size)
 

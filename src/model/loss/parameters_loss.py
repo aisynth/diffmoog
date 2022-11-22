@@ -25,7 +25,8 @@ class ParametersLoss(nn.Module):
 
         self.ignore_params = ignore_params if ignore_params is not None else []
 
-        self.cls_loss = nn.CrossEntropyLoss()
+        self.ce_loss = nn.CrossEntropyLoss()
+        self.bce_loss = nn.BCEWithLogitsLoss()
 
     def call(self, predicted_parameters_dict, target_parameters_dict):
         """ execute parameters loss computation between two parameter sets
@@ -86,10 +87,15 @@ class ParametersLoss(nn.Module):
                     target = target.squeeze(dim=0)
 
                 if param in ['waveform', 'filter_type', 'active', 'fm_active']:
-                    target = target.type(torch.LongTensor).to(self.device)
-                    if pred.dim() == 1:
-                       pred = pred.unsqueeze(dim=0)
-                    loss = self.cls_loss(pred, target)
+                    target = target.to(self.device)
+
+                    if param == 'waveform':
+                        target = target.type(torch.LongTensor).to(self.device)
+                        if pred.dim() == 1:
+                            pred = pred.unsqueeze(dim=0)
+                        loss = self.ce_loss(pred, target)
+                    else:
+                        loss = self.bce_loss(pred, target)
                 else:
                     loss = self.criterion(pred, target)
 
