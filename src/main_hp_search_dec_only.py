@@ -44,20 +44,31 @@ def objective(trial: optuna.trial.Trial, run_args) -> float:
 
     cfg = configure_experiment(exp_name, dataset_name, run_args.config, run_args.debug)
 
+    # loss_preset = {'fft_sizes': (2048, 1024, 512, 256, 128, 64),
+    #                              'multi_spectral_loss_type': 'L1',
+    #                              'multi_spectral_cumsum_time_weight': trial.suggest_float("cumsum_time_weight", 0, 1),
+    #                              'multi_spectral_cumsum_freq_weight': trial.suggest_float("cumsum_freq_weight", 0, 1),
+    #                              'multi_spectral_mag_weight': trial.suggest_float("mag_weight", 0, 1),
+    #                              'multi_spectral_delta_time_weight': trial.suggest_float("delta_time_weight", 0, 1),
+    #                              'multi_spectral_delta_freq_weight': trial.suggest_float("delta_freq_weight", 0, 1),
+    #                              'multi_spectral_logmag_weight': trial.suggest_float("logmag_weight", 0, 1),
+    #                              'normalize_loss_by_nfft': True}
     loss_preset = {'fft_sizes': (2048, 1024, 512, 256, 128, 64),
-                                 'multi_spectral_loss_type': 'L1',
-                                 'multi_spectral_cumsum_time_weight': trial.suggest_float("cumsum_time_weight", 0, 1),
-                                 'multi_spectral_cumsum_freq_weight': trial.suggest_float("cumsum_freq_weight", 0, 1),
-                                 'multi_spectral_mag_weight': trial.suggest_float("mag_weight", 0, 1),
-                                 'multi_spectral_delta_time_weight': trial.suggest_float("delta_time_weight", 0, 1),
-                                 'multi_spectral_delta_freq_weight': trial.suggest_float("delta_freq_weight", 0, 1),
-                                 'multi_spectral_logmag_weight': trial.suggest_float("logmag_weight", 0, 1),
-                                 'normalize_loss_by_nfft': True}
+                   'multi_spectral_loss_type': 'L1',
+                   'multi_spectral_cumsum_time_weight': 1,
+                   'multi_spectral_cumsum_freq_weight': 0,
+                   'multi_spectral_mag_weight': 0,
+                   'multi_spectral_delta_time_weight': 0,
+                   'multi_spectral_delta_freq_weight': 0,
+                   'multi_spectral_logmag_weight': 0,
+                   'normalize_loss_by_nfft': True}
 
-    lr = trial.suggest_float("lr", 1e-6, 1e-2)
+    lr = trial.suggest_categorical("lr", [1])
 
-    param_loss_weight = trial.suggest_float("param_loss_weight", 0, 1)
-    spec_loss_weight = trial.suggest_float("spec_loss_weight", 0, 1)
+    # param_loss_weight = trial.suggest_float("param_loss_weight", 0, 0)
+    # spec_loss_weight = trial.suggest_float("spec_loss_weight", 1, 1)
+    param_loss_weight = 1
+    spec_loss_weight = 1
 
 
     cfg.model.optimizer.base_lr = lr
@@ -79,7 +90,7 @@ def objective(trial: optuna.trial.Trial, run_args) -> float:
     lsd_metrics = MetricsCallback()
     callbacks = [LearningRateMonitor(logging_interval='step'),
                  MetricsCallback(),
-                 PyTorchLightningPruningCallback(trial, monitor="train_lsd_val")]
+                 PyTorchLightningPruningCallback(trial, monitor='lsd')]
 
     tb_logger = TensorBoardLogger(cfg.logs_dir, name=exp_name)
     lit_module.tb_logger = tb_logger.experiment

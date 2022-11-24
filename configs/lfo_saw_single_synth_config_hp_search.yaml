@@ -4,7 +4,7 @@ model:
   preset: LFO_SAW
   num_workers: 0
   batch_size: 1
-  num_epochs: 400
+  num_epochs: 100
 
   optimizer:
     base_lr: 1e-4
@@ -20,7 +20,7 @@ loss:
   parameters_loss_weight: 0.1
   spectrogram_loss_weight: 0.001
 
-  spectrogram_loss_warmup: 200
+  spectrogram_loss_warmup: 50
   loss_switch_steps: 0
   min_parameters_loss_decay: 0
   in_domain_epochs: 500

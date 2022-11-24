@@ -22,7 +22,6 @@ from utils.visualization_utils import visualize_signal_prediction
 from synth.parameters_sampling import ParametersSampler
 
 
-
 class LitModularSynthDecOnly(LightningModule):
 
     def __init__(self, train_cfg, device, run_args, tuning_mode=False):
@@ -42,17 +41,17 @@ class LitModularSynthDecOnly(LightningModule):
                                                                                  self.cfg.synth.signal_duration,
                                                                                  self.cfg.synth.note_off_time,
                                                                                  num_sounds_=self.cfg.model.batch_size)
-        # self.sampled_parameters = {(1, 1): {'operation': 'lfo',
-        #                                     'parameters': {'active': [-1000.0],
-        #                                                    'output': [[(-1, -1)]],
-        #                                                    'freq': [14.285357442943784],
-        #                                                    'waveform': [1000.0, 0, 0]}},
-        #                            (0, 2): {'operation': 'fm_saw',
-        #                                     'parameters': {'fm_active': [-1000.0],
-        #                                      'active': [-1000.0],
-        #                                      'amp_c': [0.6187255599871848],
-        #                                      'freq_c': [349.22823143300377],
-        #                                      'mod_index': [0.02403950683025824]}}}
+        self.sampled_parameters = {(1, 1): {'operation': 'lfo',
+                                            'parameters': {'active': [-1000.0],
+                                                           'output': [[(-1, -1)]],
+                                                           'freq': [20],
+                                                           'waveform': [0., 1000.0, 0.]}},
+                                   (0, 2): {'operation': 'fm_saw',
+                                            'parameters': {'fm_active': [-1000.0],
+                                             'active': [-1000.0],
+                                             'amp_c': [0.6271676093063665],
+                                             'freq_c': [277.18263097687196],
+                                             'mod_index': [0.09726261649881028]}}}
         self.decoder_only_net.apply_params(self.sampled_parameters)
 
         # todo: add freeze capability
@@ -170,6 +169,27 @@ class LitModularSynthDecOnly(LightningModule):
             lsd_val = paper_lsd(target_signal, pred_final_signal)
 
             step_losses['train_lsd'] = lsd_val
+            step_losses['epoch_num'] = self.current_epoch
+
+            lfo_freq = predicted_params_full_range[(1, 1)]['parameters']['freq'].item()
+            lfo_active = predicted_params_full_range[(1, 1)]['parameters']['active'].item()
+            lfo_waveform = predicted_params_full_range[(1, 1)]['parameters']['waveform']
+            carrier_active = predicted_params_full_range[(0, 2)]['parameters']['active'].item()
+            carrier_fm_active = predicted_params_full_range[(0, 2)]['parameters']['fm_active'].item()
+            amp_c = predicted_params_full_range[(0, 2)]['parameters']['amp_c'].item()
+            freq_c = predicted_params_full_range[(0, 2)]['parameters']['freq_c'].item()
+            mod_index = predicted_params_full_range[(0, 2)]['parameters']['mod_index'].item()
+
+            self.log("lsd", lsd_val, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+
+            self.log("lfo_freq", lfo_freq, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            self.log("lfo_active", lfo_active, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            self.log("lfo_waveform", lfo_waveform, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            self.log("carrier_active", carrier_active, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            self.log("carrier_fm_active", carrier_fm_active, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            self.log("amp_c", amp_c, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            self.log("freq_c", freq_c, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            self.log("mod_index", mod_index, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
         if return_metrics:
             step_metrics = self._calculate_audio_metrics(target_signal, pred_final_signal)
