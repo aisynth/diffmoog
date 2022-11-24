@@ -17,7 +17,8 @@ from synth.parameters_normalizer import Normalizer
 from synth.synth_architecture import SynthModular
 from synth.synth_constants import synth_constants
 from utils.metrics import lsd, pearsonr_dist, mae, mfcc_distance, spectral_convergence, paper_lsd
-from utils.train_utils import log_dict_recursive, parse_synth_params, get_param_diffs, to_numpy_recursive, MultiSpecTransform
+from utils.train_utils import log_dict_recursive, parse_synth_params, get_param_diffs, to_numpy_recursive, \
+    MultiSpecTransform
 from utils.visualization_utils import visualize_signal_prediction
 from synth.parameters_sampling import ParametersSampler
 
@@ -42,17 +43,20 @@ class LitModularSynthDecOnly(LightningModule):
                                                                                  self.cfg.synth.note_off_time,
                                                                                  num_sounds_=self.cfg.model.batch_size)
         self.sampled_parameters = {(1, 1): {'operation': 'lfo',
-                                            'parameters': {'active': [-1000.0],
+                                            'parameters': {'active': torch.tensor([-1000.0]),
                                                            'output': [[(-1, -1)]],
-                                                           'freq': [20],
-                                                           'waveform': [0., 1000.0, 0.]}},
+                                                           'freq': torch.tensor([0.7984751672891355]),
+                                                           'waveform': torch.tensor([0., 1000.0, 0.])}},
                                    (0, 2): {'operation': 'fm_saw',
-                                            'parameters': {'fm_active': [-1000.0],
-                                             'active': [-1000.0],
-                                             'amp_c': [0.6271676093063665],
-                                             'freq_c': [277.18263097687196],
-                                             'mod_index': [0.09726261649881028]}}}
-        self.decoder_only_net.apply_params(self.sampled_parameters)
+                                            'parameters': {'fm_active': torch.tensor([-1000.0]),
+                                                           'active': torch.tensor([-1000.0]),
+                                                           'amp_c': torch.tensor([0.6271676093063665]),
+                                                           'freq_c': torch.tensor([350]),
+                                                           'mod_index': torch.tensor([0.09726261649881028])}}}
+        self.normalizer = Normalizer(train_cfg.synth.note_off_time, train_cfg.synth.signal_duration, synth_constants)
+        sampled_parameters_unit_range = self.normalizer.normalize(self.sampled_parameters)
+
+        self.decoder_only_net.apply_params(sampled_parameters_unit_range)
 
         # todo: add freeze capability
         # if run_args.params_to_freeze is not None:
@@ -60,8 +64,6 @@ class LitModularSynthDecOnly(LightningModule):
         #     normalized_target_params = normalizer.normalize(target_params)
         #     freeze_params = parse_args_to_freeze(run_args.params_to_freeze, normalized_target_params)
         #     self.decoder_only_net.freeze_params(freeze_params)
-
-        self.normalizer = Normalizer(train_cfg.synth.note_off_time, train_cfg.synth.signal_duration, synth_constants)
 
         self.use_multi_spec_input = train_cfg.synth.use_multi_spec_input
 
@@ -92,8 +94,6 @@ class LitModularSynthDecOnly(LightningModule):
                                           synth_constants=synth_constants, ignore_params=self.ignore_params,
                                           device=device)
 
-
-
         self.epoch_param_diffs = defaultdict(list)
         self.epoch_vals_raw = defaultdict(list)
         self.epoch_vals_normalized = defaultdict(list)
@@ -106,10 +106,10 @@ class LitModularSynthDecOnly(LightningModule):
     def forward(self, raw_signal: torch.Tensor, *args, **kwargs) -> Any:
 
         # Run NN model and convert predicted params from (0, 1) to original range
-        predicted_params_full_range = self.decoder_only_net()
-        # predicted_params_full_range = self.normalizer.denormalize(predicted_parameters_unit_range)
+        predicted_params_unit_range = self.decoder_only_net()
+        predicted_params_full_range = self.normalizer.denormalize(predicted_params_unit_range)
 
-        return predicted_params_full_range
+        return predicted_params_unit_range, predicted_params_full_range
 
     def generate_synth_sound(self, full_range_synth_params: dict, batch_size: int) -> Tuple[torch.Tensor, dict]:
 
@@ -129,9 +129,8 @@ class LitModularSynthDecOnly(LightningModule):
 
         target_params_unit_range = self.normalizer.normalize(target_params_full_range)
 
-        predicted_params_full_range = self.decoder_only_net()
-        predicted_params_unit_range = self.normalizer.normalize(predicted_params_full_range)
-
+        predicted_params_unit_range = self.decoder_only_net()
+        predicted_params_full_range = self.normalizer.denormalize(predicted_params_unit_range)
 
         total_params_loss, per_parameter_loss = self.params_loss.call(predicted_params_unit_range,
                                                                       target_params_unit_range)
@@ -182,14 +181,14 @@ class LitModularSynthDecOnly(LightningModule):
 
             self.log("lsd", lsd_val, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
-            self.log("lfo_freq", lfo_freq, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-            self.log("lfo_active", lfo_active, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-            self.log("lfo_waveform", lfo_waveform, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-            self.log("carrier_active", carrier_active, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-            self.log("carrier_fm_active", carrier_fm_active, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-            self.log("amp_c", amp_c, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("lfo_freq", lfo_freq, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("lfo_active", lfo_active, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("lfo_waveform", lfo_waveform, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("carrier_active", carrier_active, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("carrier_fm_active", carrier_fm_active, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("amp_c", amp_c, on_step=False, on_epoch=True, prog_bar=True, logger=True)
             self.log("freq_c", freq_c, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-            self.log("mod_index", mod_index, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("mod_index", mod_index, on_step=False, on_epoch=True, prog_bar=True, logger=True)
 
         if return_metrics:
             step_metrics = self._calculate_audio_metrics(target_signal, pred_final_signal)
@@ -393,7 +392,7 @@ class LitModularSynthDecOnly(LightningModule):
 
         batch_size = len(target_signals)
 
-        predicted_params_full_range = self(target_signals)
+        predicted_params_unit_range, predicted_params_full_range = self(target_signals)
         pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
                                                                                   batch_size)
 
@@ -478,6 +477,8 @@ class LitModularSynthDecOnly(LightningModule):
         # Configure optimizer
         if 'optimizer' not in optimizer_params or optimizer_params['optimizer'].lower() == 'adam':
             optimizer = torch.optim.Adam(self.parameters(), lr=optimizer_params.base_lr)
+        elif 'optimizer' not in optimizer_params or optimizer_params['optimizer'].lower() == 'sgd':
+            optimizer = torch.optim.SGD(self.parameters(), lr=optimizer_params.base_lr)
         else:
             raise NotImplementedError(f"Optimizer {self.optimizer_params['optimizer']} not implemented")
 

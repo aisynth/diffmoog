@@ -63,7 +63,7 @@ def objective(trial: optuna.trial.Trial, run_args) -> float:
                    'multi_spectral_logmag_weight': 0,
                    'normalize_loss_by_nfft': True}
 
-    lr = trial.suggest_categorical("lr", [1])
+    lr = trial.suggest_categorical("lr", [1e-2])
 
     # param_loss_weight = trial.suggest_float("param_loss_weight", 0, 0)
     # spec_loss_weight = trial.suggest_float("spec_loss_weight", 1, 1)
