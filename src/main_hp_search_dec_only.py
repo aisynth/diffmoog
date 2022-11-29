@@ -53,6 +53,7 @@ def objective(trial: optuna.trial.Trial, run_args) -> float:
     #                              'multi_spectral_delta_freq_weight': trial.suggest_float("delta_freq_weight", 0, 1),
     #                              'multi_spectral_logmag_weight': trial.suggest_float("logmag_weight", 0, 1),
     #                              'normalize_loss_by_nfft': True}
+
     loss_preset = {'fft_sizes': (2048, 1024, 512, 256, 128, 64),
                    'multi_spectral_loss_type': 'L1',
                    'multi_spectral_cumsum_time_weight': 1,
@@ -63,7 +64,7 @@ def objective(trial: optuna.trial.Trial, run_args) -> float:
                    'multi_spectral_logmag_weight': 0,
                    'normalize_loss_by_nfft': True}
 
-    lr = trial.suggest_categorical("lr", [1e-2])
+    lr = trial.suggest_categorical("lr", [0.5e-7])
 
     # param_loss_weight = trial.suggest_float("param_loss_weight", 0, 0)
     # spec_loss_weight = trial.suggest_float("spec_loss_weight", 1, 1)
@@ -84,7 +85,7 @@ def objective(trial: optuna.trial.Trial, run_args) -> float:
 
     device = get_device(run_args.gpu_index)
 
-    lit_module = LitModularSynthDecOnly(cfg, device, run_args, tuning_mode=True)
+    lit_module = LitModularSynthDecOnly(cfg, device, run_args, datamodule, tuning_mode=True)
     if cfg.model.get('ckpt_path', None):
         lit_module.load_from_checkpoint(checkpoint_path=cfg.model.ckpt_path, train_cfg=cfg, device=device)
     lsd_metrics = MetricsCallback()
@@ -172,7 +173,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    args.params_to_freeze = {(0, 0): ['freq'], (0, 1): ['waveform', 'mod_index']}
+    args.params_to_freeze = {(1, 1): {'operation': 'lfo',
+                                      'parameters': ['freq', 'waveform', 'active']},
+                             (0, 2): {'operation': 'fm_saw',
+                                      'parameters': ['active', 'fm_active', 'amp_c', 'mod_index']}}
 
     pruner: optuna.pruners.BasePruner = (
         optuna.pruners.MedianPruner() if args.pruning else optuna.pruners.NopPruner()

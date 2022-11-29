@@ -25,7 +25,7 @@ from synth.parameters_sampling import ParametersSampler
 
 class LitModularSynthDecOnly(LightningModule):
 
-    def __init__(self, train_cfg, device, run_args, tuning_mode=False):
+    def __init__(self, train_cfg, device, run_args, datamodule, tuning_mode=False):
 
         super().__init__()
 
@@ -37,33 +37,43 @@ class LitModularSynthDecOnly(LightningModule):
         self.ignore_params = train_cfg.synth.get('ignore_params', None)
 
         self.decoder_only_net = DecoderOnlyNetwork(preset=self.cfg.synth.preset, device=device)
-        params_sampler = ParametersSampler(synth_constants)
-        self.sampled_parameters = params_sampler.generate_activations_and_chains(self.synth.synth_matrix,
-                                                                                 self.cfg.synth.signal_duration,
-                                                                                 self.cfg.synth.note_off_time,
-                                                                                 num_sounds_=self.cfg.model.batch_size)
-        self.sampled_parameters = {(1, 1): {'operation': 'lfo',
-                                            'parameters': {'active': torch.tensor([-1000.0]),
-                                                           'output': [[(-1, -1)]],
-                                                           'freq': torch.tensor([0.7984751672891355]),
-                                                           'waveform': torch.tensor([0., 1000.0, 0.])}},
-                                   (0, 2): {'operation': 'fm_saw',
-                                            'parameters': {'fm_active': torch.tensor([-1000.0]),
-                                                           'active': torch.tensor([-1000.0]),
-                                                           'amp_c': torch.tensor([0.6271676093063665]),
-                                                           'freq_c': torch.tensor([350]),
-                                                           'mod_index': torch.tensor([0.09726261649881028])}}}
+
+        if train_cfg.model.train_single_param:
+            train_params_dataframe = datamodule.train_dataset.params
+            train_params_dict = train_params_dataframe.to_dict()
+            # todo: _apply_params does not work!
+            # self.sampled_parameters = self._apply_params(train_params_dict)
+            self.sampled_parameters = {(1, 1): {'operation': 'lfo',
+                                                'parameters': {'active': torch.tensor([-1000.0]),
+                                                               'output': [[(-1, -1)]],
+                                                               'freq': torch.tensor([14.285357442943784]),
+                                                               'waveform': torch.tensor([0., 1000.0, 0.])}},
+                                       (0, 2): {'operation': 'fm_saw',
+                                                'parameters': {'fm_active': torch.tensor([-1000.0]),
+                                                               'active': torch.tensor([-1000.0]),
+                                                               'amp_c': torch.tensor([0.6187255599871848]),
+                                                               'freq_c': torch.tensor([349.22823143300377]),
+                                                               'mod_index': torch.tensor([0.02403950683025824])}}}
+
+        else:
+            params_sampler = ParametersSampler(synth_constants)
+            self.sampled_parameters = \
+                params_sampler.generate_activations_and_chains(self.synth.synth_matrix,
+                                                               self.cfg.synth.signal_duration,
+                                                               self.cfg.synth.note_off_time,
+                                                               num_sounds_=self.cfg.model.batch_size)
+
         self.normalizer = Normalizer(train_cfg.synth.note_off_time, train_cfg.synth.signal_duration, synth_constants)
         sampled_parameters_unit_range = self.normalizer.normalize(self.sampled_parameters)
 
         self.decoder_only_net.apply_params(sampled_parameters_unit_range)
 
         # todo: add freeze capability
-        # if run_args.params_to_freeze is not None:
-        #     target_params = sample[1]
-        #     normalized_target_params = normalizer.normalize(target_params)
-        #     freeze_params = parse_args_to_freeze(run_args.params_to_freeze, normalized_target_params)
-        #     self.decoder_only_net.freeze_params(freeze_params)
+        if run_args.params_to_freeze is not None:
+            # target_params = sample[1]
+            # normalized_target_params = normalizer.normalize(target_params)
+            # freeze_params = parse_args_to_freeze(run_args.params_to_freeze, sampled_parameters_unit_range)
+            self.decoder_only_net.freeze_params(run_args.params_to_freeze)
 
         self.use_multi_spec_input = train_cfg.synth.use_multi_spec_input
 
@@ -141,10 +151,11 @@ class LitModularSynthDecOnly(LightningModule):
             pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
                                                                                       batch_size)
             if self.cfg.loss.use_chain_loss:
-                _, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
+                target_signaly, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
                 spec_loss = self._calculate_spectrogram_chain_loss(target_signals_through_chain,
                                                                    pred_signals_through_chain, log=True)
             else:
+                target_signaly, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
                 spec_loss, per_op_loss, per_op_weighted_loss = self.spec_loss.call(target_signal, pred_final_signal,
                                                                                    step=self.global_step)
                 self._log_recursive(per_op_weighted_loss, f'final_spec_losses_weighted')
@@ -153,9 +164,11 @@ class LitModularSynthDecOnly(LightningModule):
         param_diffs, active_only_diffs = get_param_diffs(predicted_params_full_range.copy(),
                                                          target_params_full_range.copy(), self.ignore_params)
 
-        step_losses = {'raw_params_loss': total_params_loss, 'raw_spec_loss': spec_loss,
-                       'weighted_params_loss': weighted_params_loss, 'weighted_spec_loss': weighted_spec_loss,
-                       'loss_total': loss_total}
+        step_losses = {'raw_params_loss': total_params_loss.detach(),
+                       'raw_spec_loss': spec_loss.detach(),
+                       'weighted_params_loss': weighted_params_loss.detach(),
+                       'weighted_spec_loss': weighted_spec_loss.detach(),
+                       'loss_total': loss_total.detach()}
 
         step_artifacts = {'raw_predicted_parameters': predicted_params_unit_range,
                           'full_range_predicted_parameters': predicted_params_full_range, 'param_diffs': param_diffs,
@@ -425,6 +438,25 @@ class LitModularSynthDecOnly(LightningModule):
                     target_dict[op_idx]['parameters'][param_name] = param_vals
 
         return target_dict
+
+    def _apply_params(self, params_dict):
+        processed_dict = {}
+        for key in params_dict:
+            operation = params_dict[key][0]['operation']
+            parameters = params_dict[key][0]['parameters']
+            processed_dict[key] = {'operation': operation,
+                                   'parameters': parameters}
+            for param in parameters:
+                if param == 'output':
+                    processed_dict[key]['parameters'][param] = [params_dict[key][0]['parameters'][param]]
+                    continue
+                elif param == 'fm_active':
+                    processed_dict[key]['parameters'][param] = [params_dict[key][0]['parameters'][param]]
+                    continue
+
+                processed_dict[key]['parameters'][param] = np.array([params_dict[key][0]['parameters'][param]])
+
+        return processed_dict
 
     def _log_recursive(self, items_to_log: dict, tag: str, on_epoch=False):
         if isinstance(items_to_log, np.float) or isinstance(items_to_log, np.int):

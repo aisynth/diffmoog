@@ -65,13 +65,13 @@ class DecoderOnlyNetwork(nn.Module):
                                                    dtype=torch.float,
                                                    device=self.device,
                                                    requires_grad=True),
-                                      do_sigmoid=False)
+                                                   do_sigmoid=False)
                 self.parameters_dict[self.get_key(index, operation, 'active')] = \
                     SimpleWeightLayer(torch.tensor(init_values['active'],
                                                    dtype=torch.float,
                                                    device=self.device,
                                                    requires_grad=True),
-                                      do_sigmoid=False)
+                                                   do_sigmoid=False)
                 # self.parameters_dict[self.get_key(index, operation, 'waveform')] = \
                 #     SimpleWeightLayer(torch.rand(len(synth_constants.wave_type_dict),
                 #                                  device=self.device,
@@ -81,7 +81,7 @@ class DecoderOnlyNetwork(nn.Module):
                     SimpleWeightLayer(torch.tensor(init_values['waveform'],
                                                    device=self.device,
                                                    requires_grad=True),
-                                      do_softmax=False)
+                                                   do_softmax=False)
 
             elif operation == 'fm':
                 for fm_param in ['amp_c', 'freq_c', 'mod_index']:
@@ -131,8 +131,12 @@ class DecoderOnlyNetwork(nn.Module):
 
     def freeze_params(self, params_to_freeze: dict):
         for cell_index, cell_params in params_to_freeze.items():
-            for param_to_freeze, param_val in cell_params['parameters'].items():
-                layer = self.parameters_dict[self.get_key(cell_index, cell_params['operation'], param_to_freeze)]
+            operation = cell_params['operation']
+            parameters = cell_params['parameters']
+            for param in parameters:
+                key = self.get_key(cell_index, operation, param)
+                layer = self.parameters_dict[key]
+                param_val = self.parameters_dict[key].weight.data
                 layer.freeze(param_val)
 
     def forward(self):
