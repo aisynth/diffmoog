@@ -5,11 +5,15 @@ model:
   num_workers: 4
   batch_size: 32
   num_epochs: 200
+  ckpt_path: C:\Users\user\PycharmProjects\ai_synth\experiments\new_filter\checkpoints\last.ckpt
 
   optimizer:
-    base_lr: 3e-4
+    base_lr: 1e-5
+    max_lr: 1e-4
     optimizer: adam
-    scheduler: constant
+    scheduler: cyclic
+    cyclic_step_size_up: 6250
+
 
 loss:
   spec_loss_type: SPECTROGRAM
@@ -18,10 +22,10 @@ loss:
   parameters_loss_type: L1
 
   parameters_loss_weight: 0.1
-  spectrogram_loss_weight: 0
+  spectrogram_loss_weight: 0.001
 
-  spectrogram_loss_warmup: 3333333333333333
-  loss_switch_steps: 0
+  spectrogram_loss_warmup: 0
+  loss_switch_steps: 156250
   min_parameters_loss_decay: 0
   in_domain_epochs: 200
 
@@ -36,6 +40,7 @@ synth:
   use_multi_spec_input: True
   signal_duration: 4
   note_off_time: 3.0
+  added_noise_std: 0
 
 logging:
   n_images_to_log: 5

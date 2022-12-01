@@ -112,8 +112,8 @@ class ParametersSampler:
                 activity_signal = is_active
 
             if activity_signal is not None and param_config.get('non_active_default', None) is not None:
-                sampled_values = [val if activity_signal[k] else param_config['non_active_default']
-                                  for k, val in enumerate(sampled_values)]
+                sampled_values = np.array([val if activity_signal[k] else param_config['non_active_default']
+                                  for k, val in enumerate(sampled_values)])
 
             params_dict[param_name] = sampled_values
 

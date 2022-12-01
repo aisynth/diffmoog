@@ -12,7 +12,7 @@ import scipy.io.wavfile
 
 from synth.synth_architecture import SynthModular
 from synth.parameters_sampling import ParametersSampler
-from synth.synth_constants import synth_structure
+from synth.synth_constants import synth_constants
 from utils.gpu_utils import get_device
 from utils.train_utils import get_project_root
 
@@ -48,8 +48,8 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
 
     # Other inits
     np.random.seed(seed)
-    synth_obj = SynthModular(preset, synth_structure, device)
-    params_sampler = ParametersSampler(synth_structure)
+    synth_obj = SynthModular(preset, synth_constants, device)
+    params_sampler = ParametersSampler(synth_constants)
 
     train = (split.lower() == 'train')
     dataset_parameters = []
@@ -87,7 +87,7 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
             if c_audio.dtype == 'float64':
                 c_audio = np.float32(c_audio)
 
-            scipy.io.wavfile.write(audio_path, synth_structure.sample_rate, c_audio)
+            scipy.io.wavfile.write(audio_path, synth_constants.sample_rate, c_audio)
             print(f"Generated {file_name}")
 
             samples_created += 1
@@ -109,12 +109,12 @@ def _verify_activity(sample_params_dict):
     if sample_params_dict.get((1, 2)):
         saw_osc_activeness = sample_params_dict[(1, 2)]['parameters']['active']
     else:
-        sine_osc_activeness = False
+        saw_osc_activeness = False
 
     if sample_params_dict.get((2, 2)):
         square_osc_activeness = sample_params_dict[(2, 2)]['parameters']['active']
     else:
-        sine_osc_activeness = False
+        square_osc_activeness = False
 
     has_active_osc = sine_osc_activeness or square_osc_activeness or saw_osc_activeness
 

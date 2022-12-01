@@ -59,8 +59,11 @@ class SynthModule(ABC):
             return oscillator_tensor
 
         oscillator_tensor = 0
+        softmax = torch.nn.Softmax(dim=1)
+        waveform_probabilities = softmax(raw_waveform_selector)
+
         for i in range(len(waves_tensor)):
-            oscillator_tensor += raw_waveform_selector.t()[i].unsqueeze(1) * waves_tensor[i]
+            oscillator_tensor += waveform_probabilities.t()[i].unsqueeze(1) * waves_tensor[i]
 
         return oscillator_tensor
 

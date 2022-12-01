@@ -5,7 +5,8 @@ from torch import nn
 from torchvision.models import resnet18, resnet34
 from synth.synth_presets import synth_presets_dict
 
-from synth.synth_constants import synth_structure
+from synth.synth_constants import synth_constants
+from model.loss.spectral_loss_presets import loss_presets
 
 LATENT_SPACE_SIZE = 128
 
@@ -26,6 +27,8 @@ class DecoderOnlyNetwork(nn.Module):
         for cell in self.preset:
             index = cell.get('index')
             operation = cell.get('operation')
+            if operation is None:
+                continue
             init_values = init_params[index]['parameters']
             if operation == 'osc':
                 self.parameters_dict[self.get_key(index, operation, 'amp')] = \
@@ -34,14 +37,51 @@ class DecoderOnlyNetwork(nn.Module):
                 self.parameters_dict[self.get_key(index, operation, 'freq')] = \
                     SimpleWeightLayer(torch.tensor(init_values['freq'], dtype=torch.float, device=self.device,
                                                    requires_grad=True), do_sigmoid=True)
+                # self.parameters_dict[self.get_key(index, operation, 'waveform')] = \
+                #     SimpleWeightLayer(torch.rand(len(synth_constants.wave_type_dict), device=self.device,
+                #                                  requires_grad=True), do_softmax=True)
                 self.parameters_dict[self.get_key(index, operation, 'waveform')] = \
-                    SimpleWeightLayer(torch.rand(len(synth_structure.wave_type_dict), device=self.device,
-                                                 requires_grad=True), do_softmax=True)
+                    SimpleWeightLayer(torch.tensor(init_values['waveform'], device=self.device,
+                                                   requires_grad=True), do_softmax=True)
 
             if operation == 'lfo':
+
+                # transform into un-normalized logits
+                if init_values['active']:
+                    init_values['active'] = [-1000.]
+                else:
+                    init_values['active'] = [1000.]
+
+                if init_values['waveform'][0] == 'sine':
+                    init_values['waveform'] = [1000., 0., 0.]
+                elif init_values['waveform'][0] == 'square':
+                    init_values['waveform'] = [0., 1000., 0.]
+                elif init_values['waveform'][0] == 'sawtooth':
+                    init_values['waveform'] = [0., 0., 1000.]
+
+
                 self.parameters_dict[self.get_key(index, operation, 'freq')] = \
-                    SimpleWeightLayer(torch.tensor(init_values['freq'], dtype=torch.float, device=self.device,
-                                                   requires_grad=True), do_sigmoid=True)
+                    SimpleWeightLayer(torch.tensor(init_values['freq'],
+                                                   dtype=torch.float,
+                                                   device=self.device,
+                                                   requires_grad=True),
+                                                   do_sigmoid=False)
+                self.parameters_dict[self.get_key(index, operation, 'active')] = \
+                    SimpleWeightLayer(torch.tensor(init_values['active'],
+                                                   dtype=torch.float,
+                                                   device=self.device,
+                                                   requires_grad=True),
+                                                   do_sigmoid=False)
+                # self.parameters_dict[self.get_key(index, operation, 'waveform')] = \
+                #     SimpleWeightLayer(torch.rand(len(synth_constants.wave_type_dict),
+                #                                  device=self.device,
+                #                                  requires_grad=True),
+                #                       do_softmax=True)
+                self.parameters_dict[self.get_key(index, operation, 'waveform')] = \
+                    SimpleWeightLayer(torch.tensor(init_values['waveform'],
+                                                   device=self.device,
+                                                   requires_grad=True),
+                                                   do_softmax=False)
 
             elif operation == 'fm':
                 for fm_param in ['amp_c', 'freq_c', 'mod_index']:
@@ -51,6 +91,29 @@ class DecoderOnlyNetwork(nn.Module):
                 self.parameters_dict[self.get_key(index, operation, 'waveform')] = \
                     SimpleWeightLayer(torch.rand(len(self.synth_cfg.wave_type_dict), device=self.device,
                                                  requires_grad=True), do_softmax=True)
+
+            elif operation == 'fm_saw':
+                for fm_param in ['amp_c', 'freq_c', 'mod_index']:
+                    self.parameters_dict[self.get_key(index, operation, fm_param)] = \
+                        SimpleWeightLayer(torch.tensor(init_values[fm_param], dtype=torch.float, device=self.device,
+                                                       requires_grad=True), do_sigmoid=False)
+
+                if init_values['active']:
+                    init_values['active'] = [-1000.]
+                else:
+                    init_values['active'] = [1000.]
+
+                if init_values['fm_active']:
+                    init_values['fm_active'] = [-1000.]
+                else:
+                    init_values['fm_active'] = [1000.]
+
+                self.parameters_dict[self.get_key(index, operation, 'active')] = \
+                    SimpleWeightLayer(torch.tensor(init_values['active'], dtype=torch.float, device=self.device,
+                                                   requires_grad=True), do_sigmoid=False)
+                self.parameters_dict[self.get_key(index, operation, 'fm_active')] = \
+                    SimpleWeightLayer(torch.tensor(init_values['fm_active'], dtype=torch.float, device=self.device,
+                                                   requires_grad=True), do_sigmoid=False)
 
             elif operation == 'filter':
                 self.parameters_dict[self.get_key(index, operation, 'filter_type')] = \
@@ -68,8 +131,12 @@ class DecoderOnlyNetwork(nn.Module):
 
     def freeze_params(self, params_to_freeze: dict):
         for cell_index, cell_params in params_to_freeze.items():
-            for param_to_freeze, param_val in cell_params['parameters'].items():
-                layer = self.parameters_dict[self.get_key(cell_index, cell_params['operation'], param_to_freeze)]
+            operation = cell_params['operation']
+            parameters = cell_params['parameters']
+            for param in parameters:
+                key = self.get_key(cell_index, operation, param)
+                layer = self.parameters_dict[key]
+                param_val = self.parameters_dict[key].weight.data
                 layer.freeze(param_val)
 
     def forward(self):
@@ -77,6 +144,9 @@ class DecoderOnlyNetwork(nn.Module):
         for cell in self.preset:
             index = cell.get('index')
             operation = cell.get('operation')
+
+            if operation is None:
+                continue
 
             if operation == 'osc':
                 op_params = ['amp', 'freq', 'waveform']
@@ -86,11 +156,20 @@ class DecoderOnlyNetwork(nn.Module):
 
             if operation == 'lfo':
                 output_dic[index] = {'operation': operation,
-                                     'params': {'freq': self.parameters_dict[self.get_key(index, operation, 'freq')]()
-                                                }}
+                                     'parameters': {
+                                         'freq': self.parameters_dict[self.get_key(index, operation, 'freq')](),
+                                         'active': self.parameters_dict[self.get_key(index, operation, 'active')](),
+                                         'waveform': self.parameters_dict[self.get_key(index, operation, 'waveform')](),
+                                     }}
 
             elif operation == 'fm':
                 op_params = ['amp_c', 'freq_c', 'mod_index', 'waveform']
+                param_vals = {k: self.parameters_dict[self.get_key(index, operation, k)]() for k in op_params}
+                output_dic[index] = {'operation': operation,
+                                     'parameters': param_vals}
+
+            elif operation == 'fm_saw':
+                op_params = ['amp_c', 'freq_c', 'mod_index', 'active', 'fm_active']
                 param_vals = {k: self.parameters_dict[self.get_key(index, operation, k)]() for k in op_params}
                 output_dic[index] = {'operation': operation,
                                      'parameters': param_vals}
@@ -116,10 +195,15 @@ class DecoderOnlyNetwork(nn.Module):
 
 class SynthNetwork(nn.Module):
 
-    def __init__(self, preset: str, device, backbone='resnet'):
+    def __init__(self, cfg, synth_preset: str, loss_preset: str, device, backbone='resnet'):
         super().__init__()
 
-        self.preset = synth_presets_dict.get(preset, None)
+        self.preset = synth_presets_dict.get(synth_preset, None)
+        self.loss_preset = loss_presets[loss_preset]
+        if cfg.synth.use_multi_spec_input == True:
+            in_channels = len(self.loss_preset['fft_sizes'])
+        else:
+            in_channels = 1
         if self.preset is None:
             ValueError("Unknown self.cfg.PRESET")
 
@@ -129,9 +213,9 @@ class SynthNetwork(nn.Module):
             self.backbone = RNNBackbone(backbone)
         elif backbone == 'resnet':
             # self.backbone = resnet18(weights=None)
-            #todo: ask almog why weights is configured
+            # todo: ask almog why weights is configured
             self.backbone = resnet18()
-            self.backbone.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
+            self.backbone.conv1 = nn.Conv2d(in_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
             num_ftrs = self.backbone.fc.in_features
             self.backbone.fc = nn.Linear(num_ftrs, LATENT_SPACE_SIZE)
 
@@ -153,16 +237,15 @@ class SynthNetwork(nn.Module):
             if operation in ['None', 'mix'] or operation is None:
                 continue
 
-            op_params = synth_structure.modular_synth_params[operation]
+            op_params = synth_constants.modular_synth_params[operation]
             for param in op_params:
                 if param == 'waveform':
                     param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10,
-                                           len(synth_structure.wave_type_dict)])
+                                           len(synth_constants.wave_type_dict)])
                 elif param == 'filter_type':
-                    param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10,
-                                           len(synth_structure.filter_type_dict)])
+                    param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
                 elif param in ['active', 'fm_active']:
-                    param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 2])
+                    param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
                 else:
                     param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
 
@@ -183,13 +266,13 @@ class SynthNetwork(nn.Module):
             output_dict[index] = {'operation': operation,
                                   'parameters': {}}
 
-            for param in synth_structure.modular_synth_params[operation]:
+            for param in synth_constants.modular_synth_params[operation]:
 
                 param_head = self.heads_module_dict[self.get_key(index, operation, param)]
                 model_output = param_head(latent)
 
                 if param in ['waveform', 'filter_type']:
-                    final_model_output = self.softmax(model_output)
+                    final_model_output = model_output
                 elif param not in ['active', 'fm_active']:
                     final_model_output = self.sigmoid(model_output)
                 else:

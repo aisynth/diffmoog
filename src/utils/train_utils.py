@@ -1,7 +1,9 @@
-from typing import Sequence
+from typing import Sequence, Union
 
 import numpy as np
 import torch
+import torchaudio
+
 from pytorch_lightning.loggers import TensorBoardLogger
 from pathlib import Path
 
@@ -10,8 +12,10 @@ from torch.utils.tensorboard import SummaryWriter
 from sklearn.metrics import confusion_matrix
 from scipy.special import softmax
 
-from synth.synth_constants import synth_structure
+from synth.synth_constants import synth_constants
 from synth.synth_presets import synth_presets_dict
+from synth.synth_constants import SynthConstants
+from model.loss.spectral_loss_presets import loss_presets
 
 
 def get_project_root() -> Path:
@@ -116,7 +120,13 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
         all_diffs[op_index] = {}
         active_only_diffs[op_index] = {}
         target_op_dict = target_params_np[op_index]
-        op_config = synth_structure.param_configs[target_op_dict['operation'].squeeze()[0]]
+        if target_op_dict['operation'].ndim > 1:
+            if target_op_dict['operation'].shape == (1, 1):
+                op_config = synth_constants.param_configs[target_op_dict['operation'].squeeze(axis=0)[0]]
+            else:
+                op_config = synth_constants.param_configs[target_op_dict['operation'].squeeze()[0]]
+        else:
+            op_config = synth_constants.param_configs[target_op_dict['operation'][0]]
 
         for param_name, pred_vals in pred_op_dict['parameters'].items():
 
@@ -130,18 +140,22 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
             if param_name == 'waveform':
                 target_vals = target_vals.squeeze()
                 if target_vals.ndim == 0:
-                    waveform_idx = [synth_structure.wave_type_dict[target_vals.item()]]
-                    diff = (1 - pred_vals[0][waveform_idx]).item()
+                    waveform_idx = [synth_constants.wave_type_dict[target_vals.item()]]
+                    if pred_vals[0][waveform_idx].ndim == 1:
+                        diff = (1 - pred_vals[0][waveform_idx])
+                    else:
+                        diff = (1 - pred_vals[0][waveform_idx]).item()
+
                 else:
-                    waveform_idx = [synth_structure.wave_type_dict[wt] for wt in target_vals]
+                    waveform_idx = [synth_constants.wave_type_dict[wt] for wt in target_vals]
                     diff = [1 - v[idx] for idx, v in zip(waveform_idx, pred_vals)]
                     diff = np.asarray(diff).squeeze()
             elif param_name == 'filter_type':
                 if target_vals.ndim == 0:
-                    filter_type_idx = [synth_structure.filter_type_dict[target_vals.item()]]
+                    filter_type_idx = [synth_constants.filter_type_dict[target_vals.item()]]
                     diff = (1 - pred_vals[0][filter_type_idx]).item()
                 else:
-                    filter_type_idx = [synth_structure.filter_type_dict[ft] for ft in target_vals.squeeze()]
+                    filter_type_idx = [synth_constants.filter_type_dict[ft] for ft in target_vals.squeeze()]
                     diff = [1 - v[idx] for idx, v in zip(filter_type_idx, pred_vals)]
                     diff = np.asarray(diff).squeeze()
             # elif param_name in ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']:
@@ -161,7 +175,11 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
                 all_diffs[op_index][f'{param_name}_accuracy'] = accuracy
                 diff = [1 - v[idx] for idx, v in zip(active_targets, softmax_pred_vals)]
             else:
-                diff = np.abs(target_vals.squeeze() - pred_vals.squeeze())
+                if pred_vals.shape == (1, 1):
+                    diff = np.abs(target_vals - pred_vals.squeeze(axis=0))
+                else:
+                    diff = np.abs(target_vals.squeeze() - pred_vals.squeeze())
+
 
             if param_name not in ['active', 'fm_active'] and pred_op_dict['operation'] not in ['env_adsr',
                                                                                                'lowpass_filter_adsr']:
@@ -223,7 +241,7 @@ def count_unpredicted_params(synth_preset_name, model_preset_name):
         if index in predicted_indices or operation is None:
             continue
 
-        op_params = synth_structure.modular_synth_params[operation]
+        op_params = synth_constants.modular_synth_params[operation]
         if op_params is not None:
             n_unpredicted_params += len(op_params)
 
@@ -247,10 +265,10 @@ def vectorize_unpredicted_params(target_params, model_preset, device):
 
         for param_name, param_val in op_params.items():
             if param_name == 'waveform':
-                waveform_idx = [synth_structure.wave_type_dict[wt] for wt in param_val]
+                waveform_idx = [synth_constants.wave_type_dict[wt] for wt in param_val]
                 param_val = torch.tensor(waveform_idx, device=device)
             elif param_name == 'filter_type':
-                filter_type_idx = [synth_structure.filter_type_dict[ft] for ft in param_val]
+                filter_type_idx = [synth_constants.filter_type_dict[ft] for ft in param_val]
                 param_val = torch.tensor(filter_type_idx, device=device)
             else:
                 param_val = torch.tensor(param_val, device=device)
@@ -276,3 +294,63 @@ def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, ckpt_
     text_file = open(txt_path, 'a')
     text_file.write(f"epoch:{cur_epoch}\tloss: " + str(avg_epoch_loss) + "\n")
     text_file.close()
+
+
+class MultiSpecTransform:
+
+    def __init__(self, loss_type: str, loss_preset: Union[str, dict], synth_constants: SynthConstants, device='cuda:0'):
+
+        super().__init__()
+
+        self.loss_preset = loss_presets[loss_preset] if isinstance(loss_preset, str) else loss_preset
+        self.device = device
+        self.sample_rate = synth_constants.sample_rate
+
+        self.spectrogram_ops = {}
+        for size in self.loss_preset['fft_sizes']:
+            if loss_type == 'BOTH' or loss_type == 'SPECTROGRAM':
+                spec_transform = torchaudio.transforms.Spectrogram(n_fft=size, hop_length=int(size / 4), power=2.0).to(self.device)
+
+                self.spectrogram_ops[f'{size}_spectrogram'] = spec_transform
+
+            if loss_type == 'BOTH' or loss_type == 'MEL_SPECTROGRAM':
+                mel_spec_transform = torchaudio.transforms.MelSpectrogram(sample_rate=self.sample_rate, n_fft=size,
+                                                                          hop_length=int(size / 4), n_mels=256,
+                                                                          power=2.0).to(self.device)
+
+                self.spectrogram_ops[f'{size}_mel'] = mel_spec_transform
+
+    def call(self, input_audio):
+        if input_audio.shape[1] == 1:
+            input_audio = torch.squeeze(input_audio, dim=1)
+        max_row_size = 0
+        max_col_size = 0
+        spectrograms_dict = {}
+        for loss_name, loss_op in self.spectrogram_ops.items():
+            n_fft = loss_op.n_fft
+            output_spec_mag = loss_op(input_audio.float())
+            spectrograms_dict[str(n_fft)] = output_spec_mag
+
+            row_size = output_spec_mag.shape[1]
+            col_size = output_spec_mag.shape[2]
+            if row_size > max_row_size:
+                max_row_size = row_size
+            if col_size > max_col_size:
+                max_col_size = col_size
+
+        self.zero_pad(spectrograms_dict, max_row_size, max_col_size)
+        specs_list = []
+        for key, spec in spectrograms_dict.items():
+            specs_list.append(spec)
+
+        specs_tuple = tuple(specs_list)
+        specs_tensor = torch.stack(specs_tuple, dim=1)
+        return specs_tensor
+
+    def zero_pad(self, spectrograms_dict, target_row_size, target_col_size):
+        for key, spec in spectrograms_dict.items():
+            spec_row_size = spec.shape[1]
+            spec_col_size = spec.shape[2]
+            sizing_tuple = (0, target_col_size - spec_col_size, target_row_size - spec_row_size, 0)
+            padding_fn = torch.nn.ConstantPad2d(sizing_tuple, value=0)
+            spectrograms_dict[key] = padding_fn(spec)

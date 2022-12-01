@@ -12,18 +12,20 @@ from torch.optim.lr_scheduler import ConstantLR, ReduceLROnPlateau
 
 from model.loss.parameters_loss import ParametersLoss
 from model.loss.spectral_loss import SpectralLoss, ControlSpectralLoss
-from model.model import SynthNetwork
+from model.model import SynthNetwork, DecoderOnlyNetwork
 from synth.parameters_normalizer import Normalizer
 from synth.synth_architecture import SynthModular
 from synth.synth_constants import synth_constants
 from utils.metrics import lsd, pearsonr_dist, mae, mfcc_distance, spectral_convergence, paper_lsd
-from utils.train_utils import log_dict_recursive, parse_synth_params, get_param_diffs, to_numpy_recursive, MultiSpecTransform
+from utils.train_utils import log_dict_recursive, parse_synth_params, get_param_diffs, to_numpy_recursive, \
+    MultiSpecTransform
 from utils.visualization_utils import visualize_signal_prediction
+from synth.parameters_sampling import ParametersSampler
 
 
-class LitModularSynth(LightningModule):
+class LitModularSynthDecOnly(LightningModule):
 
-    def __init__(self, train_cfg, device, tuning_mode=False):
+    def __init__(self, train_cfg, device, run_args, datamodule, tuning_mode=False):
 
         super().__init__()
 
@@ -34,13 +36,44 @@ class LitModularSynth(LightningModule):
 
         self.ignore_params = train_cfg.synth.get('ignore_params', None)
 
-        self.synth_net = SynthNetwork(cfg=self.cfg,
-                                      synth_preset=train_cfg.model.preset,
-                                      loss_preset=train_cfg.loss.preset,
-                                      device=device,
-                                      backbone=train_cfg.model.backbone
-                                      )
+        self.decoder_only_net = DecoderOnlyNetwork(preset=self.cfg.synth.preset, device=device)
+
+        if train_cfg.model.train_single_param:
+            train_params_dataframe = datamodule.train_dataset.params
+            train_params_dict = train_params_dataframe.to_dict()
+            # todo: _apply_params does not work!
+            # self.sampled_parameters = self._apply_params(train_params_dict)
+            self.sampled_parameters = {(1, 1): {'operation': 'lfo',
+                                                'parameters': {'active': torch.tensor([-1000.0]),
+                                                               'output': [[(-1, -1)]],
+                                                               'freq': torch.tensor([14.285357442943784]),
+                                                               'waveform': torch.tensor([0., 1000.0, 0.])}},
+                                       (0, 2): {'operation': 'fm_saw',
+                                                'parameters': {'fm_active': torch.tensor([-1000.0]),
+                                                               'active': torch.tensor([-1000.0]),
+                                                               'amp_c': torch.tensor([0.6187255599871848]),
+                                                               'freq_c': torch.tensor([349.22823143300377]),
+                                                               'mod_index': torch.tensor([0.02403950683025824])}}}
+
+        else:
+            params_sampler = ParametersSampler(synth_constants)
+            self.sampled_parameters = \
+                params_sampler.generate_activations_and_chains(self.synth.synth_matrix,
+                                                               self.cfg.synth.signal_duration,
+                                                               self.cfg.synth.note_off_time,
+                                                               num_sounds_=self.cfg.model.batch_size)
+
         self.normalizer = Normalizer(train_cfg.synth.note_off_time, train_cfg.synth.signal_duration, synth_constants)
+        sampled_parameters_unit_range = self.normalizer.normalize(self.sampled_parameters)
+
+        self.decoder_only_net.apply_params(sampled_parameters_unit_range)
+
+        # todo: add freeze capability
+        if run_args.params_to_freeze is not None:
+            # target_params = sample[1]
+            # normalized_target_params = normalizer.normalize(target_params)
+            # freeze_params = parse_args_to_freeze(run_args.params_to_freeze, sampled_parameters_unit_range)
+            self.decoder_only_net.freeze_params(run_args.params_to_freeze)
 
         self.use_multi_spec_input = train_cfg.synth.use_multi_spec_input
 
@@ -82,22 +115,11 @@ class LitModularSynth(LightningModule):
 
     def forward(self, raw_signal: torch.Tensor, *args, **kwargs) -> Any:
 
-        assert len(raw_signal.shape) == 2, f'Expected tensor of dimensions [batch_size, signal_length]' \
-                                           f' but got shape {raw_signal.shape}'
-
-        raw_signal = torch.unsqueeze(raw_signal, 1)
-
-        # Transform raw signal to spectrogram
-        if self.use_multi_spec_input:
-            spectrograms = self.multi_spec_transform.call(raw_signal)
-        else:
-            spectrograms = self.signal_transform(raw_signal)
-
         # Run NN model and convert predicted params from (0, 1) to original range
-        predicted_parameters_unit_range = self.synth_net(spectrograms)
-        predicted_params_full_range = self.normalizer.denormalize(predicted_parameters_unit_range)
+        predicted_params_unit_range = self.decoder_only_net()
+        predicted_params_full_range = self.normalizer.denormalize(predicted_params_unit_range)
 
-        return predicted_parameters_unit_range, predicted_params_full_range
+        return predicted_params_unit_range, predicted_params_full_range
 
     def generate_synth_sound(self, full_range_synth_params: dict, batch_size: int) -> Tuple[torch.Tensor, dict]:
 
@@ -115,12 +137,10 @@ class LitModularSynth(LightningModule):
         target_signal, target_params_full_range, signal_index = batch
         batch_size = len(signal_index)
 
-        predicted_params_unit_range, predicted_params_full_range = self(target_signal)
         target_params_unit_range = self.normalizer.normalize(target_params_full_range)
 
-        if self.ignore_params is not None:
-            predicted_params_unit_range = self._update_param_dict(target_params_unit_range, predicted_params_unit_range)
-            predicted_params_full_range = self._update_param_dict(target_params_full_range, predicted_params_full_range)
+        predicted_params_unit_range = self.decoder_only_net()
+        predicted_params_full_range = self.normalizer.denormalize(predicted_params_unit_range)
 
         total_params_loss, per_parameter_loss = self.params_loss.call(predicted_params_unit_range,
                                                                       target_params_unit_range)
@@ -131,10 +151,11 @@ class LitModularSynth(LightningModule):
             pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
                                                                                       batch_size)
             if self.cfg.loss.use_chain_loss:
-                _, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
+                target_signaly, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
                 spec_loss = self._calculate_spectrogram_chain_loss(target_signals_through_chain,
                                                                    pred_signals_through_chain, log=True)
             else:
+                target_signaly, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
                 spec_loss, per_op_loss, per_op_weighted_loss = self.spec_loss.call(target_signal, pred_final_signal,
                                                                                    step=self.global_step)
                 self._log_recursive(per_op_weighted_loss, f'final_spec_losses_weighted')
@@ -143,17 +164,15 @@ class LitModularSynth(LightningModule):
         param_diffs, active_only_diffs = get_param_diffs(predicted_params_full_range.copy(),
                                                          target_params_full_range.copy(), self.ignore_params)
 
-        step_losses = {'raw_params_loss': total_params_loss, 'raw_spec_loss': spec_loss,
-                       'weighted_params_loss': weighted_params_loss, 'weighted_spec_loss': weighted_spec_loss,
-                       'loss_total': loss_total}
+        step_losses = {'raw_params_loss': total_params_loss.detach(),
+                       'raw_spec_loss': spec_loss.detach(),
+                       'weighted_params_loss': weighted_params_loss.detach(),
+                       'weighted_spec_loss': weighted_spec_loss.detach(),
+                       'loss_total': loss_total.detach()}
 
         step_artifacts = {'raw_predicted_parameters': predicted_params_unit_range,
                           'full_range_predicted_parameters': predicted_params_full_range, 'param_diffs': param_diffs,
                           'active_only_diffs': active_only_diffs}
-
-        if return_metrics:
-            step_metrics = self._calculate_audio_metrics(target_signal, pred_final_signal)
-            return loss_total, step_losses, step_metrics, step_artifacts
 
         if self.tuning_mode:
             if pred_final_signal is None:
@@ -162,6 +181,31 @@ class LitModularSynth(LightningModule):
             lsd_val = paper_lsd(target_signal, pred_final_signal)
 
             step_losses['train_lsd'] = lsd_val
+            step_losses['epoch_num'] = self.current_epoch
+
+            lfo_freq = predicted_params_full_range[(1, 1)]['parameters']['freq'].item()
+            lfo_active = predicted_params_full_range[(1, 1)]['parameters']['active'].item()
+            lfo_waveform = predicted_params_full_range[(1, 1)]['parameters']['waveform']
+            carrier_active = predicted_params_full_range[(0, 2)]['parameters']['active'].item()
+            carrier_fm_active = predicted_params_full_range[(0, 2)]['parameters']['fm_active'].item()
+            amp_c = predicted_params_full_range[(0, 2)]['parameters']['amp_c'].item()
+            freq_c = predicted_params_full_range[(0, 2)]['parameters']['freq_c'].item()
+            mod_index = predicted_params_full_range[(0, 2)]['parameters']['mod_index'].item()
+
+            self.log("lsd", lsd_val, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+
+            # self.log("lfo_freq", lfo_freq, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("lfo_active", lfo_active, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("lfo_waveform", lfo_waveform, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("carrier_active", carrier_active, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("carrier_fm_active", carrier_fm_active, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("amp_c", amp_c, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            self.log("freq_c", freq_c, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+            # self.log("mod_index", mod_index, on_step=False, on_epoch=True, prog_bar=True, logger=True)
+
+        if return_metrics:
+            step_metrics = self._calculate_audio_metrics(target_signal, pred_final_signal)
+            return loss_total, step_losses, step_metrics, step_artifacts
 
         return loss_total, step_losses, step_artifacts
 
@@ -218,11 +262,11 @@ class LitModularSynth(LightningModule):
             target_params = batch[1] if dataloader_idx == 0 else None
             self._log_sounds_batch(batch[0], target_params, val_name)
 
-        self.synth_net.train()
+        self.decoder_only_net.train()
         if 'in_domain' in val_name:
             loss, step_losses, step_metrics, step_artifacts = self.in_domain_step(batch, return_metrics=True)
-        else:
-            loss, step_losses, step_metrics, step_artifacts = self.out_of_domain_step(batch, return_metrics=True)
+        if val_name == 'nsynth_validation':
+            return 0
 
         self._log_recursive(step_losses, f'{val_name}_losses')
         self._log_recursive(step_metrics, f'{val_name}_metrics')
@@ -395,6 +439,25 @@ class LitModularSynth(LightningModule):
 
         return target_dict
 
+    def _apply_params(self, params_dict):
+        processed_dict = {}
+        for key in params_dict:
+            operation = params_dict[key][0]['operation']
+            parameters = params_dict[key][0]['parameters']
+            processed_dict[key] = {'operation': operation,
+                                   'parameters': parameters}
+            for param in parameters:
+                if param == 'output':
+                    processed_dict[key]['parameters'][param] = [params_dict[key][0]['parameters'][param]]
+                    continue
+                elif param == 'fm_active':
+                    processed_dict[key]['parameters'][param] = [params_dict[key][0]['parameters'][param]]
+                    continue
+
+                processed_dict[key]['parameters'][param] = np.array([params_dict[key][0]['parameters'][param]])
+
+        return processed_dict
+
     def _log_recursive(self, items_to_log: dict, tag: str, on_epoch=False):
         if isinstance(items_to_log, np.float) or isinstance(items_to_log, np.int):
             self.log(tag, items_to_log, on_step=True, on_epoch=on_epoch)
@@ -446,6 +509,8 @@ class LitModularSynth(LightningModule):
         # Configure optimizer
         if 'optimizer' not in optimizer_params or optimizer_params['optimizer'].lower() == 'adam':
             optimizer = torch.optim.Adam(self.parameters(), lr=optimizer_params.base_lr)
+        elif 'optimizer' not in optimizer_params or optimizer_params['optimizer'].lower() == 'sgd':
+            optimizer = torch.optim.SGD(self.parameters(), lr=optimizer_params.base_lr)
         else:
             raise NotImplementedError(f"Optimizer {self.optimizer_params['optimizer']} not implemented")
 

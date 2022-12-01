@@ -25,7 +25,7 @@ class SynthConstants:
     min_fm_lfo_mod_index: float = 0.0001
     max_fm_lfo_mod_index: float = 0.01
     min_lfo_freq: float = 0.5
-    max_lfo_freq: float = 20
+    max_lfo_freq: float = 15
     min_filter_freq: float = 100
     max_filter_freq: float = 8000
     min_amount_tremolo: float = 0.05
@@ -33,6 +33,8 @@ class SynthConstants:
     min_intensity_filter: float = 0
     max_intensity_filter: float = 1
     filter_adsr_frame_size = 512
+
+    lfo_signal_sampling_rate = 100
 
     # non-active operation defaults
     non_active_waveform_default = 'sine'
@@ -60,7 +62,7 @@ class SynthConstants:
     modular_synth_params = {'osc': ['amp', 'freq', 'waveform'],
                             'lfo_sine': ['active', 'freq'],
                             'lfo_non_sine': ['freq', 'waveform'],
-                            'lfo': ['freq', 'waveform'],
+                            'lfo': ['freq', 'waveform', 'active'],
                             'fm_lfo': ['active', 'fm_active', 'freq_c', 'waveform', 'fm_lfo_mod_index'],
                             'fm': ['freq_c', 'waveform', 'mod_index'],
                             'fm_sine': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
@@ -175,4 +177,4 @@ class SynthConstants:
         return op_types
 
 
-synth_structure = SynthConstants()
+synth_constants = SynthConstants()

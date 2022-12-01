@@ -21,8 +21,8 @@ def paper_lsd(orig_audio, resyn_audio):
     window = torch.hann_window(1024).to(orig_audio.device)
     orig_power_s = spectrogram(orig_audio, 1024, 256, window=window).detach()
     resyn_power_s = spectrogram(resyn_audio, 1024, 256, window=window).detach()
-    lsd_val = torch.sqrt(((10 * (torch.log10(resyn_power_s+1e-5)-torch.log10(orig_power_s+1e-5)))**2).sum(dim=(1,2))) /\
-              orig_power_s.shape[-1]
+    square_log_diff = ((10 * (torch.log10(resyn_power_s+1e-5)-torch.log10(orig_power_s+1e-5)))**2)
+    lsd_val = torch.sqrt(square_log_diff.sum(dim=(1, 2))) / orig_power_s.shape[-1]
     lsd_val = lsd_val.mean()
     return lsd_val
 

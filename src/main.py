@@ -18,7 +18,7 @@ from utils.train_utils import get_project_root
 
 
 root = get_project_root()
-EXP_ROOT = root.joinpath('experiments')
+EXP_ROOT = root.joinpath('experiments', 'current')
 DATA_ROOT = root.joinpath('data')
 
 
@@ -31,6 +31,8 @@ def run(run_args):
 
     datamodule = ModularSynthDataModule(cfg.data_dir, cfg.model.batch_size, cfg.model.num_workers,
                                         added_noise_std=cfg.synth.added_noise_std)
+
+    # todo: allow config of out of domain data
     datamodule.setup()
 
     device = get_device(run_args.gpu_index)
@@ -39,12 +41,15 @@ def run(run_args):
     if cfg.model.get('ckpt_path', None):
         lit_module.load_from_checkpoint(checkpoint_path=cfg.model.ckpt_path, train_cfg=cfg, device=device)
 
-    callbacks = [ModelCheckpoint(cfg.ckpts_dir, monitor='nsynth_validation_metrics/lsd_value/dataloader_idx_1',
-                                 save_last=True, save_top_k=3, every_n_epochs=25),
-                 LearningRateMonitor(logging_interval='step')]
+    callbacks = [LearningRateMonitor(logging_interval='step')]
 
     tb_logger = TensorBoardLogger(cfg.logs_dir, name=exp_name)
     lit_module.tb_logger = tb_logger.experiment
+
+    if len(datamodule.train_dataset.params) < 50:
+        log_every_n_steps = len(datamodule.train_dataset.params)
+    else:
+        log_every_n_steps = 50
     trainer = Trainer(logger=tb_logger,
                       callbacks=callbacks,
                       max_epochs=cfg.model.num_epochs,
@@ -52,9 +57,8 @@ def run(run_args):
                       devices=[run_args.gpu_index],
                       accelerator="gpu",
                       detect_anomaly=True,
-                      reload_dataloaders_every_n_epochs=1,
-                      resume_from_checkpoint=cfg.model.get('resume_training', None))
-
+                      log_every_n_steps=log_every_n_steps,
+                      check_val_every_n_epoch=500)
     trainer.fit(lit_module, datamodule=datamodule)
 
 
@@ -64,22 +68,19 @@ def configure_experiment(exp_name: str, dataset_name: str, config_name: str, deb
     data_dir = os.path.join(DATA_ROOT, dataset_name, '')
     config_path = os.path.join(root, 'configs', config_name)
 
-    cfg = OmegaConf.load(config_path)
-
     if os.path.isdir(exp_dir):
-        if cfg.model.get('resume_training', None) is not None:
-            print(f'Resuming training from {cfg.model.get("resume_training", None)}')
-        else:
-            if not debug:
-                overwrite = input(colored(f"Folder {exp_dir} already exists. Overwrite previous experiment (Y/N)?"
-                                          f"\n\tThis will delete all files related to the previous run!",
-                                          'yellow'))
-                if overwrite.lower() != 'y':
-                    print('Exiting...')
-                    exit()
+        if not debug:
+            overwrite = input(colored(f"Folder {exp_dir} already exists. Overwrite previous experiment (Y/N)?"
+                                      f"\n\tThis will delete all files related to the previous run!",
+                                      'yellow'))
+            if overwrite.lower() != 'y':
+                print('Exiting...')
+                exit()
 
-            print("Deleting previous experiment...")
-            rmtree(exp_dir)
+        print("Deleting previous experiment...")
+        rmtree(exp_dir)
+
+    cfg = OmegaConf.load(config_path)
 
     cfg.exp_dir = exp_dir
     cfg.data_dir = data_dir
