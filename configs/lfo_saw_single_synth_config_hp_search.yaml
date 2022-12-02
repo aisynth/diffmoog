@@ -15,7 +15,7 @@ model:
 
 loss:
   spec_loss_type: SPECTROGRAM
-  preset: cumsum_time
+  preset: cumsum_freq
   control_spec_preset: cumsum_freq
   parameters_loss_type: L1
 
@@ -27,7 +27,7 @@ loss:
   min_parameters_loss_decay: 0
   in_domain_epochs: 500
 
-  use_chain_loss: false
+  use_chain_loss: true
   chain_loss_weight: 1.0
   use_gradual_chain_loss: false
   chain_warmup_factor: 5

@@ -1,6 +1,7 @@
-import torch
-
 import math
+
+import numpy as np
+import torch
 
 from synth.synth_constants import SynthConstants
 
@@ -8,7 +9,8 @@ from synth.synth_constants import SynthConstants
 class Normalizer:
     """ normalize/de-normalise regression parameters"""
 
-    def __init__(self, note_off_time: float, signal_duration: int, synth_structure: SynthConstants, clamp_adsr=True):
+    def __init__(self, note_off_time: float, signal_duration: int, synth_structure: SynthConstants, clamp_adsr=True,
+                 clip=False):
 
         self.signal_duration = signal_duration
         self.clamp_adsr = clamp_adsr
@@ -18,19 +20,19 @@ class Normalizer:
                                                      target_max_val=1,
                                                      original_min_val=synth_structure.min_mod_index,
                                                      original_max_val=synth_structure.max_mod_index,
-                                                     clip=True)
+                                                     clip=clip)
 
         self.fm_lfo_mod_index_normalizer = MinMaxNormaliser(target_min_val=0,
                                                             target_max_val=1,
                                                             original_min_val=synth_structure.min_fm_lfo_mod_index,
                                                             original_max_val=synth_structure.max_fm_lfo_mod_index,
-                                                            clip=True)
+                                                            clip=clip)
 
         self.lfo_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                     target_max_val=1,
                                                     original_min_val=synth_structure.min_lfo_freq,
                                                     original_max_val=synth_structure.max_lfo_freq,
-                                                    clip=True)
+                                                    clip=clip)
 
         self.lfo_phase_normalizer = MinMaxNormaliser(target_min_val=0,
                                                      target_max_val=1,
@@ -46,7 +48,7 @@ class Normalizer:
                                                        target_max_val=1,
                                                        original_min_val=synth_structure.min_filter_freq,
                                                        original_max_val=synth_structure.max_filter_freq,
-                                                       clip=True)
+                                                       clip=clip)
 
         self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
                                                            target_max_val=1,

@@ -52,7 +52,7 @@ class LitModularSynthDecOnly(LightningModule):
                                                 'parameters': {'fm_active': torch.tensor([-1000.0]),
                                                                'active': torch.tensor([-1000.0]),
                                                                'amp_c': torch.tensor([0.6187255599871848]),
-                                                               'freq_c': torch.tensor([349.22823143300377]),
+                                                               'freq_c': torch.tensor([340.22823143300377]),
                                                                'mod_index': torch.tensor([0.02403950683025824])}}}
 
         else:
