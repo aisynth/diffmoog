@@ -59,12 +59,12 @@ class SynthConstants:
     modular_synth_operations = ['osc', 'fm', 'lfo', 'mix', 'filter', 'env_adsr', 'fm_lfo', 'lfo_sine', 'lfo_non_sine',
                                 'fm_sine', 'fm_square', 'fm_saw', 'lowpass_filter']
 
-    modular_synth_params = {'osc': ['amp', 'freq', 'waveform'],
+    modular_synth_params = {'osc': ['amp', 'freq', 'waveform', 'active'],
                             'lfo_sine': ['active', 'freq'],
                             'lfo_non_sine': ['freq', 'waveform'],
                             'lfo': ['freq', 'waveform', 'active'],
                             'fm_lfo': ['active', 'fm_active', 'freq_c', 'waveform', 'fm_lfo_mod_index'],
-                            'fm': ['freq_c', 'waveform', 'mod_index'],
+                            'fm': ['freq_c', 'waveform', 'mod_index', 'active'],
                             'fm_sine': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
                             'fm_square': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
                             'fm_saw': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
