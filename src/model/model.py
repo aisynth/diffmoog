@@ -27,7 +27,7 @@ class DecoderOnlyNetwork(nn.Module):
         for cell in self.preset:
             index = cell.get('index')
             operation = cell.get('operation')
-            if operation is None:
+            if operation is None or index not in init_params:
                 continue
             init_values = init_params[index]['parameters']
             if operation == 'osc':
@@ -128,6 +128,15 @@ class DecoderOnlyNetwork(nn.Module):
                     self.parameters_dict[self.get_key(index, operation, adsr_param)] = \
                         SimpleWeightLayer(torch.tensor(init_values[adsr_param], dtype=torch.float, device=self.device,
                                                        requires_grad=True), do_sigmoid=True)
+
+    def apply_params_partial(self, params_to_apply):
+
+        for index, params in params_to_apply.items():
+            operation = params['operation']
+            param_vals = params['parameters']
+
+            for param_name, param_val in param_vals.items():
+                self.parameters_dict[self.get_key(index, operation, param_name)].update_val(param_val)
 
     def freeze_params(self, params_to_freeze: dict):
         for cell_index, cell_params in params_to_freeze.items():
@@ -358,6 +367,16 @@ class SimpleWeightLayer(nn.Module):
         self.weight = nn.Parameter(val, requires_grad=False)
         self.do_softmax = False
         self.do_sigmoid = False
+
+    def update_val(self, val):
+        device = self.weight.device
+
+        val = torch.tensor(val, device=device)
+
+        if val.ndim == 1:
+            val = val.unsqueeze(0)
+
+        self.weight = nn.Parameter(val)
 
 
 class RNNBackbone(nn.Module):

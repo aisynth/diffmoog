@@ -99,24 +99,36 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
     parameters_dataframe.to_csv(parameters_csv_path)
 
 
+
 def _verify_activity(sample_params_dict):
 
-    if sample_params_dict.get((0, 2)):
-        sine_osc_activeness = sample_params_dict[(0, 2)]['parameters']['active']
-    else:
-        sine_osc_activeness = False
+    has_active_osc = False
+    for key in sample_params_dict.keys():
+        if sample_params_dict[key]:
+            operation = sample_params_dict[key]['operation']
+            if operation in ['osc', 'fm_saw', 'fm_sine', 'fm_square', 'fm', 'fm_lfo']:
+                is_active = sample_params_dict[key]['parameters']['active']
+                has_active_osc = has_active_osc or is_active
+        else:
+            continue
 
-    if sample_params_dict.get((1, 2)):
-        saw_osc_activeness = sample_params_dict[(1, 2)]['parameters']['active']
-    else:
-        saw_osc_activeness = False
-
-    if sample_params_dict.get((2, 2)):
-        square_osc_activeness = sample_params_dict[(2, 2)]['parameters']['active']
-    else:
-        square_osc_activeness = False
-
-    has_active_osc = sine_osc_activeness or square_osc_activeness or saw_osc_activeness
+    # todo: commented code works only for MODULAR preset. make sure above code generalizes
+    # if sample_params_dict.get((0, 2)):
+    #     sine_osc_activeness = sample_params_dict[(0, 2)]['parameters']['active']
+    # else:
+    #     sine_osc_activeness = False
+    #
+    # if sample_params_dict.get((1, 2)):
+    #     saw_osc_activeness = sample_params_dict[(1, 2)]['parameters']['active']
+    # else:
+    #     saw_osc_activeness = False
+    #
+    # if sample_params_dict.get((2, 2)):
+    #     square_osc_activeness = sample_params_dict[(2, 2)]['parameters']['active']
+    # else:
+    #     square_osc_activeness = False
+    #
+    # has_active_osc = sine_osc_activeness or square_osc_activeness or saw_osc_activeness
 
     return has_active_osc
 
