@@ -68,6 +68,7 @@ class SynthConstants:
                             'fm_sine': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
                             'fm_square': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
                             'fm_saw': ['active', 'fm_active', 'amp_c', 'freq_c', 'mod_index'],
+                            'saw_square_osc': ['saw_amp', 'square_amp', 'freq', 'factor'],
                             'mix': [],
                             'filter': ['filter_freq', 'filter_type'],
                             'lowpass_filter': ['filter_freq'],
@@ -138,7 +139,10 @@ class SynthConstants:
                        'non_active_default': self.non_active_tremolo_amount_default},
             'intensity': {'type': 'uniform',
                           'values': (self.min_intensity_filter, self.max_intensity_filter),
-                          'non_active_default': self.non_active_filter_intensity_default}
+                          'non_active_default': self.non_active_filter_intensity_default},
+            'uniform_mix_factor': {'type': 'unit_uniform',
+                                   'values': (0, 1),
+                                   'sum': 1},
         }
         
         return sampling_configurations
@@ -162,7 +166,14 @@ class SynthConstants:
                           'mod_index': sampling_configurations['mod_index']},
             'fm_saw': {'amp_c': sampling_configurations['uniform_amp'], 'freq_c': sampling_configurations['fm_freq'],
                        'mod_index': sampling_configurations['mod_index']},
-            'mix': {},
+            'saw_square_osc': {'square_amp': sampling_configurations['uniform_amp'],
+                               'saw_amp': sampling_configurations['uniform_amp'],
+                               'freq': sampling_configurations['fm_freq'],
+                               'factor': sampling_configurations['uniform_mix_factor']},
+            'oscillator_mix': {'amp': sampling_configurations['uniform_amp'],
+                               'freq': sampling_configurations['fm_freq'],
+                               'waveform': sampling_configurations['waveform']},
+            'mix': {'mix_factor': sampling_configurations['uniform_mix_factor']},
             'filter': {'filter_freq': sampling_configurations['filter_freq'],
                        'filter_type': sampling_configurations['filter_type']},
             'lowpass_filter': {'filter_freq': sampling_configurations['filter_freq']},

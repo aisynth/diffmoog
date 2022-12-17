@@ -10,7 +10,6 @@ BASIC_FLOW_LFO_DECOUPLING = [
     {'index': (0, 4), 'operation': 'env_adsr', 'default_connection': True}
 ]
 
-
 BASIC_FLOW = [
     {'index': (0, 0), 'operation': 'lfo', 'default_connection': True},
     {'index': (0, 1), 'operation': 'fm_sine', 'default_connection': True},
@@ -91,6 +90,10 @@ REDUCED = [
     {'index': (0, 3), 'operation': 'mix', 'audio_input': [[1, 2], [2, 2]], 'control_input': None, 'outputs': [[0, 4]]},
     {'index': (0, 4), 'operation': 'env_adsr', 'audio_input': [[0, 3]], 'control_input': None, 'outputs': [[0, 5]]},
     {'index': (0, 5), 'operation': 'lowpass_filter_adsr', 'audio_input': [[0, 4]], 'control_input': None, 'outputs': [[0, 6]]},
+]
+
+SAW_SQUARE_MIX = [
+    {'index': (0, 0), 'operation': 'saw_square_osc', 'default_connection': True},
 ]
 
 BASIC_FLOW_NO_ADSR = [

@@ -220,6 +220,88 @@ class Oscillator(SynthModule):
             self.warning_sent = True
 
 
+class SawSquareOscillator(SynthModule):
+
+    def __init__(self, name: str, device: str, synth_structure: SynthConstants, waveform: str = None):
+
+        super().__init__(name=name, device=device, synth_structure=synth_structure)
+
+        self.waveform = waveform
+        self.wave_type_indices = {k: torch.tensor(v, dtype=torch.long, device=self.device).squeeze()
+                                  for k, v in self.synth_structure.wave_type_dict.items()}
+        self.warning_sent = False
+
+    def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
+                      sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
+        """Creates a basic oscillator.
+
+            Retrieves a waveform shape and attributes, and construct the respected signal
+
+            Args:
+                self: Self object
+                amp: batch of n amplitudes in range [0, 1]
+                freq: batch of n frequencies in range [0, 22000]
+                phase: batch of n phases in range [0, 2pi], default is 0
+                waveform: batch of n strings, one of ['sine', 'square', 'triangle', 'sawtooth'] or a probability vector
+
+            Returns:
+                A torch tensor with the constructed signal
+
+            Raises:
+                ValueError: Provided variables are out of range
+                :rtype: object
+            """
+
+        t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True,
+                           device=self.device)
+
+        self._verify_input_params(params)
+
+        active_signal = params.get('active', None)
+        if active_signal is not None:
+            active_signal = self._standardize_input(active_signal, requested_dtype=torch.float32, requested_dims=2,
+                                                    batch_size=batch_size)
+        active_signal = self._process_active_signal(active_signal, batch_size)
+
+        square_amp = self._standardize_input(params['square_amp'], requested_dtype=torch.float32, requested_dims=2,
+                                             batch_size=batch_size)
+
+        saw_amp = self._standardize_input(params['saw_amp'], requested_dtype=torch.float32, requested_dims=2,
+                                          batch_size=batch_size)
+
+        freq = self._standardize_input(params['freq'], requested_dtype=torch.float32, requested_dims=2,
+                                       batch_size=batch_size)
+
+        factor = self._standardize_input(params['factor'], torch.float32, requested_dims=3, batch_size=batch_size)
+
+        # square_amp = active_signal * square_amp
+        # saw_amp = active_signal * saw_amp
+        freq = active_signal * freq
+
+        square_wave, sawtooth_wave = self._generate_wave_tensors(t, square_amp, saw_amp, freq, phase_mod=0)
+        oscillator_tensor = factor * square_wave + (1-facor) * sawtooth_wave
+
+        return oscillator_tensor
+
+    def _generate_wave_tensors(self, t, square_amp, saw_amp, freq, phase_mod):
+
+        square_wave = square_amp * torch.sign(torch.sin(TWO_PI * freq * t + phase_mod))
+
+        sawtooth_wave = 2 * (t * freq - torch.floor(0.5 + t * freq))  # Sawtooth closed form
+
+        # Phase shift (by normalization to range [0,1] and modulo operation)
+        sawtooth_wave = (((sawtooth_wave + 1) / 2) + phase_mod / TWO_PI) % 1
+        sawtooth_wave = saw_amp * (sawtooth_wave * 2 - 1)  # re-normalization to range [-amp, amp]
+
+        return square_wave, sawtooth_wave
+
+    def _amp_warning(self):
+        if not self.warning_sent:
+            print(f'Missing amp param in Oscillator module {self.name}. Assuming fixed amp.'
+                  f' Please check Synth structure if this is unexpected.')
+            self.warning_sent = True
+
+
 class FMOscillator(Oscillator):
 
     def __init__(self, name: str, device: str, synth_structure: SynthConstants, waveform: str = None):
@@ -725,12 +807,37 @@ class Mix(SynthModule):
     def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
                       sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
 
+        # input_signal = [n_signals, batch_size, sample_rate * siganl_duration]
+        # factor = [n_signals, batch_size] or [batch_size]
+
         assert input_signal.shape[1] == batch_size and input_signal.shape[2] == sample_rate * signal_duration
 
-        summed_signal = torch.sum(input_signal, dim=0)
-        mixed_signal = summed_signal / input_signal.shape[0]
+        factor = params.get("mix_factor", None)
+        if factor is not None:
+            factor = self._standardize_input(factor, torch.float32, requested_dims=2, batch_size=batch_size)
+            factor = self.parse_mix_factor(factor, input_signal.shape[0])
+            factorized_input_signal = input_signal * factor
+            mixed_signal = torch.sum(factorized_input_signal, dim=0)
+        else:
+            summed_signal = torch.sum(input_signal, dim=0)
+            mixed_signal = summed_signal / input_signal.shape[0]
 
         return mixed_signal
+
+    @staticmethod
+    def parse_mix_factor(factor: torch.Tensor, n_signals_to_mix: int):
+        """
+        factor: [batch_size, 1] or [n_signals, batch_size, 1]
+        """
+
+        if factor.ndim == 2:
+            factor = torch.unsqueeze(factor, 0)
+
+        if n_signals_to_mix == 2 and factor.size[0] == 1:
+            complement = 1 - factor
+            factor = torch.stack([factor, complement], dim=0)
+
+        return factor
 
 
 class Noop(SynthModule):

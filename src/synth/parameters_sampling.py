@@ -76,8 +76,10 @@ class ParametersSampler:
                         sampled_params.update(sampled_non_adsr_params)
 
                 else:
+                    n_input_sounds = len(cell_params.get("audio_input", [1]))
                     sampled_params = self._sample_parameters(operation, cell_params.get('active', None),
-                                                             cell_params.get('fm_active', None), num_sounds_)
+                                                             cell_params.get('fm_active', None), num_sounds_,
+                                                             n_input_sounds)
 
                 cell_params.update(sampled_params)
 
@@ -86,7 +88,7 @@ class ParametersSampler:
 
         return output_params_dict
 
-    def _sample_parameters(self, op_name: str, is_active, is_fm_active, batch_size: int = 1):
+    def _sample_parameters(self, op_name: str, is_active, is_fm_active, batch_size: int = 1, n_input_sounds=1):
 
         synth_structure = self.synth_structure
         sampling_config = synth_structure.param_configs[op_name]
@@ -100,6 +102,10 @@ class ParametersSampler:
             elif param_config['type'] == 'uniform':
                 sampled_values = np.random.uniform(low=param_config['values'][0], high=param_config['values'][1],
                                                    size=batch_size)
+            elif param_config['type'] == 'unit_uniform':
+                sampled_values = np.random.uniform(low=param_config['values'][0], high=param_config['values'][1],
+                                                   size=(n_input_sounds, batch_size))
+                sampled_values = sampled_values / np.sum(sampled_values, dim=0) * param_config['sum']
             elif param_config['type'] == 'choice':
                 sampled_values = random.choices(param_config['values'], k=batch_size)
             else:
