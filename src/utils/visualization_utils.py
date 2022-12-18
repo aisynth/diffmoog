@@ -1,9 +1,12 @@
+import copy
+
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 import numpy as np
 from torchaudio.transforms import Spectrogram, MelSpectrogram, AmplitudeToDB
+from tqdm import tqdm
 
 matplotlib.use('Agg')
 
@@ -56,3 +59,32 @@ def visualize_signal_prediction(orig_audio, pred_audio, orig_params, pred_params
     plt.close('all')
 
     return X
+
+
+def calc_loss_vs_param_range(synth, target_params_dict, target_signal, loss_handler, param_name, cell_index, min_val,
+                             max_val, n_steps):
+    param_range = np.linspace(min_val, max_val, n_steps)
+
+    loss_vals = []
+    for param_val in tqdm(param_range):
+        update_params = copy.deepcopy(target_params_dict)
+
+        update_params[cell_index]['parameters'].update({param_name: param_val})
+
+        synth.update_cells_from_dict(update_params)
+        signal, _ = synth.generate_signal(signal_duration=1)
+
+        target_signal_unsqueezed = target_signal.unsqueeze(dim=0)
+        loss_val, _, _ = loss_handler.call(target_signal_unsqueezed, signal, step=0, return_spectrogram=False)
+
+        loss_vals.append(loss_val.detach().cpu().numpy().item())
+
+    return loss_vals, param_range
+
+
+def plot_loss_vs_param(param_range, loss_vals, title, fig_size=(15, 5)):
+    fig = plt.figure(figsize=fig_size)
+    ax = fig.gca()
+    ax.plot(param_range, loss_vals)
+    ax.set_title(title)
+    plt.show()

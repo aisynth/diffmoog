@@ -226,6 +226,36 @@ def to_numpy_recursive(input_to_convert):
         return {k: to_numpy_recursive(v) for k, v in input_to_convert.items()}
 
 
+def to_torch_recursive(input_to_convert, device, ignore_dtypes=None):
+
+    if ignore_dtypes is not None and isinstance(input_to_convert, ignore_dtypes):
+        return input_to_convert
+
+    if isinstance(input_to_convert, torch.Tensor):
+        return input_to_convert.to(device=device)
+
+    if isinstance(input_to_convert, (int, np.integer)):
+        return torch.tensor([input_to_convert], dtype=torch.int32, device=device)
+
+    if isinstance(input_to_convert, (float, np.floating)):
+        return torch.tensor([input_to_convert], dtype=torch.float32, device=device)
+
+    if isinstance(input_to_convert, (bool, np.bool, np.bool_)):
+        return torch.tensor([input_to_convert], dtype=torch.bool, device=device)
+
+    if isinstance(input_to_convert, np.ndarray):
+        return torch.tensor(input_to_convert, device=device)
+
+    if isinstance(input_to_convert, list):
+        return torch.tensor([to_torch_recursive(item, device=device, ignore_dtypes=ignore_dtypes)
+                             for item in input_to_convert], device=device)
+
+    if isinstance(input_to_convert, dict):
+        return {k: to_torch_recursive(v, device, ignore_dtypes) for k, v in input_to_convert.items()}
+
+    raise ValueError(f"Input of unexpected type {type(input_to_convert)}. Please add case to this function.")
+
+
 def count_unpredicted_params(synth_preset_name, model_preset_name):
 
     synth_preset = synth_presets_dict[synth_preset_name]
