@@ -228,4 +228,5 @@ synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW, 'LFO': LFO, 'OSC': OSC, 'FM': FM
                       'REDUCED': REDUCED,
                       'NO_FILTER': NO_FILTER,
                       'TWO_LFO_SAW': TWO_LFO_SAW,
-                      'LFO_SAW': LFO_SAW}
+                      'LFO_SAW': LFO_SAW,
+                      'SAW_SQUARE_MIX': SAW_SQUARE_MIX}

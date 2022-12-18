@@ -103,9 +103,13 @@ class ParametersSampler:
                 sampled_values = np.random.uniform(low=param_config['values'][0], high=param_config['values'][1],
                                                    size=batch_size)
             elif param_config['type'] == 'unit_uniform':
-                sampled_values = np.random.uniform(low=param_config['values'][0], high=param_config['values'][1],
+                if n_input_sounds == 1:
+                    sampled_values = np.random.uniform(low=param_config['values'][0], high=param_config['values'][1],
+                                                       size=batch_size)
+                else:
+                    sampled_values = np.random.uniform(low=param_config['values'][0], high=param_config['values'][1],
                                                    size=(n_input_sounds, batch_size))
-                sampled_values = sampled_values / np.sum(sampled_values, dim=0) * param_config['sum']
+                    sampled_values = sampled_values / np.sum(sampled_values, axis=0) * param_config['sum']
             elif param_config['type'] == 'choice':
                 sampled_values = random.choices(param_config['values'], k=batch_size)
             else:

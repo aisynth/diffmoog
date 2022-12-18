@@ -44,6 +44,29 @@ class DecoderOnlyNetwork(nn.Module):
                     SimpleWeightLayer(torch.tensor(init_values['waveform'], device=self.device,
                                                    requires_grad=True), do_softmax=True)
 
+            if operation == 'saw_square_osc':
+                self.parameters_dict[self.get_key(index, operation, 'saw_amp')] = \
+                    SimpleWeightLayer(init_values['saw_amp'].clone().detach())
+                self.parameters_dict[self.get_key(index, operation, 'square_amp')] = \
+                    SimpleWeightLayer(init_values['square_amp'].clone().detach())
+                self.parameters_dict[self.get_key(index, operation, 'freq')] = \
+                    SimpleWeightLayer(init_values['freq'].clone().detach())
+                self.parameters_dict[self.get_key(index, operation, 'factor')] = \
+                    SimpleWeightLayer(init_values['factor'].clone().detach())
+
+                # self.parameters_dict[self.get_key(index, operation, 'saw_amp')] = \
+                #     SimpleWeightLayer(torch.tensor(init_values['saw_amp'], dtype=torch.float, device=self.device,
+                #                                    requires_grad=True), do_sigmoid=True)
+                # self.parameters_dict[self.get_key(index, operation, 'square_amp')] = \
+                #     SimpleWeightLayer(torch.tensor(init_values['square_amp'], dtype=torch.float, device=self.device,
+                #                                    requires_grad=True), do_sigmoid=True)
+                # self.parameters_dict[self.get_key(index, operation, 'freq')] = \
+                #     SimpleWeightLayer(torch.tensor(init_values['freq'], dtype=torch.float, device=self.device,
+                #                                    requires_grad=True), do_sigmoid=True)
+                # self.parameters_dict[self.get_key(index, operation, 'factor')] = \
+                #     SimpleWeightLayer(torch.tensor(init_values['factor'], device=self.device,
+                #                                    requires_grad=True), do_softmax=True)
+
             if operation == 'lfo':
 
                 # transform into un-normalized logits
@@ -163,7 +186,13 @@ class DecoderOnlyNetwork(nn.Module):
                 output_dic[index] = {'operation': operation,
                                      'parameters': param_vals}
 
-            if operation == 'lfo':
+            elif operation == 'saw_square_osc':
+                op_params = ['freq', 'saw_amp', 'square_amp', 'factor']
+                param_vals = {k: self.parameters_dict[self.get_key(index, operation, k)]() for k in op_params}
+                output_dic[index] = {'operation': operation,
+                                     'parameters': param_vals}
+
+            elif operation == 'lfo':
                 output_dic[index] = {'operation': operation,
                                      'parameters': {
                                          'freq': self.parameters_dict[self.get_key(index, operation, 'freq')](),
@@ -359,7 +388,8 @@ class SimpleWeightLayer(nn.Module):
 
         device = self.weight.device
 
-        val = torch.tensor(val, device=device)
+        if isinstance(val, float):
+            val = torch.tensor(val, device=device)
 
         if val.ndim == 1:
             val = val.unsqueeze(0)

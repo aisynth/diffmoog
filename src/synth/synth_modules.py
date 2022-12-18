@@ -76,7 +76,7 @@ class SynthModule(ABC):
             input_val = torch.tensor(input_val, dtype=requested_dtype, device=self.device)
 
         # List, ndarray or tensor input
-        if isinstance(input_val, (np.ndarray, list)):
+        if isinstance(input_val, (np.ndarray, list, np.bool_)):
             output_tensor = torch.tensor(input_val, dtype=requested_dtype, device=self.device)
         elif torch.is_tensor(input_val):
             output_tensor = input_val.to(dtype=requested_dtype, device=self.device)
@@ -272,14 +272,14 @@ class SawSquareOscillator(SynthModule):
         freq = self._standardize_input(params['freq'], requested_dtype=torch.float32, requested_dims=2,
                                        batch_size=batch_size)
 
-        factor = self._standardize_input(params['factor'], torch.float32, requested_dims=3, batch_size=batch_size)
+        factor = self._standardize_input(params['factor'], torch.float32, requested_dims=2, batch_size=batch_size)
 
         # square_amp = active_signal * square_amp
         # saw_amp = active_signal * saw_amp
         freq = active_signal * freq
 
         square_wave, sawtooth_wave = self._generate_wave_tensors(t, square_amp, saw_amp, freq, phase_mod=0)
-        oscillator_tensor = factor * square_wave + (1-facor) * sawtooth_wave
+        oscillator_tensor = factor * square_wave + (1 - factor) * sawtooth_wave
 
         return oscillator_tensor
 
@@ -878,5 +878,7 @@ def get_synth_module(op_name: str, device: str, synth_structure: SynthConstants)
         return FilterShaper(device, synth_structure, filter_type='lowpass')
     elif op_name in ['mix']:
         return Mix(device, synth_structure)
+    elif op_name in ['saw_square_osc']:
+        return SawSquareOscillator(op_name, device, synth_structure)
     else:
         raise ValueError(f"Unsupported synth module {op_name}")

@@ -18,7 +18,7 @@ from utils.train_utils import get_project_root
 
 
 def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_duration: float, note_off_time: float,
-                   device: device, batch_size: int = 1000, seed: int = 42):
+                   device: device, batch_size: int = 1000, seed: int = 47):
     """
     Create a dataset by randomizing synthesizer parameters and generating sound.
 
@@ -103,11 +103,12 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
 def _verify_activity(sample_params_dict):
 
     has_active_osc = False
+
     for key in sample_params_dict.keys():
         if sample_params_dict[key]:
             operation = sample_params_dict[key]['operation']
-            if operation in ['osc', 'fm_saw', 'fm_sine', 'fm_square', 'fm', 'fm_lfo']:
-                is_active = sample_params_dict[key]['parameters']['active']
+            if operation in ['osc', 'fm_saw', 'fm_sine', 'fm_square', 'fm', 'fm_lfo', 'saw_square_osc']:
+                is_active = sample_params_dict[key]['parameters'].get('active', True)
                 has_active_osc = has_active_osc or is_active
         else:
             continue
