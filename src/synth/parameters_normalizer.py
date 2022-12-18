@@ -66,7 +66,7 @@ class Normalizer:
 
             normalized_params_dict[key] = {'operation': operation, 'parameters': {}}
             for param_name, param_val in params.items():
-                if (operation in ['osc'] and param_name in ['freq']) or \
+                if (operation in ['osc', 'saw_square_osc'] and param_name in ['freq']) or \
                         (param_name == 'freq_c' and 'lfo' not in operation):
                     normalized_params_dict[key]['parameters'][param_name] = \
                         self.oscillator_freq_normalizer.normalise(params[param_name])
@@ -99,7 +99,7 @@ class Normalizer:
 
             denormalized_params_dict[key] = {'operation': operation, 'parameters': {}}
             for param_name, param_val in params.items():
-                if (operation in ['osc'] and param_name in ['freq']) or \
+                if (operation in ['osc', 'saw_square_osc'] and param_name in ['freq']) or \
                         (param_name == 'freq_c' and 'lfo' not in operation):
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.oscillator_freq_normalizer.denormalise(params[param_name])
