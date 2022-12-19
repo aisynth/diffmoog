@@ -1,4 +1,4 @@
-from typing import Sequence, Union
+from typing import Sequence, Union, Callable
 
 import numpy as np
 import torch
@@ -324,6 +324,41 @@ def save_model(cur_epoch, model, optimiser_arg, avg_epoch_loss, loss_list, ckpt_
     text_file = open(txt_path, 'a')
     text_file.write(f"epoch:{cur_epoch}\tloss: " + str(avg_epoch_loss) + "\n")
     text_file.close()
+
+
+def remove_external_dims(item):
+
+    if isinstance(item, list) and len(item) == 1:
+        return remove_external_dims(item[0])
+    elif isinstance(item, (np.ndarray, torch.Tensor)) and item.ndim > 0 and len(item) == 1:
+        return remove_external_dims(item[0])
+    return item
+
+
+def process_categorical_variable(values: Sequence, map_fn: Callable, batch_size: int, return_one_hot: bool = True):
+
+    if batch_size > 1:
+        values = remove_external_dims(values)
+    else:
+        values = [remove_external_dims(values)]
+
+    assert len(values) == batch_size
+
+    processed_res = []
+    for val in values:
+        core_val = remove_external_dims(val)
+        if map_fn is not None:
+            idx = map_fn[core_val] if isinstance(map_fn, dict) else map_fn(core_val)
+            if return_one_hot:
+                processed_val = np.zeros(len(map_fn), dtype=np.float32)
+                processed_val[idx] = 1.0
+                processed_res.append(processed_val)
+            else:
+                processed_res.append(idx)
+        else:
+            processed_res.append(core_val)
+
+    return processed_res
 
 
 class MultiSpecTransform:

@@ -145,6 +145,14 @@ LFO_SAW = [
     {'index': (0, 2), 'operation': 'fm_saw', 'audio_input': None, 'control_input': [[1, 1]], 'outputs': [(0, 3)]},
 ]
 
+LFO_SIN = [
+    {'index': (0, 0), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (0, 1), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (1, 1), 'operation': 'lfo', 'audio_input': None, 'control_input': None,
+     'outputs': [(0, 2)], 'switch_outputs': False, 'allow_multiple': False, 'active_prob': 0.5},
+    {'index': (0, 2), 'operation': 'fm_sine', 'audio_input': None, 'control_input': [[1, 1]], 'outputs': [(0, 3)]},
+]
+
 NON_SINE_LFO = [
     {'index': (1, 0), 'operation': 'lfo_non_sine', 'default_connection': True},
 ]
@@ -229,4 +237,5 @@ synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW, 'LFO': LFO, 'OSC': OSC, 'FM': FM
                       'NO_FILTER': NO_FILTER,
                       'TWO_LFO_SAW': TWO_LFO_SAW,
                       'LFO_SAW': LFO_SAW,
-                      'SAW_SQUARE_MIX': SAW_SQUARE_MIX}
+                      'SAW_SQUARE_MIX': SAW_SQUARE_MIX,
+                      'LFO_SIN': LFO_SIN}

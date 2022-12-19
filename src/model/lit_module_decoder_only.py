@@ -12,7 +12,7 @@ from torch.optim.lr_scheduler import ConstantLR, ReduceLROnPlateau
 
 from model.loss.parameters_loss import ParametersLoss
 from model.loss.spectral_loss import SpectralLoss, ControlSpectralLoss
-from model.model import SynthNetwork, DecoderOnlyNetwork
+from model.model import SynthNetwork, DecoderNetwork
 from synth.parameters_normalizer import Normalizer
 from synth.synth_architecture import SynthModular
 from synth.synth_constants import synth_constants
@@ -36,7 +36,7 @@ class LitModularSynthDecOnly(LightningModule):
 
         self.ignore_params = train_cfg.synth.get('ignore_params', None)
 
-        self.decoder_only_net = DecoderOnlyNetwork(preset=self.cfg.synth.preset, device=device)
+        self.decoder_only_net = DecoderNetwork(preset=self.cfg.synth.preset, device=device)
 
         if train_cfg.model.train_single_param:
             train_params_dataframe = datamodule.train_dataset.params

@@ -1,5 +1,6 @@
 from typing import Sequence
 
+import numpy as np
 import torch
 from torch import nn
 from torchvision.models import resnet18, resnet34
@@ -7,11 +8,12 @@ from synth.synth_presets import synth_presets_dict
 
 from synth.synth_constants import synth_constants
 from model.loss.spectral_loss_presets import loss_presets
+from utils.train_utils import process_categorical_variable
 
 LATENT_SPACE_SIZE = 128
 
 
-class DecoderOnlyNetwork(nn.Module):
+class DecoderNetwork(nn.Module):
     def __init__(self, preset: str, device):
         self.preset = synth_presets_dict.get(preset, None)
         if self.preset is None:
@@ -22,135 +24,44 @@ class DecoderOnlyNetwork(nn.Module):
         self.device = device
         self.parameters_dict = nn.ModuleDict()
 
-    def apply_params(self, init_params):
+    def apply_params(self, init_params, batch_size=1):
 
         for cell in self.preset:
+
             index = cell.get('index')
             operation = cell.get('operation')
+
             if operation is None or index not in init_params:
                 continue
+
             init_values = init_params[index]['parameters']
-            if operation == 'osc':
-                self.parameters_dict[self.get_key(index, operation, 'amp')] = \
-                    SimpleWeightLayer(torch.tensor(init_values['amp'], dtype=torch.float, device=self.device,
-                                                   requires_grad=True), do_sigmoid=True)
-                self.parameters_dict[self.get_key(index, operation, 'freq')] = \
-                    SimpleWeightLayer(torch.tensor(init_values['freq'], dtype=torch.float, device=self.device,
-                                                   requires_grad=True), do_sigmoid=True)
-                # self.parameters_dict[self.get_key(index, operation, 'waveform')] = \
-                #     SimpleWeightLayer(torch.rand(len(synth_constants.wave_type_dict), device=self.device,
-                #                                  requires_grad=True), do_softmax=True)
-                self.parameters_dict[self.get_key(index, operation, 'waveform')] = \
-                    SimpleWeightLayer(torch.tensor(init_values['waveform'], device=self.device,
-                                                   requires_grad=True), do_softmax=True)
+            op_params = synth_constants.modular_synth_params[operation]
 
-            if operation == 'saw_square_osc':
-                self.parameters_dict[self.get_key(index, operation, 'saw_amp')] = \
-                    SimpleWeightLayer(init_values['saw_amp'].clone().detach())
-                self.parameters_dict[self.get_key(index, operation, 'square_amp')] = \
-                    SimpleWeightLayer(init_values['square_amp'].clone().detach())
-                self.parameters_dict[self.get_key(index, operation, 'freq')] = \
-                    SimpleWeightLayer(init_values['freq'].clone().detach())
-                self.parameters_dict[self.get_key(index, operation, 'factor')] = \
-                    SimpleWeightLayer(init_values['factor'].clone().detach())
+            assert set(op_params) == set(init_values.keys()) - {'output'},\
+                f"DecoderNetwork got mismatching parameter values in apply_params for operation {operation}: \n " \
+                f"Expected: {set(op_params)}\n Received: {set(init_values.keys())}"
 
-                # self.parameters_dict[self.get_key(index, operation, 'saw_amp')] = \
-                #     SimpleWeightLayer(torch.tensor(init_values['saw_amp'], dtype=torch.float, device=self.device,
-                #                                    requires_grad=True), do_sigmoid=True)
-                # self.parameters_dict[self.get_key(index, operation, 'square_amp')] = \
-                #     SimpleWeightLayer(torch.tensor(init_values['square_amp'], dtype=torch.float, device=self.device,
-                #                                    requires_grad=True), do_sigmoid=True)
-                # self.parameters_dict[self.get_key(index, operation, 'freq')] = \
-                #     SimpleWeightLayer(torch.tensor(init_values['freq'], dtype=torch.float, device=self.device,
-                #                                    requires_grad=True), do_sigmoid=True)
-                # self.parameters_dict[self.get_key(index, operation, 'factor')] = \
-                #     SimpleWeightLayer(torch.tensor(init_values['factor'], device=self.device,
-                #                                    requires_grad=True), do_softmax=True)
-
-            if operation == 'lfo':
-
-                # transform into un-normalized logits
-                if init_values['active']:
-                    init_values['active'] = [-1000.]
+            for param_name in op_params:
+                if param_name in ['waveform', 'filter_type']:
+                    val_idx_dict = synth_constants.wave_type_dict if param_name == 'waveform' else \
+                        synth_constants.filter_type_dict
+                    init_val = process_categorical_variable(init_values[param_name], val_idx_dict, batch_size,
+                                                            return_one_hot=True)
+                elif param_name in ['active', 'fm_active']:
+                    map = lambda x: 1.0 if x else -1.0
+                    init_val = process_categorical_variable(init_values[param_name], map, batch_size,
+                                                            return_one_hot=False)
                 else:
-                    init_values['active'] = [1000.]
+                    init_val = init_values[param_name]
 
-                if init_values['waveform'][0] == 'sine':
-                    init_values['waveform'] = [1000., 0., 0.]
-                elif init_values['waveform'][0] == 'square':
-                    init_values['waveform'] = [0., 1000., 0.]
-                elif init_values['waveform'][0] == 'sawtooth':
-                    init_values['waveform'] = [0., 0., 1000.]
+                if isinstance(init_val, torch.Tensor):
+                    init_val = init_val.clone().detach().cpu().numpy()
+                elif isinstance(init_val, list):
+                    init_val = np.asarray(init_val)
 
-
-                self.parameters_dict[self.get_key(index, operation, 'freq')] = \
-                    SimpleWeightLayer(torch.tensor(init_values['freq'],
-                                                   dtype=torch.float,
-                                                   device=self.device,
-                                                   requires_grad=True),
-                                                   do_sigmoid=False)
-                self.parameters_dict[self.get_key(index, operation, 'active')] = \
-                    SimpleWeightLayer(torch.tensor(init_values['active'],
-                                                   dtype=torch.float,
-                                                   device=self.device,
-                                                   requires_grad=True),
-                                                   do_sigmoid=False)
-                # self.parameters_dict[self.get_key(index, operation, 'waveform')] = \
-                #     SimpleWeightLayer(torch.rand(len(synth_constants.wave_type_dict),
-                #                                  device=self.device,
-                #                                  requires_grad=True),
-                #                       do_softmax=True)
-                self.parameters_dict[self.get_key(index, operation, 'waveform')] = \
-                    SimpleWeightLayer(torch.tensor(init_values['waveform'],
-                                                   device=self.device,
-                                                   requires_grad=True),
-                                                   do_softmax=False)
-
-            elif operation == 'fm':
-                for fm_param in ['amp_c', 'freq_c', 'mod_index']:
-                    self.parameters_dict[self.get_key(index, operation, fm_param)] = \
-                        SimpleWeightLayer(torch.tensor(init_values[fm_param], dtype=torch.float, device=self.device,
-                                                       requires_grad=True), do_sigmoid=True)
-                self.parameters_dict[self.get_key(index, operation, 'waveform')] = \
-                    SimpleWeightLayer(torch.rand(len(self.synth_cfg.wave_type_dict), device=self.device,
-                                                 requires_grad=True), do_softmax=True)
-
-            elif operation == 'fm_saw':
-                for fm_param in ['amp_c', 'freq_c', 'mod_index']:
-                    self.parameters_dict[self.get_key(index, operation, fm_param)] = \
-                        SimpleWeightLayer(torch.tensor(init_values[fm_param], dtype=torch.float, device=self.device,
-                                                       requires_grad=True), do_sigmoid=False)
-
-                if init_values['active']:
-                    init_values['active'] = [-1000.]
-                else:
-                    init_values['active'] = [1000.]
-
-                if init_values['fm_active']:
-                    init_values['fm_active'] = [-1000.]
-                else:
-                    init_values['fm_active'] = [1000.]
-
-                self.parameters_dict[self.get_key(index, operation, 'active')] = \
-                    SimpleWeightLayer(torch.tensor(init_values['active'], dtype=torch.float, device=self.device,
-                                                   requires_grad=True), do_sigmoid=False)
-                self.parameters_dict[self.get_key(index, operation, 'fm_active')] = \
-                    SimpleWeightLayer(torch.tensor(init_values['fm_active'], dtype=torch.float, device=self.device,
-                                                   requires_grad=True), do_sigmoid=False)
-
-            elif operation == 'filter':
-                self.parameters_dict[self.get_key(index, operation, 'filter_type')] = \
-                    SimpleWeightLayer(torch.rand(len(self.synth_cfg.filter_type_dict), device=self.device,
-                                                 requires_grad=True), do_softmax=True)
-                self.parameters_dict[self.get_key(index, operation, 'filter_freq')] = \
-                    SimpleWeightLayer(torch.tensor(init_values['filter_freq'], dtype=torch.float, device=self.device,
-                                                   requires_grad=True), do_sigmoid=True)
-
-            elif operation == 'env_adsr':
-                for adsr_param in ['attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']:
-                    self.parameters_dict[self.get_key(index, operation, adsr_param)] = \
-                        SimpleWeightLayer(torch.tensor(init_values[adsr_param], dtype=torch.float, device=self.device,
-                                                       requires_grad=True), do_sigmoid=True)
+                param_head = SimpleWeightLayer(torch.tensor(init_val, device=self.device, requires_grad=True),
+                                               do_softmax=False)
+                self.parameters_dict[self.get_key(index, operation, param_name)] = param_head
 
     def apply_params_partial(self, params_to_apply):
 
@@ -172,57 +83,20 @@ class DecoderOnlyNetwork(nn.Module):
                 layer.freeze(param_val)
 
     def forward(self):
+
         output_dic = {}
         for cell in self.preset:
+
             index = cell.get('index')
             operation = cell.get('operation')
 
             if operation is None:
                 continue
 
-            if operation == 'osc':
-                op_params = ['amp', 'freq', 'waveform']
-                param_vals = {k: self.parameters_dict[self.get_key(index, operation, k)]() for k in op_params}
-                output_dic[index] = {'operation': operation,
-                                     'parameters': param_vals}
-
-            elif operation == 'saw_square_osc':
-                op_params = ['freq', 'saw_amp', 'square_amp', 'factor']
-                param_vals = {k: self.parameters_dict[self.get_key(index, operation, k)]() for k in op_params}
-                output_dic[index] = {'operation': operation,
-                                     'parameters': param_vals}
-
-            elif operation == 'lfo':
-                output_dic[index] = {'operation': operation,
-                                     'parameters': {
-                                         'freq': self.parameters_dict[self.get_key(index, operation, 'freq')](),
-                                         'active': self.parameters_dict[self.get_key(index, operation, 'active')](),
-                                         'waveform': self.parameters_dict[self.get_key(index, operation, 'waveform')](),
-                                     }}
-
-            elif operation == 'fm':
-                op_params = ['amp_c', 'freq_c', 'mod_index', 'waveform']
-                param_vals = {k: self.parameters_dict[self.get_key(index, operation, k)]() for k in op_params}
-                output_dic[index] = {'operation': operation,
-                                     'parameters': param_vals}
-
-            elif operation == 'fm_saw':
-                op_params = ['amp_c', 'freq_c', 'mod_index', 'active', 'fm_active']
-                param_vals = {k: self.parameters_dict[self.get_key(index, operation, k)]() for k in op_params}
-                output_dic[index] = {'operation': operation,
-                                     'parameters': param_vals}
-
-            elif operation == 'filter':
-                op_params = ['filter_type', 'filter_freq']
-                param_vals = {k: self.parameters_dict[self.get_key(index, operation, k)]() for k in op_params}
-                output_dic[index] = {'operation': operation,
-                                     'parameters': param_vals}
-
-            elif operation == 'env_adsr':
-                op_params = ['attack_t', 'decay_t', 'sustain_t', 'release_t', 'sustain_level']
-                param_vals = {k: self.parameters_dict[self.get_key(index, operation, k)]() for k in op_params}
-                output_dic[index] = {'operation': operation,
-                                     'parameters': param_vals}
+            op_params = synth_constants.modular_synth_params[operation]
+            param_vals = {k: self.parameters_dict[self.get_key(index, operation, k)]() for k in op_params}
+            output_dic[index] = {'operation': operation,
+                                 'parameters': param_vals}
 
         return output_dic
 
