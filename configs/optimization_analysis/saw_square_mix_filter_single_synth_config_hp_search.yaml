@@ -1,7 +1,7 @@
 model:
   arch: simple
   backbone: resnet
-  preset: SAW_SQUARE_MIX
+  preset: SAW_SQUARE_MIX_FILTER
   num_workers: 0
   batch_size: 1
   num_epochs: 500
@@ -33,7 +33,7 @@ loss:
   chain_warmup_factor: 5
 
 synth:
-  preset: SAW_SQUARE_MIX
+  preset: SAW_SQUARE_MIX_FILTER
   transform: MEL
   use_multi_spec_input: True
   signal_duration: 1.0

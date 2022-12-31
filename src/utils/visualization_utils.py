@@ -66,12 +66,24 @@ def calc_loss_vs_param_range(synth, target_params_dict, target_signal, loss_hand
     param_range = np.linspace(min_val, max_val, n_steps)
 
     loss_vals = []
-    for param_val in tqdm(param_range):
+    # todo: refactor hardcoded 1
+    signal_duration = 1
+    for i, param_val in enumerate(tqdm(param_range)):
         update_params = copy.deepcopy(target_params_dict)
 
         update_params[cell_index]['parameters'].update({param_name: param_val})
 
         synth.update_cells_from_dict(update_params)
+
+        if param_name in ['attack_t', 'decay_t', 'sustain_t', 'release_t']:
+            attack_t = update_params[cell_index]['parameters']['attack_t']
+            decay_t = update_params[cell_index]['parameters']['decay_t']
+            sustain_t = update_params[cell_index]['parameters']['sustain_t']
+            release_t = update_params[cell_index]['parameters']['release_t']
+
+            if attack_t + decay_t + sustain_t + release_t >= signal_duration - 1e-3:
+                return loss_vals, param_range[:i]
+
         signal, _ = synth.generate_signal(signal_duration=1)
 
         target_signal_unsqueezed = target_signal.unsqueeze(dim=0)

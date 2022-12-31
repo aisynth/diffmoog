@@ -18,7 +18,7 @@ from utils.train_utils import get_project_root
 
 
 def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_duration: float, note_off_time: float,
-                   device: device, batch_size: int = 1000, seed: int = 47):
+                   device: device, batch_size: int = 1000, seed: int = 26):
     """
     Create a dataset by randomizing synthesizer parameters and generating sound.
 
