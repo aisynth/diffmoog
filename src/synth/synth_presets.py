@@ -96,6 +96,11 @@ SAW_SQUARE_MIX = [
     {'index': (0, 0), 'operation': 'saw_square_osc', 'default_connection': True},
 ]
 
+SAW_SQUARE_MIX_FILTER = [
+    {'index': (0, 0), 'operation': 'saw_square_osc',  'audio_input': None, 'outputs': [[0, 1]]},
+    {'index': (0, 1), 'operation': 'lowpass_filter', 'audio_input': [[0, 0]], 'outputs': [[0, 2]]},
+]
+
 BASIC_FLOW_NO_ADSR = [
     {'index': (0, 0), 'operation': 'lfo_sine', 'default_connection': True},
     {'index': (0, 1), 'operation': 'fm', 'default_connection': True},
@@ -167,6 +172,22 @@ LFO_SIN = [
     {'index': (1, 1), 'operation': 'lfo', 'audio_input': None, 'control_input': None,
      'outputs': [(0, 2)], 'switch_outputs': False, 'allow_multiple': False, 'active_prob': 0.5},
     {'index': (0, 2), 'operation': 'fm_sine', 'audio_input': None, 'control_input': [[1, 1]], 'outputs': [(0, 3)]},
+]
+
+OSC_FILTER = [
+    {'index': (0, 0), 'operation': 'osc', 'audio_input': None, 'control_input': None, 'outputs': [(0, 1)]},
+    {'index': (0, 1), 'operation': 'lowpass_filter', 'audio_input': [[0, 0]], 'control_input': None, 'outputs': [(0, 2)]},
+]
+
+OSC_ADSR = [
+    {'index': (0, 0), 'operation': 'osc', 'audio_input': None, 'control_input': None, 'outputs': [(0, 1)]},
+    {'index': (0, 1), 'operation': 'env_adsr', 'audio_input': [[0, 0]], 'control_input': None, 'outputs': [(0, 2)]},
+]
+
+OSC_TREMOLO = [
+    {'index': (0, 0), 'operation': 'lfo_sine', 'audio_input': None, 'control_input': None, 'outputs': [(0, 2)], 'switch_outputs': False, 'active_prob': 1},
+    {'index': (0, 1), 'operation': 'osc', 'audio_input': None, 'control_input': None, 'outputs': [(0, 2)]},
+    {'index': (0, 2), 'operation': 'tremolo', 'audio_input': [[0, 1]], 'control_input': [[0, 0]], 'outputs': [(0, 3)], 'active_prob': 1}
 ]
 
 NON_SINE_LFO = [
@@ -257,3 +278,9 @@ synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW, 'LFO': LFO, 'OSC': OSC, 'FM': FM
                       'LFO_SIN': LFO_SIN,
                       'SURROGATE_LFO_SAW': SURROGATE_LFO_SAW,
                       'SURROGATE_LFO_SINE': SURROGATE_LFO_SINE}
+                      'SAW_SQUARE_MIX_FILTER': SAW_SQUARE_MIX_FILTER,
+                      'LFO_SIN': LFO_SIN,
+                      'OSC_FILTER': OSC_FILTER,
+                      'OSC_ADSR': OSC_ADSR,
+                      'OSC_TREMOLO': OSC_TREMOLO,
+                      }

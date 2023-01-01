@@ -15,7 +15,7 @@ model:
 
 loss:
   spec_loss_type: SPECTROGRAM
-  preset: cumsum_freq
+  preset: cumsum_time
   control_spec_preset: cumsum_freq
   parameters_loss_type: L1
 
