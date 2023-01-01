@@ -79,7 +79,7 @@ def calc_loss_vs_param_range(synth, target_params_dict, target_signal, loss_hand
 
         loss_vals.append(loss_val.detach().cpu().numpy().item())
 
-    return loss_vals, param_range
+    return loss_vals, param_range, signal
 
 
 def plot_loss_vs_param(param_range, loss_vals, title, fig_size=(15, 5)):
