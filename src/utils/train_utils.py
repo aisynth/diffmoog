@@ -335,7 +335,8 @@ def remove_external_dims(item):
     return item
 
 
-def process_categorical_variable(values: Sequence, map_fn: Callable, batch_size: int, return_one_hot: bool = True):
+def process_categorical_variable(values: Sequence, map_fn: Callable, batch_size: int, return_one_hot: bool = True,
+                                 factor: float = 1.0):
 
     if batch_size > 1:
         values = remove_external_dims(values)
@@ -351,7 +352,7 @@ def process_categorical_variable(values: Sequence, map_fn: Callable, batch_size:
             idx = map_fn[core_val] if isinstance(map_fn, dict) else map_fn(core_val)
             if return_one_hot:
                 processed_val = np.zeros(len(map_fn), dtype=np.float32)
-                processed_val[idx] = 1.0
+                processed_val[idx] = 1.0 * factor
                 processed_res.append(processed_val)
             else:
                 processed_res.append(idx)

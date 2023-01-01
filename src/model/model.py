@@ -46,7 +46,7 @@ class DecoderNetwork(nn.Module):
                     val_idx_dict = synth_constants.wave_type_dict if param_name == 'waveform' else \
                         synth_constants.filter_type_dict
                     init_val = process_categorical_variable(init_values[param_name], val_idx_dict, batch_size,
-                                                            return_one_hot=True)
+                                                            return_one_hot=True, factor=1000)
                 elif param_name in ['active', 'fm_active']:
                     map = lambda x: 1.0 if x else -1.0
                     init_val = process_categorical_variable(init_values[param_name], map, batch_size,
@@ -60,7 +60,7 @@ class DecoderNetwork(nn.Module):
                     init_val = np.asarray(init_val)
 
                 param_head = SimpleWeightLayer(torch.tensor(init_val, device=self.device, requires_grad=True),
-                                               do_softmax=False)
+                                               do_softmax=False, do_sigmoid=True)
                 self.parameters_dict[self.get_key(index, operation, param_name)] = param_head
 
     def apply_params_partial(self, params_to_apply):
