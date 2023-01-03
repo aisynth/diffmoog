@@ -58,7 +58,7 @@ def run(run_args):
                       accelerator="gpu",
                       detect_anomaly=True,
                       log_every_n_steps=log_every_n_steps,
-                      check_val_every_n_epoch=500)
+                      check_val_every_n_epoch=1)
     trainer.fit(lit_module, datamodule=datamodule)
 
 

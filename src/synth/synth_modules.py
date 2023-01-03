@@ -182,7 +182,8 @@ class Oscillator(SynthModule):
         amp = active_signal * amp
         freq = active_signal * freq
 
-        wave_tensors = self._generate_wave_tensors(t, amp, freq, phase_mod=0, sample_rate=sample_rate)
+        wave_tensors = self._generate_wave_tensors(t, amp, freq, phase_mod=0, sample_rate=sample_rate,
+                                                   signal_duration=signal_duration)
 
         if self.waveform is not None:
             return wave_tensors[self.waveform]
@@ -192,7 +193,7 @@ class Oscillator(SynthModule):
 
         return oscillator_tensor
 
-    def _generate_wave_tensors(self, t, amp, freq, phase_mod, sample_rate):
+    def _generate_wave_tensors(self, t, amp, freq, phase_mod, sample_rate, signal_duration):
 
         wave_tensors = {}
 
@@ -224,7 +225,7 @@ class Oscillator(SynthModule):
 
 class SurrogateOscillator(Oscillator):
 
-    def _generate_wave_tensors(self, t, amp, freq, phase_mod, sample_rate, modulator=None):
+    def _generate_wave_tensors(self, t, amp, freq, phase_mod, sample_rate, signal_duration, modulator=None):
 
         wave_tensors = {}
 
@@ -232,7 +233,7 @@ class SurrogateOscillator(Oscillator):
         if modulator is not None:
             z = torch.exp(1j * (z_freq + (2 * math.pi * modulator) * (100.0 / sample_rate)))
         else:
-            z = torch.exp(1j * (z_freq.repeat(1, sample_rate-1)))  # complex parameter
+            z = torch.exp(1j * (z_freq.repeat(1, int(sample_rate * signal_duration) - 1)))  # complex parameter
 
         if self.waveform == 'sine' or self.waveform is None:
             sine_wave = amp * self.complex_oscillator_cumprod(z)
@@ -496,7 +497,8 @@ class SurrogateFMOscillator(SurrogateOscillator):
         t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True,
                            device=self.device)
         wave_tensors = self._generate_wave_tensors(t, amp=parsed_params['amp_c'], freq=parsed_params['freq_c'],
-                                                   phase_mod=0, sample_rate=sample_rate, modulator=modulator_signal)
+                                                   phase_mod=0, sample_rate=sample_rate,
+                                                   signal_duration=signal_duration, modulator=modulator_signal)
 
         if self.waveform is not None:
             return wave_tensors[self.waveform]

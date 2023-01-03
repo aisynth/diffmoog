@@ -184,7 +184,7 @@ class SynthNetwork(nn.Module):
                 model_output = param_head(latent)
 
                 if param in ['waveform', 'filter_type']:
-                    final_model_output = model_output
+                    final_model_output = self.softmax(model_output)
                 elif param not in ['active', 'fm_active']:
                     final_model_output = self.sigmoid(model_output)
                 else:
