@@ -6,6 +6,8 @@ from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 
 import pandas as pd
 import numpy as np
+import sys
+import subprocess
 
 from torch import device
 import scipy.io.wavfile
@@ -98,6 +100,14 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
     parameters_dataframe.to_pickle(str(parameters_pickle_path))
     parameters_dataframe.to_csv(parameters_csv_path)
 
+    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()
+
+    args = " ".join(sys.argv[1:])
+    txt_path = os.path.join(dataset_dir_path, 'commit_and_args.txt')
+
+    with open(txt_path, 'w') as f:
+        f.write(f"Git commit: {commit}\n")
+        f.write(f"Arguments: {args}\n")
 
 def _verify_activity(sample_params_dict):
 

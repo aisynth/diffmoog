@@ -3,7 +3,7 @@ model:
   backbone: resnet
   preset: MODULAR
   num_workers: 4
-  batch_size: 64
+  batch_size: 16
   num_epochs: 200
 
   resume_training: /home/almogelharar/almog/ai_synth/experiments/baseline_old_fltr_full_range_w_noise/checkpoints/last.ckpt

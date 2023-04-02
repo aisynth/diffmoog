@@ -930,7 +930,11 @@ class Mix(SynthModule):
 
         assert input_signal.shape[1] == batch_size and input_signal.shape[2] == sample_rate * signal_duration
 
-        factor = params.get("mix_factor", None)
+        if params is not None:
+            factor = params.get("mix_factor", None)
+        else:
+            factor = None
+
         if factor is not None:
             factor = self._standardize_input(factor, torch.float32, requested_dims=2, batch_size=batch_size)
             factor = self.parse_mix_factor(factor, input_signal.shape[0])
