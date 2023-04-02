@@ -10,7 +10,7 @@ from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 
 from sklearn.metrics import confusion_matrix
-from scipy.special import softmax
+from scipy.special import softmax, expit
 
 from synth.synth_constants import synth_constants
 from synth.synth_presets import synth_presets_dict
@@ -150,22 +150,23 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
                     waveform_idx = [synth_constants.wave_type_dict[wt] for wt in target_vals]
                     diff = [1 - v[idx] for idx, v in zip(waveform_idx, pred_vals)]
                     diff = np.asarray(diff).squeeze()
-            elif param_name == 'filter_type':
-                if target_vals.ndim == 0:
-                    filter_type_idx = [synth_constants.filter_type_dict[target_vals.item()]]
-                    diff = (1 - pred_vals[0][filter_type_idx]).item()
-                else:
-                    filter_type_idx = [synth_constants.filter_type_dict[ft] for ft in target_vals.squeeze()]
-                    diff = [1 - v[idx] for idx, v in zip(filter_type_idx, pred_vals)]
-                    diff = np.asarray(diff).squeeze()
+            # elif param_name == 'filter_type':
+            #     if target_vals.ndim == 0:
+            #         filter_type_idx = [synth_constants.filter_type_dict[target_vals.item()]]
+            #         diff = (1 - pred_vals[0][filter_type_idx]).item()
+            #     else:
+            #         filter_type_idx = [synth_constants.filter_type_dict[ft] for ft in target_vals.squeeze()]
+            #         diff = [1 - v[idx] for idx, v in zip(filter_type_idx, pred_vals)]
+            #         diff = np.asarray(diff).squeeze()
             # elif param_name in ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']:
             #     continue
             elif param_name == 'envelope':
                 diff = [np.linalg.norm(pred_vals[k] - target_vals[k]) for k in range(pred_vals.shape[0])]
-            elif param_name in ['active', 'fm_active']:
+            elif param_name in ['active', 'fm_active', 'filter_type']:
                 active_targets = [0 if f else 1 for f in target_vals]
-                softmax_pred_vals = softmax(pred_vals, axis=1)
-                active_preds = np.argmax(softmax_pred_vals, axis=1)
+                pred_vals_squeezed = np.squeeze(pred_vals)
+                sigmoid_pred_vals = expit(pred_vals_squeezed)
+                active_preds = np.round(sigmoid_pred_vals)
                 conf_mat = confusion_matrix(active_targets, active_preds, labels=[0, 1])
 
                 true_negative = conf_mat[0][0]
@@ -173,7 +174,7 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
 
                 accuracy = (true_negative + true_positive) / len(active_preds)
                 all_diffs[op_index][f'{param_name}_accuracy'] = accuracy
-                diff = [1 - v[idx] for idx, v in zip(active_targets, softmax_pred_vals)]
+                diff = np.abs(active_targets - sigmoid_pred_vals)
             else:
                 if pred_vals.shape == (1, 1):
                     diff = np.abs(target_vals - pred_vals.squeeze(axis=0))

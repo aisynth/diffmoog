@@ -126,7 +126,7 @@ class LitModularSynth(LightningModule):
                                                                       target_params_unit_range)
         pred_final_signal = None
         if self.global_step < self.cfg.loss.spectrogram_loss_warmup and not return_metrics:
-            spec_loss = 0
+            spec_loss = torch.tensor(0)
         else:
             pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
                                                                                       batch_size)
