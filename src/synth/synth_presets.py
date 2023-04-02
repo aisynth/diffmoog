@@ -78,6 +78,24 @@ MODULAR_NEW = [
     {'index': (0, 6), 'operation': 'tremolo', 'audio_input': [[0, 5]], 'control_input': [[0, 0]], 'outputs': None, 'active_prob': 0}
 ]
 
+FM_DX7 = [
+    {'index': (0, 0), 'operation': 'osc', 'audio_input': None, 'control_input': None, 'outputs': [[0, 1]]},
+    {'index': (1, 1), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (0, 2), 'operation': 'fm_sine', 'audio_input': None, 'control_input': [[0, 1]], 'outputs': [[0, 3]]},
+    {'index': (1, 2), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (2, 2), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (0, 1), 'operation': 'env_adsr', 'audio_input': [[0, 0]], 'control_input': None, 'outputs': [[0, 2]]},
+    {'index': (1, 0), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (2, 0), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (2, 1), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (1, 3), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (2, 3), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (0, 3), 'operation': None, 'audio_input': [[0, 2]], 'control_input': None, 'outputs': [[0, 4]]},
+    {'index': (0, 4), 'operation': None, 'audio_input': [[0, 3]], 'control_input': None, 'outputs': [[0, 5]]},
+    {'index': (0, 5), 'operation': None, 'audio_input': [[0, 4]], 'control_input': None, 'outputs': [[0, 6]]},
+    {'index': (0, 6), 'operation': None, 'audio_input': [[0, 5]], 'control_input': None, 'outputs': None}
+]
+
 REDUCED = [
     {'index': (1, 2), 'operation': 'fm_saw', 'audio_input': None, 'control_input': None, 'outputs': [[0, 3]]},
     {'index': (2, 2), 'operation': 'fm_square', 'audio_input': None, 'control_input': None, 'outputs': [[0, 3]]},
@@ -148,6 +166,14 @@ LFO_SAW = [
     {'index': (1, 1), 'operation': 'lfo', 'audio_input': None, 'control_input': None,
      'outputs': [(0, 2)], 'switch_outputs': False, 'allow_multiple': False, 'active_prob': 0.5},
     {'index': (0, 2), 'operation': 'fm_saw', 'audio_input': None, 'control_input': [[1, 1]], 'outputs': [(0, 3)]},
+]
+
+LFO_SQUARE = [
+    {'index': (0, 0), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (0, 1), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (1, 1), 'operation': 'lfo', 'audio_input': None, 'control_input': None,
+     'outputs': [(0, 2)], 'switch_outputs': False, 'allow_multiple': False, 'active_prob': 0.5},
+    {'index': (0, 2), 'operation': 'fm_square', 'audio_input': None, 'control_input': [[1, 1]], 'outputs': [(0, 3)]},
 ]
 
 SURROGATE_LFO_SAW = [
@@ -245,15 +271,18 @@ DOUBLE_LFO = [
 
 OSC_AMPLITUDE_SHAPER = [
     {'index': (0, 0), 'operation': 'osc', 'default_connection': True},
-    {'index': (0, 1), 'operation': 'amplitude_shape', 'default_connection': True}
+    {'index': (0, 1), 'operation': 'env_adsr', 'default_connection': True}
 ]
 
 OSC_FILTER_SHAPER = [
-    {'index': (0, 0), 'operation': 'osc', 'default_connection': True},
-    {'index': (0, 1), 'operation': 'filter_shape', 'default_connection': True}
+    {'index': (0, 0), 'operation': 'osc', 'audio_input': None, 'control_input': None, 'outputs': [(0, 1)]},
+    {'index': (0, 1), 'operation': 'lowpass_filter_adsr', 'audio_input': [(0, 0)], 'control_input': None, 'outputs': [(0, 2)]}
 ]
 
-synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW, 'LFO': LFO, 'OSC': OSC, 'FM': FM,
+synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW,
+                      'LFO': LFO,
+                      'OSC': OSC,
+                      'FM': FM,
                       'BASIC_FLOW_LFO_DECOUPLING': BASIC_FLOW_LFO_DECOUPLING,
                       'BASIC_FLOW_NO_ADSR': BASIC_FLOW_NO_ADSR,
                       'BASIC_FLOW_NO_ADSR_NO_FILTER': BASIC_FLOW_NO_ADSR_NO_FILTER,
@@ -274,13 +303,14 @@ synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW, 'LFO': LFO, 'OSC': OSC, 'FM': FM
                       'NO_FILTER': NO_FILTER,
                       'TWO_LFO_SAW': TWO_LFO_SAW,
                       'LFO_SAW': LFO_SAW,
+                      'LFO_SQUARE': LFO_SQUARE,
                       'SAW_SQUARE_MIX': SAW_SQUARE_MIX,
                       'LFO_SIN': LFO_SIN,
                       'SURROGATE_LFO_SAW': SURROGATE_LFO_SAW,
                       'SURROGATE_LFO_SINE': SURROGATE_LFO_SINE,
                       'SAW_SQUARE_MIX_FILTER': SAW_SQUARE_MIX_FILTER,
-                      'LFO_SIN': LFO_SIN,
                       'OSC_FILTER': OSC_FILTER,
                       'OSC_ADSR': OSC_ADSR,
                       'OSC_TREMOLO': OSC_TREMOLO,
+                      'FM_DX7': FM_DX7
                       }
