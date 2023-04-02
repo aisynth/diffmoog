@@ -1,4 +1,7 @@
 import os
+import subprocess
+import sys
+
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from shutil import rmtree
 
@@ -93,6 +96,16 @@ def configure_experiment(exp_name: str, dataset_name: str, config_name: str, deb
     config_dump_path = os.path.join(config_dump_dir, 'config.yaml')
     OmegaConf.save(cfg, config_dump_path)
 
+    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()
+
+    # Get the command line arguments
+    args = " ".join(sys.argv[1:])
+    txt_path = os.path.join(config_dump_dir, 'commit_and_args.txt')
+
+    # Create the file and write the contents
+    with open(txt_path, 'w') as f:
+        f.write(f"Git commit: {commit}\n")
+        f.write(f"Arguments: {args}\n")
     return cfg
 
 
