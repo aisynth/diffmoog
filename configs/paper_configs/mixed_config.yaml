@@ -2,9 +2,9 @@ model:
   arch: simple
   backbone: resnet
   preset: MODULAR
-  num_workers: 4
-  batch_size: 4
-  num_epochs: 2
+  num_workers: 8
+  batch_size: 64
+  num_epochs: 120
 
   optimizer:
     base_lr: 0.005
@@ -14,19 +14,19 @@ model:
 
 loss:
   spec_loss_type: SPECTROGRAM
-  preset: cumsum_time
+  preset: mag_logmag
   control_spec_preset: cumsum_freq
   parameters_loss_type: L1
 
   parameters_loss_weight: 0.1
-  spectrogram_loss_weight: 0.001
+  spectrogram_loss_weight: 0.0001
 
   # spectrogram_loss_warmup shall be defined by (dataset_size / batch_size) * spectrogram_switch_epoc_start
   # loss_switch_steps shall be defined by (dataset_size / batch_size) * spectrogram_switch_epoc_end
-  spectrogram_loss_warmup: 12500
-  loss_switch_steps: 12500
-  min_parameters_loss_decay: 0
-  in_domain_epochs: 2
+  spectrogram_loss_warmup_epochs: 15
+  loss_switch_epochs: 45
+  min_parameters_loss_decay: 0.5
+  in_domain_epochs: 120
 
   use_chain_loss: true
   chain_loss_weight: 1.0
@@ -42,4 +42,4 @@ synth:
   added_noise_std: 0.001
 
 logging:
-  n_images_to_log: 4
+  n_images_to_log: 5

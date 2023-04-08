@@ -2,11 +2,9 @@ model:
   arch: simple
   backbone: resnet
   preset: MODULAR
-  num_workers: 4
-  batch_size: 5
-  num_epochs: 200
-
-  resume_training: /home/almogelharar/almog/ai_synth/experiments/baseline_old_fltr_full_range_w_noise/checkpoints/last.ckpt
+  num_workers: 8
+  batch_size: 64
+  num_epochs: 120
 
   optimizer:
     base_lr: 0.005
@@ -26,7 +24,7 @@ loss:
   spectrogram_loss_warmup: 3333333333333333
   loss_switch_steps: 0
   min_parameters_loss_decay: 0
-  in_domain_epochs: 200
+  in_domain_epochs: 120
 
   use_chain_loss: true
   chain_loss_weight: 1.0
@@ -36,7 +34,7 @@ loss:
 synth:
   preset: MODULAR
   transform: MEL
-  use_multi_spec_input: True
+  use_multi_spec_input: false
   signal_duration: 4
   note_off_time: 3.0
   added_noise_std: 0.001

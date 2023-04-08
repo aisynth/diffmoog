@@ -35,7 +35,10 @@ def run(run_args):
 
     cfg = configure_experiment(exp_name, dataset_name, run_args.config, run_args.debug)
 
-    datamodule = ModularSynthDataModule(cfg.data_dir, cfg.model.batch_size, cfg.model.num_workers,
+    datamodule = ModularSynthDataModule(cfg.data_dir,
+                                        cfg.model.batch_size,
+                                        cfg.model.num_workers,
+                                        cfg.loss.in_domain_epochs,
                                         added_noise_std=cfg.synth.added_noise_std)
 
     # todo: allow config of out of domain data
@@ -61,7 +64,7 @@ def run(run_args):
 
     trainer = Trainer(devices=2,
                       gpus=2,
-                      precision=16
+                      precision=16,
                       logger=tb_logger,
                       callbacks=callbacks,
                       max_epochs=cfg.model.num_epochs,
@@ -72,7 +75,8 @@ def run(run_args):
                       check_val_every_n_epoch=1,
                       accumulate_grad_batches=4,
                       deterministic=True,
-                      auto_scale_batch_size="binsearch")
+                      auto_scale_batch_size="binsearch",
+                      reload_dataloaders_every_epoch=True)
 
     trainer.tune(lit_module)
 

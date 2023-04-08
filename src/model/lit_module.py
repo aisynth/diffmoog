@@ -125,7 +125,7 @@ class LitModularSynth(LightningModule):
         total_params_loss, per_parameter_loss = self.params_loss.call(predicted_params_unit_range,
                                                                       target_params_unit_range)
         pred_final_signal = None
-        if self.global_step < self.cfg.loss.spectrogram_loss_warmup and not return_metrics:
+        if self.current_epoch < self.cfg.loss.spectrogram_loss_warmup_epochs and not return_metrics:
             spec_loss = torch.tensor(0)
         else:
             pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
@@ -196,6 +196,7 @@ class LitModularSynth(LightningModule):
             self._log_sounds_batch(batch[0], target_params, f'samples_train')
 
         if self.cfg.loss.in_domain_epochs < self.current_epoch:
+            print("Running over out of domain dataset")
             assert len(batch) == 2, "Tried to run OOD step on in domain batch"
             loss, step_losses, step_artifacts = self.out_of_domain_step(batch)
         else:
@@ -276,9 +277,9 @@ class LitModularSynth(LightningModule):
             c_target_operation = self.synth.synth_matrix[current_channel][current_layer].operation
 
             if self.cfg.loss.use_gradual_chain_loss:
-                layer_warmup_factor = self.cfg.loss.chain_warmup_factor * current_layer + self.cfg.loss.spectrogram_loss_warmup
+                layer_warmup_factor = self.cfg.loss.chain_warmup_factor * current_layer + self.cfg.loss.spectrogram_loss_warmup_epochs
 
-                if self.global_step < layer_warmup_factor:
+                if self.current_epoch < layer_warmup_factor:
                     continue
 
             c_pred_signal = pred_signals_through_chain[op_index]
@@ -309,17 +310,17 @@ class LitModularSynth(LightningModule):
 
     def _balance_losses(self, parameters_loss, spectrogram_loss, log=False):
 
-        step = self.global_step
+        step = self.current_epoch
         cfg = self.cfg.loss
 
         parameters_loss_decay_factor = cfg.min_parameters_loss_decay
         spec_loss_rampup_factor = 1
 
-        if step < cfg.spectrogram_loss_warmup:
+        if step < cfg.spectrogram_loss_warmup_epochs:
             parameters_loss_decay_factor = 1.0
             spec_loss_rampup_factor = 0
-        elif step < (cfg.spectrogram_loss_warmup + cfg.loss_switch_steps):
-            linear_mix_factor = (step - cfg.spectrogram_loss_warmup) / cfg.loss_switch_steps
+        elif step < (cfg.spectrogram_loss_warmup_epochs + cfg.loss_switch_epochs):
+            linear_mix_factor = (step - cfg.spectrogram_loss_warmup_epochs) / cfg.loss_switch_epochs
             parameters_loss_decay_factor = max(1 - linear_mix_factor, cfg.min_parameters_loss_decay)
             spec_loss_rampup_factor = linear_mix_factor
 
