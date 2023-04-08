@@ -470,7 +470,7 @@ class LitModularSynth(LightningModule):
         elif optimizer_params.scheduler.lower() == 'exponential':
             scheduler_config = {"scheduler": torch.optim.lr_scheduler.ExponentialLR(
                 optimizer, gamma=self.cfg.model.optimizer.gamma),
-                "interval": "step"}
+                "interval": "epoch"}
         else:
             raise NotImplementedError(f"Scheduler {self.optimizer_params['scheduler']} not implemented")
 
