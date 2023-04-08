@@ -59,17 +59,23 @@ def run(run_args):
 
     seed_everything(42, workers=True)
 
-    trainer = Trainer(logger=tb_logger,
+    trainer = Trainer(devices=2,
+                      gpus=2,
+                      precision=16
+                      logger=tb_logger,
                       callbacks=callbacks,
                       max_epochs=cfg.model.num_epochs,
                       auto_select_gpus=True,
-                      devices=[run_args.gpu_index],
                       accelerator="gpu",
                       detect_anomaly=True,
                       log_every_n_steps=log_every_n_steps,
                       check_val_every_n_epoch=1,
                       accumulate_grad_batches=4,
-                      deterministic=True)
+                      deterministic=True,
+                      auto_scale_batch_size="binsearch")
+
+    trainer.tune(lit_module)
+
     trainer.fit(lit_module, datamodule=datamodule)
 
 def configure_experiment(exp_name: str, dataset_name: str, config_name: str, debug: bool = False):
