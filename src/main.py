@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import pytorch_lightning.profiler
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from shutil import rmtree
@@ -8,9 +9,11 @@ from shutil import rmtree
 import torch
 
 from omegaconf import OmegaConf
-from pytorch_lightning import Trainer
+from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.profiler import AdvancedProfiler, SimpleProfiler
+
 from termcolor import colored
 
 from dataset.synth_datamodule import ModularSynthDataModule
@@ -53,6 +56,9 @@ def run(run_args):
         log_every_n_steps = len(datamodule.train_dataset.params)
     else:
         log_every_n_steps = 50
+
+    seed_everything(42, workers=True)
+
     trainer = Trainer(logger=tb_logger,
                       callbacks=callbacks,
                       max_epochs=cfg.model.num_epochs,
@@ -61,9 +67,10 @@ def run(run_args):
                       accelerator="gpu",
                       detect_anomaly=True,
                       log_every_n_steps=log_every_n_steps,
-                      check_val_every_n_epoch=1)
+                      check_val_every_n_epoch=1,
+                      accumulate_grad_batches=4,
+                      deterministic=True)
     trainer.fit(lit_module, datamodule=datamodule)
-
 
 def configure_experiment(exp_name: str, dataset_name: str, config_name: str, debug: bool = False):
 
