@@ -21,8 +21,8 @@ loss:
   parameters_loss_weight: 0.1
   spectrogram_loss_weight: 0
 
-  spectrogram_loss_warmup: 3333333333333333
-  loss_switch_steps: 0
+  spectrogram_loss_warmup_epochs: 3333333333333333
+  loss_switch_epochs: 0
   min_parameters_loss_decay: 0
   in_domain_epochs: 120
 

@@ -62,9 +62,7 @@ def run(run_args):
 
     seed_everything(42, workers=True)
 
-    trainer = Trainer(devices=2,
-                      gpus=2,
-                      precision=16,
+    trainer = Trainer(gpus=1,
                       logger=tb_logger,
                       callbacks=callbacks,
                       max_epochs=cfg.model.num_epochs,
@@ -74,11 +72,7 @@ def run(run_args):
                       log_every_n_steps=log_every_n_steps,
                       check_val_every_n_epoch=1,
                       accumulate_grad_batches=4,
-                      deterministic=True,
-                      auto_scale_batch_size="binsearch",
                       reload_dataloaders_every_epoch=True)
-
-    trainer.tune(lit_module)
 
     trainer.fit(lit_module, datamodule=datamodule)
 
