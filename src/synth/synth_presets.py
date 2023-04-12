@@ -110,6 +110,20 @@ REDUCED = [
     {'index': (0, 5), 'operation': 'lowpass_filter_adsr', 'audio_input': [[0, 4]], 'control_input': None, 'outputs': [[0, 6]]},
 ]
 
+REDUCED_SIMPLE_FILTER = [
+    {'index': (1, 2), 'operation': 'fm_saw', 'audio_input': None, 'control_input': None, 'outputs': [[0, 3]]},
+    {'index': (2, 2), 'operation': 'fm_square', 'audio_input': None, 'control_input': None, 'outputs': [[0, 3]]},
+    {'index': (0, 1), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (1, 0), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (2, 0), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (2, 1), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (1, 3), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (2, 3), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
+    {'index': (0, 3), 'operation': 'mix', 'audio_input': [[1, 2], [2, 2]], 'control_input': None, 'outputs': [[0, 4]]},
+    {'index': (0, 4), 'operation': 'env_adsr', 'audio_input': [[0, 3]], 'control_input': None, 'outputs': [[0, 5]]},
+    {'index': (0, 5), 'operation': 'lowpass_filter', 'audio_input': [[0, 4]], 'control_input': None, 'outputs': [[0, 6]]},
+]
+
 SAW_SQUARE_MIX = [
     {'index': (0, 0), 'operation': 'saw_square_osc', 'default_connection': True},
 ]
@@ -312,5 +326,6 @@ synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW,
                       'OSC_FILTER': OSC_FILTER,
                       'OSC_ADSR': OSC_ADSR,
                       'OSC_TREMOLO': OSC_TREMOLO,
-                      'FM_DX7': FM_DX7
+                      'FM_DX7': FM_DX7,
+                      'REDUCED_SIMPLE_FILTER': REDUCED_SIMPLE_FILTER
                       }
