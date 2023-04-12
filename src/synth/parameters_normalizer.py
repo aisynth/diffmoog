@@ -112,31 +112,46 @@ class Normalizer:
                 elif param_name in ['filter_freq']:
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.filter_freq_normalizer.denormalise(params[param_name])
-                elif operation == 'env_adsr' and param_name in ['attack_t', 'decay_t', 'sustain_t']:
+                elif operation in ['env_adsr', 'lowpass_filter_adsr'] and param_name in ['attack_t', 'decay_t', 'sustain_t']:
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.adsr_normalizer.denormalise(params[param_name])
                 else:
                     denormalized_params_dict[key]['parameters'][param_name] = params[param_name]
 
-            if operation == 'env_adsr' and self.clamp_adsr:
+            if operation in ['env_adsr', 'lowpass_filter_adsr'] and self.clamp_adsr:
                 denormalized_params_dict[key]['parameters'] = \
-                    self._clamp_adsr_params(denormalized_params_dict[key]['parameters'])
+                    self._clamp_adsr_params(denormalized_params_dict[key]['parameters'], operation)
 
         return denormalized_params_dict
 
-    def _clamp_adsr_params(self, adsr_params: dict):
+    def _clamp_adsr_params(self, params: dict, operation: 'str'):
         """look for adsr operations to send to clamping function"""
 
         clamped_attack, clamped_decay, clamped_sustain, clamped_release = \
-            self._clamp_adsr_superposition(**adsr_params)
+            self._clamp_adsr_superposition(params['attack_t'],
+                                           params['decay_t'],
+                                           params['sustain_t'],
+                                           params['release_t'])
+        if operation == 'env_adsr':
+            ret_params = {'attack_t': clamped_attack,
+                          'decay_t': clamped_decay,
+                          'sustain_t': clamped_sustain,
+                          'sustain_level': torch.clamp(params['sustain_level'], min=0, max=self.synth_structure.max_amp),
+                          'release_t': clamped_release}
 
-        ret_params = {'attack_t': clamped_attack, 'decay_t': clamped_decay, 'sustain_t': clamped_sustain,
-                      'sustain_level': torch.clamp(adsr_params['sustain_level'], min=0, max=self.synth_structure.max_amp),
-                      'release_t': clamped_release}
+        elif operation == 'lowpass_filter_adsr':
+            ret_params = {'attack_t': clamped_attack,
+                          'decay_t': clamped_decay,
+                          'sustain_t': clamped_sustain,
+                          'sustain_level': torch.clamp(params['sustain_level'], min=0, max=self.synth_structure.max_amp),
+                          'release_t': clamped_release,
+                          'intensity': params['intensity'],
+                          'filter_freq': params['filter_freq']}
+
 
         return ret_params
 
-    def _clamp_adsr_superposition(self, attack_t, decay_t, sustain_t, release_t, sustain_level):
+    def _clamp_adsr_superposition(self, attack_t, decay_t, sustain_t, release_t):
         """This function clamps the superposition of adsr times, so it does not exceed signal length"""
 
         adsr_length_in_sec = attack_t + decay_t + sustain_t + release_t

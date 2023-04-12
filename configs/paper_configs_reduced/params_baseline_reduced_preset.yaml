@@ -35,8 +35,8 @@ synth:
   preset: REDUCED
   transform: MEL
   use_multi_spec_input: false
-  signal_duration: 1
-  note_off_time: 0.75
+  signal_duration: 4
+  note_off_time: 3
   added_noise_std: 0.001
 
 logging:
