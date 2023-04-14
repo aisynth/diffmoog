@@ -1,7 +1,7 @@
 model:
   arch: simple
   backbone: resnet
-  preset: MODULAR_NEW
+  chain: MODULAR_NEW
   num_workers: 4
   batch_size: 32
   num_epochs: 200
@@ -24,8 +24,8 @@ loss:
   parameters_loss_weight: 0.1
   spectrogram_loss_weight: 0.001
 
-  spectrogram_loss_warmup: 0
-  loss_switch_steps: 156250
+  spectrogram_loss_warmup_epochs: 0
+  loss_switch_epochs: 156250
   min_parameters_loss_decay: 0
   in_domain_epochs: 200
 
@@ -35,7 +35,7 @@ loss:
   chain_warmup_factor: 5
 
 synth:
-  preset: MODULAR_NEW
+  chain: MODULAR_NEW
   transform: MEL
   use_multi_spec_input: True
   signal_duration: 4

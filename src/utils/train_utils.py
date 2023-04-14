@@ -13,7 +13,7 @@ from sklearn.metrics import confusion_matrix
 from scipy.special import softmax, expit
 
 from synth.synth_constants import synth_constants
-from synth.synth_presets import synth_presets_dict
+from synth.synth_chains import synth_chains_dict
 from synth.synth_constants import SynthConstants
 from model.loss.spectral_loss_presets import loss_presets
 
@@ -257,15 +257,15 @@ def to_torch_recursive(input_to_convert, device, ignore_dtypes=None):
     raise ValueError(f"Input of unexpected type {type(input_to_convert)}. Please add case to this function.")
 
 
-def count_unpredicted_params(synth_preset_name, model_preset_name):
+def count_unpredicted_params(synth_chain_name, model_chain_name):
 
-    synth_preset = synth_presets_dict[synth_preset_name]
-    model_preset = synth_presets_dict[model_preset_name]
+    synth_chain = synth_chains_dict[synth_chain_name]
+    model_chain = synth_chains_dict[model_chain_name]
 
-    predicted_indices = [cell['index'] for cell in model_preset]
+    predicted_indices = [cell['index'] for cell in model_chain]
 
     n_unpredicted_params = 0
-    for cell in synth_preset:
+    for cell in synth_chain:
         index = cell.get('index')
         operation = cell.get('operation')
 

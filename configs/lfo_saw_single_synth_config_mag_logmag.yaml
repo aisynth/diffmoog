@@ -1,7 +1,7 @@
 model:
   arch: simple
   backbone: resnet
-  preset: LFO_SAW
+  chain: LFO_SAW
   num_workers: 1
   batch_size: 2
   num_epochs: 500
@@ -20,8 +20,8 @@ loss:
   parameters_loss_weight: 0.1
   spectrogram_loss_weight: 0.001
 
-  spectrogram_loss_warmup: 150
-  loss_switch_steps: 150
+  spectrogram_loss_warmup_epochs: 150
+  loss_switch_epochs: 150
   min_parameters_loss_decay: 0
   in_domain_epochs: 500
 
@@ -31,7 +31,7 @@ loss:
   chain_warmup_factor: 5
 
 synth:
-  preset: LFO_SAW
+  chain: LFO_SAW
   transform: MEL
   use_multi_spec_input: True
   signal_duration: 1.0

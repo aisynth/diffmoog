@@ -4,7 +4,7 @@ import torch
 
 from synth.synth_constants import SynthConstants
 from synth.synth_modules import get_synth_module
-from synth.synth_presets import synth_presets_dict
+from synth.synth_chains import synth_chains_dict
 
 from utils.types import TensorLike
 
@@ -97,7 +97,7 @@ class SynthModularCell:
 
 
 class SynthModular(torch.nn.Module):
-    def __init__(self, preset_name: str, synth_constants: SynthConstants, device='cuda:0'):
+    def __init__(self, chain_name: str, synth_constants: SynthConstants, device='cuda:0'):
 
         super().__init__()
 
@@ -106,18 +106,18 @@ class SynthModular(torch.nn.Module):
 
         self.device = device
 
-        preset, (n_channels, n_layers) = self._parse_preset(preset_name)
+        chain, (n_channels, n_layers) = self._parse_chain(chain_name)
 
         self.n_channels = n_channels
         self.n_layers = n_layers
         self.synth_matrix = None
-        self.apply_architecture(preset, n_channels, n_layers)
+        self.apply_architecture(chain, n_channels, n_layers)
 
-    def apply_architecture(self, preset: dict, n_channels: int, n_layers: int):
+    def apply_architecture(self, chain: dict, n_channels: int, n_layers: int):
         self.synth_matrix = [[None for _ in range(n_layers)] for _ in range(n_channels)]
         for channel_idx in range(n_channels):
             for layer_idx in range(n_layers):
-                cell = preset.get((channel_idx, layer_idx), {'index': (channel_idx, layer_idx)})
+                cell = chain.get((channel_idx, layer_idx), {'index': (channel_idx, layer_idx)})
                 self.synth_matrix[channel_idx][layer_idx] = SynthModularCell(**cell, device=self.device,
                                                                              synth_constants=self.synth_constants)
 
@@ -206,21 +206,21 @@ class SynthModular(torch.nn.Module):
                 cell.signal = 0
 
     @staticmethod
-    def _parse_preset(preset_name: str) -> (dict, Tuple[int, int]):
+    def _parse_chain(chain_name: str) -> (dict, Tuple[int, int]):
 
-        # Load preset and convert to dictionary of cell_index: cell_parameters
-        preset_list = synth_presets_dict.get(preset_name, None)
-        if preset_list is None:
-            raise ValueError("Unknown PRESET")
+        # Load chain and convert to dictionary of cell_index: cell_parameters
+        chain_list = synth_chains_dict.get(chain_name, None)
+        if chain_list is None:
+            raise ValueError("Unknown CHAIN")
 
-        preset_dict = {}
+        chain_dict = {}
         n_layers, n_channels = 0, 0
-        for cell_desc in preset_list:
+        for cell_desc in chain_list:
             cell_idx = cell_desc['index']
-            preset_dict[cell_idx] = cell_desc
+            chain_dict[cell_idx] = cell_desc
 
-            # Deduce preset channel and layer numbers
+            # Deduce chain channel and layer numbers
             n_channels = max(n_channels, cell_idx[0] + 1)
             n_layers = max(n_layers, cell_idx[1] + 1)
 
-        return preset_dict, (n_channels, n_layers)
+        return chain_dict, (n_channels, n_layers)

@@ -293,7 +293,7 @@ OSC_FILTER_SHAPER = [
     {'index': (0, 1), 'operation': 'lowpass_filter_adsr', 'audio_input': [(0, 0)], 'control_input': None, 'outputs': [(0, 2)]}
 ]
 
-synth_presets_dict = {'BASIC_FLOW': BASIC_FLOW,
+synth_chains_dict = {'BASIC_FLOW': BASIC_FLOW,
                       'LFO': LFO,
                       'OSC': OSC,
                       'FM': FM,

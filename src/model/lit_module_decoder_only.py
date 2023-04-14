@@ -31,12 +31,12 @@ class LitModularSynthDecOnly(LightningModule):
 
         self.cfg = train_cfg
         self.tuning_mode = tuning_mode
-        self.synth = SynthModular(preset_name=train_cfg.synth.preset, synth_constants=synth_constants,
+        self.synth = SynthModular(chain_name=train_cfg.synth.chain, synth_constants=synth_constants,
                                   device=device)
 
         self.ignore_params = train_cfg.synth.get('ignore_params', None)
 
-        self.decoder_only_net = DecoderNetwork(preset=self.cfg.synth.preset, device=device)
+        self.decoder_only_net = DecoderNetwork(chain=self.cfg.synth.chain, device=device)
 
         if train_cfg.model.train_single_param:
             train_params_dataframe = datamodule.train_dataset.params
@@ -145,7 +145,7 @@ class LitModularSynthDecOnly(LightningModule):
         total_params_loss, per_parameter_loss = self.params_loss.call(predicted_params_unit_range,
                                                                       target_params_unit_range)
         pred_final_signal = None
-        if self.global_step < self.cfg.loss.spectrogram_loss_warmup and not return_metrics:
+        if self.global_step < self.cfg.loss.spectrogram_loss_warmup_epochs and not return_metrics:
             spec_loss = 0
         else:
             pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
@@ -320,7 +320,7 @@ class LitModularSynthDecOnly(LightningModule):
             c_target_operation = self.synth.synth_matrix[current_channel][current_layer].operation
 
             if self.cfg.loss.use_gradual_chain_loss:
-                layer_warmup_factor = self.cfg.loss.chain_warmup_factor * current_layer + self.cfg.loss.spectrogram_loss_warmup
+                layer_warmup_factor = self.cfg.loss.chain_warmup_factor * current_layer + self.cfg.loss.spectrogram_loss_warmup_epochs
 
                 if self.global_step < layer_warmup_factor:
                     continue
@@ -359,11 +359,11 @@ class LitModularSynthDecOnly(LightningModule):
         parameters_loss_decay_factor = cfg.min_parameters_loss_decay
         spec_loss_rampup_factor = 1
 
-        if step < cfg.spectrogram_loss_warmup:
+        if step < cfg.spectrogram_loss_warmup_epochs:
             parameters_loss_decay_factor = 1.0
             spec_loss_rampup_factor = 0
-        elif step < (cfg.spectrogram_loss_warmup + cfg.loss_switch_steps):
-            linear_mix_factor = (step - cfg.spectrogram_loss_warmup) / cfg.loss_switch_steps
+        elif step < (cfg.spectrogram_loss_warmup_epochs + cfg.loss_switch_epochs):
+            linear_mix_factor = (step - cfg.spectrogram_loss_warmup_epochs) / cfg.loss_switch_epochs
             parameters_loss_decay_factor = max(1 - linear_mix_factor, cfg.min_parameters_loss_decay)
             spec_loss_rampup_factor = linear_mix_factor
 

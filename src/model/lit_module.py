@@ -29,13 +29,13 @@ class LitModularSynth(LightningModule):
 
         self.cfg = train_cfg
         self.tuning_mode = tuning_mode
-        self.synth = SynthModular(preset_name=train_cfg.synth.preset, synth_constants=synth_constants,
+        self.synth = SynthModular(chain_name=train_cfg.synth.chain, synth_constants=synth_constants,
                                   device=device)
 
         self.ignore_params = train_cfg.synth.get('ignore_params', None)
 
         self.synth_net = SynthNetwork(cfg=self.cfg,
-                                      synth_preset=train_cfg.model.preset,
+                                      synth_chain=train_cfg.model.chain,
                                       loss_preset=train_cfg.loss.preset,
                                       device=device,
                                       backbone=train_cfg.model.backbone

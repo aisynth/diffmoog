@@ -19,7 +19,7 @@ from utils.gpu_utils import get_device
 from utils.train_utils import get_project_root
 
 
-def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_duration: float, note_off_time: float,
+def create_dataset(chain: str, output_dir: str, split: str, size: int, signal_duration: float, note_off_time: float,
                    device: device, batch_size: int = 1000, seed: int = 26):
     """
     Create a dataset by randomizing synthesizer parameters and generating sound.
@@ -50,7 +50,7 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
 
     # Other inits
     np.random.seed(seed)
-    synth_obj = SynthModular(preset, synth_constants, device)
+    synth_obj = SynthModular(chain, synth_constants, device)
     params_sampler = ParametersSampler(synth_constants)
 
     train = (split.lower() == 'train')
@@ -123,7 +123,7 @@ def _verify_activity(sample_params_dict):
         else:
             continue
 
-    # todo: commented code works only for MODULAR preset. make sure above code generalizes
+    # todo: commented code works only for MODULAR chain. make sure above code generalizes
     # if sample_params_dict.get((0, 2)):
     #     sine_osc_activeness = sample_params_dict[(0, 2)]['parameters']['active']
     # else:
@@ -172,7 +172,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--split', required=True)
     parser.add_argument('-k', '--size', required=True, type=int)
     parser.add_argument('-n', '--name', required=True, help='name of dataset')
-    parser.add_argument('-p', '--preset', required=False, help='Synth preset', default='MODULAR')
+    parser.add_argument('-c', '--chain', required=False, help='Synth chain', default='MODULAR')
 
     parser.add_argument('-sd', '--signal_duration', required=False, type=float, default=4.0)
     parser.add_argument('-no', '--note_off', required=False, type=float, default=3.0)
@@ -193,7 +193,7 @@ if __name__ == '__main__':
     os.makedirs(output_dir, exist_ok=True)
 
     device = get_device(args.gpu_index)
-    create_dataset(preset=args.preset, output_dir=output_dir, split=args.split, size=args.size,
+    create_dataset(chain=args.chain, output_dir=output_dir, split=args.split, size=args.size,
                    signal_duration=args.signal_duration, note_off_time=args.note_off, batch_size=args.batch_size,
                    device=device)
 

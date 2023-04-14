@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from torch import nn
 from torchvision.models import resnet18, resnet34
-from synth.synth_presets import synth_presets_dict
+from synth.synth_chains import synth_chains_dict
 
 from synth.synth_constants import synth_constants
 from model.loss.spectral_loss_presets import loss_presets
@@ -14,10 +14,10 @@ LATENT_SPACE_SIZE = 128
 
 
 class DecoderNetwork(nn.Module):
-    def __init__(self, preset: str, device):
-        self.preset = synth_presets_dict.get(preset, None)
-        if self.preset is None:
-            ValueError("Unknown self.cfg.PRESET")
+    def __init__(self, chain: str, device):
+        self.chain = synth_chains_dict.get(chain, None)
+        if self.chain is None:
+            ValueError("Unknown self.cfg.CHAIN")
 
         super().__init__()
 
@@ -26,7 +26,7 @@ class DecoderNetwork(nn.Module):
 
     def apply_params(self, init_params, batch_size=1):
 
-        for cell in self.preset:
+        for cell in self.chain:
 
             index = cell.get('index')
             operation = cell.get('operation')
@@ -85,7 +85,7 @@ class DecoderNetwork(nn.Module):
     def forward(self):
 
         output_dic = {}
-        for cell in self.preset:
+        for cell in self.chain:
 
             index = cell.get('index')
             operation = cell.get('operation')
@@ -107,17 +107,17 @@ class DecoderNetwork(nn.Module):
 
 class SynthNetwork(nn.Module):
 
-    def __init__(self, cfg, synth_preset: str, loss_preset: str, device, backbone='resnet'):
+    def __init__(self, cfg, synth_chain: str, loss_preset: str, device, backbone='resnet'):
         super().__init__()
 
-        self.preset = synth_presets_dict.get(synth_preset, None)
+        self.chain = synth_chains_dict.get(synth_chain, None)
         self.loss_preset = loss_presets[loss_preset]
         if cfg.synth.use_multi_spec_input == True:
             in_channels = len(self.loss_preset['fft_sizes'])
         else:
             in_channels = 1
-        if self.preset is None:
-            ValueError("Unknown self.cfg.PRESET")
+        if self.chain is None:
+            ValueError("Unknown self.cfg.CHAIN")
 
         self.device = device
 
@@ -132,7 +132,7 @@ class SynthNetwork(nn.Module):
             self.backbone.fc = nn.Linear(num_ftrs, LATENT_SPACE_SIZE)
 
         self.heads_module_dict = nn.ModuleDict({})
-        self.make_heads_from_preset()
+        self.make_heads_from_chain()
 
         self.softmax = nn.Softmax(dim=1)
         self.sigmoid = nn.Sigmoid()
@@ -141,8 +141,8 @@ class SynthNetwork(nn.Module):
     def get_key(index: tuple, operation: str, parameter: str) -> str:
         return f'{index}' + '_' + operation + '_' + parameter
 
-    def make_heads_from_preset(self):
-        for cell in self.preset:
+    def make_heads_from_chain(self):
+        for cell in self.chain:
             index = cell.get('index')
             operation = cell.get('operation')
 
@@ -168,7 +168,7 @@ class SynthNetwork(nn.Module):
 
         # Apply different heads to predict each synth parameter
         output_dict = {}
-        for cell in self.preset:
+        for cell in self.chain:
             index = cell.get('index')
             operation = cell.get('operation')
 

@@ -1,7 +1,7 @@
 model:
   arch: simple
   backbone: resnet
-  preset: REDUCED_SIMPLE_FILTER
+  chain: REDUCED_SIMPLE_FILTER
   num_workers: 0
   batch_size: 64
   num_epochs: 60
@@ -32,7 +32,7 @@ loss:
   chain_warmup_factor: 5
 
 synth:
-  preset: REDUCED_SIMPLE_FILTER
+  chain: REDUCED_SIMPLE_FILTER
   transform: MEL
   use_multi_spec_input: false
   signal_duration: 1
