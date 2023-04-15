@@ -1,0 +1,6 @@
+synth_obj = SynthModular(preset_name='FM_DX7', synth_constants=synth_constants, device='cpu')
+
+params = {(0,0): {'operation': 'osc', 'parameters': {'amp': [1], 'freq': [1250], 'waveform': ['sine'], 'active': [True], 'output': [[0, 1]]}},
+          (0,2): {'operation': 'fm_sine', 'parameters': {'amp_c': [1], 'freq_c': [1000], 'mod_index': [0.5], 'active': [True], 'fm_active': [True]}},
+          (0, 1): {'operation': 'env_adsr', 'parameters': {'attack_t': [1], 'decay_t': [1], 'sustain_t': [1], 'sustain_level': [0.3], 'release_t': [0.9]}}
+          }
