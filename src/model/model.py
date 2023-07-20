@@ -285,7 +285,7 @@ class SimpleWeightLayer(nn.Module):
 
 class RNNBackbone(nn.Module):
 
-    def __init__(self, rnn_type: str = 'lstm', input_size: int = 128, hidden_size: int = 128, output_size: int = 128,
+    def __init__(self, rnn_type: str = 'lstm', input_size: int = 128, hidden_size: int = 512, output_size: int = LATENT_SPACE_SIZE,
                  agg_mean: bool = False):
 
         super().__init__()
@@ -296,7 +296,16 @@ class RNNBackbone(nn.Module):
         if rnn_type.lower() == 'lstm':
             self.rnn = nn.LSTM(input_size, hidden_size, num_layers=4, batch_first=True, bias=False)
         elif rnn_type.lower() == 'gru':
-            self.rnn = nn.GRU(input_size, hidden_size, 1, batch_first=True)
+            self.conv1 = nn.Conv1d(in_channels=128, out_channels=64, kernel_size=7, stride=2)
+            self.conv2 = nn.Conv1d(in_channels=64, out_channels=32, kernel_size=7, stride=2)
+            self.conv3 = nn.Conv1d(in_channels=32, out_channels=16, kernel_size=7, stride=2)
+
+            # GRU layer
+            # self.gru = nn.GRU(input_size=16, hidden_size=512, batch_first=True)
+
+            # Output size not defined so using 512 here for illustration
+
+            self.rnn = nn.GRU(input_size=16, hidden_size=hidden_size, num_layers=1, batch_first=True)
         else:
             raise ValueError(f"{rnn_type} RNN not supported")
 
@@ -304,10 +313,19 @@ class RNNBackbone(nn.Module):
                                 nn.ReLU())
 
     def forward(self, x):
+        x = x.squeeze()
 
-        x = torch.transpose(x.squeeze(), 2, 1)
+        if self.rnn_type == 'gru':
+            x = self.conv1(x)
+            x = self.conv2(x)
+            x = self.conv3(x)
+            x = x.transpose(1, 2)
+
+        else:  # assuming the only other option is 'lstm'
+            x = x.transpose(2, 1)
 
         output, hidden = self.rnn(x)
+
         if self.rnn_type == 'lstm':
             hidden = hidden[0]
 

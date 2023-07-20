@@ -155,8 +155,8 @@ class ControlSpectralLoss(BaseSpectralLoss):
      therefore need to be down sampled and compared using a Spectrogram with lower nyquist frequency.
     """
 
-    def __init__(self, preset_name: str, synth_constants: SynthConstants, device='cuda:0'):
-        super().__init__(preset_name, synth_constants, device)
+    def __init__(self, loss_preset: str, synth_constants: SynthConstants, device='cuda:0'):
+        super().__init__(loss_preset, synth_constants, device)
 
         target_sample_rate = synth_constants.lfo_signal_sampling_rate
         self.resample = torchaudio.transforms.Resample(self.sample_rate, target_sample_rate)

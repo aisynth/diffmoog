@@ -59,8 +59,7 @@ class LitModularSynth(LightningModule):
         self.spec_loss = SpectralLoss(loss_preset=train_cfg.loss.loss_preset,
                                       synth_constants=synth_constants, device=device)
 
-        self.control_spec_loss = ControlSpectralLoss(signal_duration=train_cfg.synth.signal_duration,
-                                                     preset_name=train_cfg.loss.control_spec_preset,
+        self.control_spec_loss = ControlSpectralLoss(loss_preset=train_cfg.loss.control_spec_preset,
                                                      synth_constants=synth_constants,
                                                      device=device)
 
