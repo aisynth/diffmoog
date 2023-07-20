@@ -61,6 +61,9 @@ class SynthConstants:
                                 'fm_sine', 'fm_square', 'fm_saw', 'lowpass_filter']
 
     modular_synth_params = {'osc': ['amp', 'freq', 'waveform', 'active', 'phase'],
+                            'osc_sine': ['amp', 'active', 'freq'],
+                            'osc_square': ['amp', 'active', 'freq'],
+                            'osc_saw': ['amp', 'active', 'freq'],
                             'lfo_sine': ['active', 'freq'],
                             'lfo_non_sine': ['freq', 'waveform'],
                             'lfo': ['freq', 'waveform', 'active'],
@@ -161,6 +164,12 @@ class SynthConstants:
                     'freq': sampling_configurations['osc_freq'],
                     'phase': sampling_configurations['osc_phase'],
                     'waveform': sampling_configurations['waveform']},
+            'osc_sine': {'amp': sampling_configurations['uniform_amp'],
+                         'freq': sampling_configurations['osc_freq']},
+            'osc_square': {'amp': sampling_configurations['uniform_amp'],
+                           'freq': sampling_configurations['osc_freq']},
+            'osc_saw': {'amp': sampling_configurations['uniform_amp'],
+                        'freq': sampling_configurations['osc_freq']},
             'lfo_sine': {'freq': sampling_configurations['lfo_freq']},
             'lfo_non_sine': {'freq': sampling_configurations['lfo_freq'],
                              'waveform': sampling_configurations['non_sine_waveform']},

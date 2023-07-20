@@ -178,7 +178,11 @@ class Oscillator(SynthModule):
                                           batch_size=batch_size)
         freq = self._standardize_input(params['freq'], requested_dtype=torch.float32, requested_dims=2,
                                        batch_size=batch_size)
-        phase = self._standardize_input(params['freq'], requested_dtype=torch.float32, requested_dims=2,
+
+        if 'phase' not in params:
+            phase = torch.zeros((batch_size, 1), dtype=torch.float32, device=self.device)
+        else:
+            phase = self._standardize_input(params['phase'], requested_dtype=torch.float32, requested_dims=2,
                                        batch_size=batch_size)
 
         amp = active_signal * amp
@@ -992,6 +996,9 @@ def get_synth_module(op_name: str, device: str, synth_structure: SynthConstants)
     elif op_name in ['fm_sine', 'fm_square', 'fm_saw']:
         waveform = op_name.split('_')[1]
         return FMOscillator(op_name, device, synth_structure, waveform)
+    elif op_name in ['osc_sine', 'osc_square', 'osc_saw']:
+        waveform = op_name.split('_')[1]
+        return Oscillator(op_name, device, synth_structure, waveform)
     elif op_name in ['surrogate_fm_sine', 'surrogate_fm_square', 'surrogate_fm_saw']:
         waveform = op_name.split('_')[-1]
         return SurrogateFMOscillator(op_name, device, synth_structure, waveform)

@@ -111,17 +111,11 @@ REDUCED = [
 ]
 
 REDUCED_SIMPLE_FILTER = [
-    {'index': (1, 2), 'operation': 'fm_saw', 'audio_input': None, 'control_input': None, 'outputs': [[0, 3]]},
-    {'index': (2, 2), 'operation': 'fm_square', 'audio_input': None, 'control_input': None, 'outputs': [[0, 3]]},
-    {'index': (0, 1), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
-    {'index': (1, 0), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
-    {'index': (2, 0), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
-    {'index': (2, 1), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
-    {'index': (1, 3), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
-    {'index': (2, 3), 'operation': None, 'audio_input': None, 'control_input': None, 'outputs': None},
-    {'index': (0, 3), 'operation': 'mix', 'audio_input': [[1, 2], [2, 2]], 'control_input': None, 'outputs': [[0, 4]]},
-    {'index': (0, 4), 'operation': 'env_adsr', 'audio_input': [[0, 3]], 'control_input': None, 'outputs': [[0, 5]]},
-    {'index': (0, 5), 'operation': 'lowpass_filter', 'audio_input': [[0, 4]], 'control_input': None, 'outputs': [[0, 6]]},
+    {'index': (0, 0), 'operation': 'osc_saw', 'audio_input': None, 'control_input': None, 'outputs': [[0, 1]]},
+    {'index': (1, 0), 'operation': 'osc_square', 'audio_input': None, 'control_input': None, 'outputs': [[0, 1]]},
+    {'index': (0, 1), 'operation': 'mix', 'audio_input': [[0, 0], [1, 0]], 'control_input': None, 'outputs': [[0, 2]]},
+    {'index': (0, 2), 'operation': 'env_adsr', 'audio_input': [[0, 1]], 'control_input': None, 'outputs': [[0, 3]]},
+    {'index': (0, 3), 'operation': 'lowpass_filter', 'audio_input': [[0, 2]], 'control_input': None, 'outputs': None},
 ]
 
 SAW_SQUARE_MIX = [
