@@ -14,10 +14,9 @@ model:
     scheduler: constant
 
 loss:
-  spec_loss_type: BOTH
   preset: mag_logmag
   control_spec_preset: mag_logmag
-  parameters_loss_type: L2
+  parameters_loss_norm: L2
 
   parameters_loss_weight: 0.1
   spectrogram_loss_weight: 0.001

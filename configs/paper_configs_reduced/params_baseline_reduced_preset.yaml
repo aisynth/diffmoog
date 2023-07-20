@@ -13,10 +13,9 @@ model:
     gamma: 0.99
 
 loss:
-  spec_loss_type: SPECTROGRAM
   preset: cumsum_time
   control_spec_preset: cumsum_freq
-  parameters_loss_type: L1
+  parameters_loss_norm: L1
 
   parameters_loss_weight: 0.1
   spectrogram_loss_weight: 0

@@ -178,11 +178,14 @@ class Oscillator(SynthModule):
                                           batch_size=batch_size)
         freq = self._standardize_input(params['freq'], requested_dtype=torch.float32, requested_dims=2,
                                        batch_size=batch_size)
+        phase = self._standardize_input(params['freq'], requested_dtype=torch.float32, requested_dims=2,
+                                       batch_size=batch_size)
 
         amp = active_signal * amp
         freq = active_signal * freq
+        phase = active_signal * phase
 
-        wave_tensors = self._generate_wave_tensors(t, amp, freq, phase_mod=0, sample_rate=sample_rate,
+        wave_tensors = self._generate_wave_tensors(t, amp, freq, phase_mod=phase, sample_rate=sample_rate,
                                                    signal_duration=signal_duration)
 
         if self.waveform is not None:
@@ -193,7 +196,7 @@ class Oscillator(SynthModule):
 
         return oscillator_tensor
 
-    def _generate_wave_tensors(self, t, amp, freq, phase_mod, sample_rate, signal_duration):
+    def _generate_wave_tensors(self, t, amp, freq, phase_mod=0, sample_rate=16000, signal_duration=1.0):
 
         wave_tensors = {}
 

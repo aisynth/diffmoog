@@ -45,7 +45,7 @@ def objective(trial: optuna.trial.Trial, run_args) -> float:
     cfg = configure_experiment(exp_name, dataset_name, run_args.config, run_args.debug)
 
     # loss_preset = {'fft_sizes': (2048, 1024, 512, 256, 128, 64),
-    #                              'multi_spectral_loss_type': 'L1',
+    #                              'multi_spectral_loss_norm': 'L1',
     #                              'multi_spectral_cumsum_time_weight': trial.suggest_float("cumsum_time_weight", 0, 1),
     #                              'multi_spectral_cumsum_freq_weight': trial.suggest_float("cumsum_freq_weight", 0, 1),
     #                              'multi_spectral_mag_weight': trial.suggest_float("mag_weight", 0, 1),
@@ -55,7 +55,7 @@ def objective(trial: optuna.trial.Trial, run_args) -> float:
     #                              'normalize_loss_by_nfft': True}
 
     loss_preset = {'fft_sizes': (2048, 1024, 512, 256, 128, 64),
-                   'multi_spectral_loss_type': 'L1',
+                   'multi_spectral_loss_norm': 'L1',
                    'multi_spectral_cumsum_time_weight': 1,
                    'multi_spectral_cumsum_freq_weight': 0,
                    'multi_spectral_mag_weight': 0,
@@ -73,7 +73,7 @@ def objective(trial: optuna.trial.Trial, run_args) -> float:
 
 
     cfg.model.optimizer.base_lr = lr
-    cfg.loss.preset = loss_preset
+    cfg.loss.loss_preset = loss_preset
     cfg.loss.parameters_loss_weight = param_loss_weight
     cfg.loss.spectrogram_loss_weight = spec_loss_weight
 

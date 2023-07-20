@@ -40,6 +40,7 @@ class SynthConstants:
     non_active_waveform_default = 'sine'
     non_active_freq_default = 0
     non_active_amp_default = 0
+    non_active_phase_default = 0
     non_active_mod_index_default = 0
     non_active_fm_lfo_mod_index_default = 0
     non_active_tremolo_amount_default = 0
@@ -59,7 +60,7 @@ class SynthConstants:
     modular_synth_operations = ['osc', 'fm', 'lfo', 'mix', 'filter', 'env_adsr', 'fm_lfo', 'lfo_sine', 'lfo_non_sine',
                                 'fm_sine', 'fm_square', 'fm_saw', 'lowpass_filter']
 
-    modular_synth_params = {'osc': ['amp', 'freq', 'waveform', 'active'],
+    modular_synth_params = {'osc': ['amp', 'freq', 'waveform', 'active', 'phase'],
                             'lfo_sine': ['active', 'freq'],
                             'lfo_non_sine': ['freq', 'waveform'],
                             'lfo': ['freq', 'waveform', 'active'],
@@ -114,6 +115,9 @@ class SynthConstants:
             'osc_freq': {'type': 'choice',
                          'values': self.osc_freq_list,
                          'non_active_default': self.non_active_freq_default},
+            'osc_phase': {'type': 'uniform',
+                          'values': (0, 2 * np.pi),
+                          'non_active_default': self.non_active_phase_default},
             'waveform': {'type': 'choice',
                          'values': list(self.wave_type_dict),
                          'non_active_default': self.non_active_waveform_default},
@@ -153,7 +157,9 @@ class SynthConstants:
     def _create_op_types_dict(self):
         sampling_configurations = self.sampling_configurations
         op_types = {
-            'osc': {'amp': sampling_configurations['uniform_amp'], 'freq': sampling_configurations['osc_freq'],
+            'osc': {'amp': sampling_configurations['uniform_amp'],
+                    'freq': sampling_configurations['osc_freq'],
+                    'phase': sampling_configurations['osc_phase'],
                     'waveform': sampling_configurations['waveform']},
             'lfo_sine': {'freq': sampling_configurations['lfo_freq']},
             'lfo_non_sine': {'freq': sampling_configurations['lfo_freq'],

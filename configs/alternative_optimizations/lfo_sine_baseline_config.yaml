@@ -12,10 +12,9 @@ model:
     scheduler: cosine
 
 loss:
-  spec_loss_type: BOTH
   preset: cumsum_freq
   control_spec_preset: cumsum_freq
-  parameters_loss_type: L1
+  parameters_loss_norm: L1
 
   parameters_loss_weight: 0.1
   spectrogram_loss_weight: 0.001

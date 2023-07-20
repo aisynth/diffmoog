@@ -9,16 +9,16 @@ from synth.synth_constants import SynthConstants
 class ParametersLoss(nn.Module):
     """This loss compares target and predicted parameters of the modular synthesizer"""
 
-    def __init__(self, loss_type: str, synth_constants: SynthConstants, ignore_params: Sequence[str] = None,
+    def __init__(self, loss_norm: str, synth_constants: SynthConstants, ignore_params: Sequence[str] = None,
                  device='cuda:0'):
 
         super().__init__()
 
         self.synth_constants = synth_constants
         self.device = device
-        if loss_type == 'L1':
+        if loss_norm == 'L1':
             self.criterion = nn.L1Loss()
-        elif loss_type == 'L2':
+        elif loss_norm == 'L2':
             self.criterion = nn.MSELoss()
         else:
             raise ValueError("unknown loss type")

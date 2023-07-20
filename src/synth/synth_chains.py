@@ -166,6 +166,10 @@ SINE_LFO = [
     {'index': (0, 0), 'operation': 'lfo_sine', 'default_connection': True, 'active_prob': 1},
 ]
 
+OSC = [
+    {'index': (0, 0), 'operation': 'osc', 'default_connection': True, 'active_prob': 1}
+]
+
 TWO_LFO_SAW = [
     {'index': (0, 0), 'operation': 'lfo_sine', 'audio_input': None, 'control_input': None, 'outputs': [(1, 1)],
      'switch_outputs': True, 'active_prob': 0.25},
@@ -327,5 +331,5 @@ synth_chains_dict = {'BASIC_FLOW': BASIC_FLOW,
                       'OSC_ADSR': OSC_ADSR,
                       'OSC_TREMOLO': OSC_TREMOLO,
                       'FM_DX7': FM_DX7,
-                      'REDUCED_SIMPLE_FILTER': REDUCED_SIMPLE_FILTER
+                      'REDUCED_SIMPLE_FILTER': REDUCED_SIMPLE_FILTER,
                       }

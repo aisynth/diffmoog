@@ -36,7 +36,7 @@ class LitModularSynth(LightningModule):
 
         self.synth_net = SynthNetwork(cfg=self.cfg,
                                       synth_chain=train_cfg.model.chain,
-                                      loss_preset=train_cfg.loss.preset,
+                                      loss_preset=train_cfg.loss.loss_preset,
                                       device=device,
                                       backbone=train_cfg.model.backbone
                                       )
@@ -53,21 +53,18 @@ class LitModularSynth(LightningModule):
         else:
             raise NotImplementedError(f'Input transform {train_cfg.transform} not implemented.')
 
-        self.multi_spec_transform = MultiSpecTransform(loss_type=train_cfg.loss.spec_loss_type,
-                                                       loss_preset=train_cfg.loss.preset,
+        self.multi_spec_transform = MultiSpecTransform(loss_preset=train_cfg.loss.loss_preset,
                                                        synth_constants=synth_constants, device=device)
 
-        self.spec_loss = SpectralLoss(loss_type=train_cfg.loss.spec_loss_type,
-                                      loss_preset=train_cfg.loss.preset,
+        self.spec_loss = SpectralLoss(loss_preset=train_cfg.loss.loss_preset,
                                       synth_constants=synth_constants, device=device)
 
         self.control_spec_loss = ControlSpectralLoss(signal_duration=train_cfg.synth.signal_duration,
-                                                     loss_type=train_cfg.loss.spec_loss_type,
                                                      preset_name=train_cfg.loss.control_spec_preset,
                                                      synth_constants=synth_constants,
                                                      device=device)
 
-        self.params_loss = ParametersLoss(loss_type=train_cfg.loss.parameters_loss_type,
+        self.params_loss = ParametersLoss(loss_norm=train_cfg.loss.parameters_loss_norm,
                                           synth_constants=synth_constants, ignore_params=self.ignore_params,
                                           device=device)
 

@@ -365,22 +365,23 @@ def process_categorical_variable(values: Sequence, map_fn: Callable, batch_size:
 
 class MultiSpecTransform:
 
-    def __init__(self, loss_type: str, loss_preset: Union[str, dict], synth_constants: SynthConstants, device='cuda:0'):
+    def __init__(self, loss_preset: Union[str, dict], synth_constants: SynthConstants, device='cuda:0'):
 
         super().__init__()
 
         self.loss_preset = loss_presets[loss_preset] if isinstance(loss_preset, str) else loss_preset
+        self.loss_transform = self.loss_preset['transform']
         self.device = device
         self.sample_rate = synth_constants.sample_rate
 
         self.spectrogram_ops = {}
         for size in self.loss_preset['fft_sizes']:
-            if loss_type == 'BOTH' or loss_type == 'SPECTROGRAM':
+            if self.loss_transform == 'BOTH' or self.loss_transform == 'SPECTROGRAM':
                 spec_transform = torchaudio.transforms.Spectrogram(n_fft=size, hop_length=int(size / 4), power=2.0).to(self.device)
 
                 self.spectrogram_ops[f'{size}_spectrogram'] = spec_transform
 
-            if loss_type == 'BOTH' or loss_type == 'MEL_SPECTROGRAM':
+            if self.loss_transform == 'BOTH' or self.loss_transform == 'MEL_SPECTROGRAM':
                 mel_spec_transform = torchaudio.transforms.MelSpectrogram(sample_rate=self.sample_rate, n_fft=size,
                                                                           hop_length=int(size / 4), n_mels=256,
                                                                           power=2.0).to(self.device)
