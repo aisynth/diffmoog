@@ -1,10 +1,10 @@
 model:
   arch: simple
-  backbone: resnet
+  backbone: gru
   chain: REDUCED_SIMPLE_FILTER
-  num_workers: 0
+  num_workers: 8
   batch_size: 64
-  num_epochs: 60
+  num_epochs: 200
 
   optimizer:
     base_lr: 0.005
@@ -13,17 +13,17 @@ model:
     gamma: 0.99
 
 loss:
-  preset: cumsum_freq
-  control_spec_preset: cumsum_freq
+  preset: cumsum_time
+  control_spec_preset: cumsum_time
   parameters_loss_norm: L1
 
   parameters_loss_weight: 0.1
   spectrogram_loss_weight: 0
 
-  spectrogram_loss_warmup_epochs: 10
-  loss_switch_epochs: 20
+  spectrogram_loss_warmup_epochs: 25
+  loss_switch_epochs: 75
   min_parameters_loss_decay: 0
-  in_domain_epochs: 60
+  in_domain_epochs: 200
 
   use_chain_loss: true
   chain_loss_weight: 1.0
@@ -34,9 +34,9 @@ synth:
   chain: REDUCED_SIMPLE_FILTER
   transform: MEL
   use_multi_spec_input: false
-  signal_duration: 1
-  note_off_time: 0.75
+  signal_duration: 4.0
+  note_off_time: 3.0
   added_noise_std: 0.001
 
 logging:
-  n_images_to_log: 2
+  n_images_to_log: 5
