@@ -285,7 +285,7 @@ class SimpleWeightLayer(nn.Module):
 
 class RNNBackbone(nn.Module):
 
-    def __init__(self, rnn_type: str = 'lstm', input_size: int = 128, hidden_size: int = 512, output_size: int = LATENT_SPACE_SIZE,
+    def __init__(self, rnn_type: str = 'lstm', input_size: int = 128, hidden_size: int = 1024, output_size: int = LATENT_SPACE_SIZE,
                  agg_mean: bool = False):
 
         super().__init__()
@@ -297,13 +297,13 @@ class RNNBackbone(nn.Module):
             self.rnn = nn.LSTM(input_size, hidden_size, num_layers=4, batch_first=True, bias=False)
         elif rnn_type.lower() == 'gru':
             self.conv1 = nn.Conv1d(in_channels=128, out_channels=64, kernel_size=7, stride=2)
+            self.bn1 = nn.BatchNorm1d(num_features=64)
+
             self.conv2 = nn.Conv1d(in_channels=64, out_channels=32, kernel_size=7, stride=2)
+            self.bn2 = nn.BatchNorm1d(num_features=32)
+
             self.conv3 = nn.Conv1d(in_channels=32, out_channels=16, kernel_size=7, stride=2)
-
-            # GRU layer
-            # self.gru = nn.GRU(input_size=16, hidden_size=512, batch_first=True)
-
-            # Output size not defined so using 512 here for illustration
+            self.bn3 = nn.BatchNorm1d(num_features=16)
 
             self.rnn = nn.GRU(input_size=16, hidden_size=hidden_size, num_layers=1, batch_first=True)
         else:
@@ -316,9 +316,9 @@ class RNNBackbone(nn.Module):
         x = x.squeeze()
 
         if self.rnn_type == 'gru':
-            x = self.conv1(x)
-            x = self.conv2(x)
-            x = self.conv3(x)
+            x = self.bn1(self.conv1(x))
+            x = self.bn2(self.conv2(x))
+            x = self.bn3(self.conv3(x))
             x = x.transpose(1, 2)
 
         else:  # assuming the only other option is 'lstm'
