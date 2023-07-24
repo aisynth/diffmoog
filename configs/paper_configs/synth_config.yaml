@@ -4,7 +4,7 @@ model:
   chain: MODULAR
   num_workers: 8
   batch_size: 64
-  num_epochs: 120
+  num_epochs: 200
 
   optimizer:
     base_lr: 0.005
@@ -13,19 +13,19 @@ model:
     gamma: 0.99
 
 loss:
-  preset: mag_logmag
-  control_spec_preset: cumsum_freq
+  preset: cumsum_time
+  control_spec_preset: cumsum_time
   parameters_loss_norm: L1
 
   parameters_loss_weight: 0.1
   spectrogram_loss_weight: 0.0001
 
-  spectrogram_loss_warmup_epochs: 15
-  loss_switch_epochs: 45
+  spectrogram_loss_warmup_epochs: 25
+  loss_switch_epochs: 75
   min_parameters_loss_decay: 0
-  in_domain_epochs: 120
+  in_domain_epochs: 200
 
-  use_chain_loss: true
+  use_chain_loss: false
   chain_loss_weight: 1.0
   use_gradual_chain_loss: false
   chain_warmup_factor: 5
