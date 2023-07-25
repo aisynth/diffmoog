@@ -2,8 +2,8 @@ model:
   arch: simple
   backbone: gru
   chain: REDUCED_SIMPLE_FILTER
-  num_workers: 8
-  batch_size: 64
+  num_workers: 0
+  batch_size: 8
   num_epochs: 200
 
   optimizer:
@@ -13,12 +13,12 @@ model:
     gamma: 0.99
 
 loss:
-  preset: cumsum_time
+  loss_preset: cumsum_time
   control_spec_preset: cumsum_time
   parameters_loss_norm: L1
 
-  parameters_loss_weight: 0.1
-  spectrogram_loss_weight: 0
+  parameters_loss_weight: 5
+  spectrogram_loss_weight: 1
 
   spectrogram_loss_warmup_epochs: 25
   loss_switch_epochs: 75

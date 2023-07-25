@@ -12,7 +12,7 @@ model:
     scheduler: cosine
 
 loss:
-  preset: cumsum_freq
+  loss_preset: cumsum_freq
   control_spec_preset: cumsum_freq
   parameters_loss_norm: L1
 

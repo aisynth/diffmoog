@@ -14,7 +14,7 @@ model:
     scheduler: constant
 
 loss:
-  preset: mag_logmag
+  loss_preset: mag_logmag
   control_spec_preset: mag_logmag
   parameters_loss_norm: L2
 

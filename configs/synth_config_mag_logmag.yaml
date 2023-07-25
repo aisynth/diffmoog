@@ -12,7 +12,7 @@ model:
     scheduler: constant
 
 loss:
-  preset: mag_logmag
+  loss_preset: mag_logmag
   control_spec_preset: cumsum_freq
   parameters_loss_norm: L1
 

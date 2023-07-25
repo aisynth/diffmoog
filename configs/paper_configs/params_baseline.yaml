@@ -13,7 +13,7 @@ model:
     gamma: 0.99
 
 loss:
-  preset: cumsum_time
+  loss_preset: cumsum_time
   control_spec_preset: cumsum_time
   parameters_loss_norm: L1
 
