@@ -393,7 +393,7 @@ class LitModularSynth(LightningModule):
         return target_dict
 
     def _log_recursive(self, items_to_log: dict, tag: str, on_epoch=False):
-        if isinstance(items_to_log, np.float) or isinstance(items_to_log, np.int):
+        if isinstance(items_to_log, float) or isinstance(items_to_log, int):
             self.log(tag, items_to_log, on_step=True, on_epoch=on_epoch)
             return
 

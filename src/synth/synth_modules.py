@@ -71,7 +71,7 @@ class SynthModule(ABC):
                            value_range: Tuple = None) -> torch.Tensor:
 
         # Single scalar input value
-        if isinstance(input_val, (float, np.floating, int, np.int)):
+        if isinstance(input_val, (float, np.floating, int)):
             assert batch_size == 1, f"Input expected to be of batch size {batch_size} but is scalar"
             input_val = torch.tensor(input_val, dtype=requested_dtype, device=self.device)
 
