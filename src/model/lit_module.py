@@ -186,12 +186,15 @@ class LitModularSynth(LightningModule):
         return weighted_spec_loss, step_losses, step_artifacts
 
     def training_step(self, batch, batch_idx) -> STEP_OUTPUT:
+        if self.current_epoch != self.trainer.current_epoch:
+            print(f"Current epoch: {self.current_epoch}, trainer epoch: {self.trainer.current_epoch}")
+            exit()
 
         if batch_idx == 0:
             target_params = batch[1] if len(batch) == 3 else None
             self._log_sounds_batch(batch[0], target_params, f'samples_train')
 
-        if self.cfg.loss.in_domain_epochs < self.current_epoch:
+        if self.cfg.loss.in_domain_epochs < self.current_epoch + 1:
             print("Running over out of domain dataset")
             assert len(batch) == 2, "Tried to run OOD step on in domain batch"
             loss, step_losses, step_artifacts = self.out_of_domain_step(batch)

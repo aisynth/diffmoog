@@ -43,7 +43,7 @@ class ModularSynthDataModule(pl.LightningDataModule):
             self.out_of_domain_val_dataset = NSynthDataset(nsynth_val_dir)
 
     def train_dataloader(self):
-        if 0 < self.switch_to_ood_after_n_epochs < self.trainer.current_epoch:
+        if 0 < self.switch_to_ood_after_n_epochs < self.trainer.current_epoch + 1:
             print("Reloading Out of domain dataloader")
 
             return DataLoader(self.ood_train_dataset, batch_size=self.batch_size, shuffle=True,
