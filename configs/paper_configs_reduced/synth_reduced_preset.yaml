@@ -2,8 +2,8 @@ model:
   arch: simple
   backbone: gru
   chain: REDUCED_SIMPLE_FILTER
-  num_workers: 0
-  batch_size: 8
+  num_workers: 8
+  batch_size: 64
   num_epochs: 200
 
   optimizer:
