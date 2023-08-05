@@ -138,9 +138,11 @@ class LitModularSynth(LightningModule):
         param_diffs, active_only_diffs = get_param_diffs(predicted_params_full_range.copy(),
                                                          target_params_full_range.copy(), self.ignore_params)
 
-        step_losses = {'raw_params_loss': total_params_loss.detach(), 'raw_spec_loss': spec_loss.detach(),
+        step_losses = {'raw_params_loss': total_params_loss.detach(),
+                       'raw_spec_loss': spec_loss.detach(),
                        'weighted_params_loss': weighted_params_loss.detach(),
-                       'weighted_spec_loss': weighted_spec_loss.detach(), 'loss_total': loss_total.item()}
+                       'weighted_spec_loss': weighted_spec_loss.detach(),
+                       'loss_total': loss_total.item()}
 
         step_artifacts = {'raw_predicted_parameters': predicted_params_unit_range,
                           'full_range_predicted_parameters': predicted_params_full_range, 'param_diffs': param_diffs,

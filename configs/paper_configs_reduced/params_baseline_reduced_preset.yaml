@@ -17,7 +17,7 @@ loss:
   control_spec_preset: cumsum_time
   parameters_loss_norm: L1
 
-  parameters_loss_weight: 5
+  parameters_loss_weight: 1
   spectrogram_loss_weight: 0
 
   spectrogram_loss_warmup_epochs: 3333333333333333

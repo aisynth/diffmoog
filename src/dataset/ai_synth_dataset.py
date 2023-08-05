@@ -41,7 +41,22 @@ class AiSynthDataset(Dataset):
             noise = np.random.normal(0, self.noise_std, signal.shape).astype(np.float32)
             signal = signal + noise
 
+        # convert params to float32, since pandas defaults to float64
+        params_dic = self._convert_to_float32(params_dic)
+
         return signal, params_dic, index
+
+    def _convert_to_float32(self, item):
+        if isinstance(item, dict):
+            return {k: self._convert_to_float32(v) for k, v in item.items()}
+        elif isinstance(item, list):
+            return [self._convert_to_float32(v) for v in item]
+        elif isinstance(item, (float, int)):
+            return np.float32(item)
+        else:
+            return item  # if it's not a type we handle, return the item as-is
+
+    # And use it like this:
 
     def _get_audio_path(self, index):
         audio_file_name = f"sound_{index}.wav"

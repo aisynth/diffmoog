@@ -58,12 +58,11 @@ class ParametersLoss(nn.Module):
                                         filter_type in target_parameters[param]]
                     target = torch.tensor(filter_type_list)
                 elif param in ['active', 'fm_active']:
-                    active_list = [0 if is_active else 1 for is_active in target_parameters[param]]
+                    active_list = [1 if is_active else 0 for is_active in target_parameters[param]]
                     target = torch.tensor(active_list)
                 else:
                     target = target_parameters[param].clone()
 
-                target = target.type(torch.LongTensor).to(self.device)
                 if predicted_parameters[param].dim() > 1 and predicted_parameters[param].shape[0] == 1:
                     pred = predicted_parameters[param].squeeze(dim=0)
                 else:
