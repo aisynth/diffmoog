@@ -63,7 +63,7 @@ class ParametersLoss(nn.Module):
                 else:
                     target = target_parameters[param].clone()
 
-                target = target.type(torch.FloatTensor).to(self.device)
+                target = target.type(torch.LongTensor).to(self.device)
                 if predicted_parameters[param].dim() > 1 and predicted_parameters[param].shape[0] == 1:
                     pred = predicted_parameters[param].squeeze(dim=0)
                 else:
@@ -95,7 +95,7 @@ class ParametersLoss(nn.Module):
                             pred = pred.unsqueeze(dim=0)
                         loss = self.ce_loss(pred, target)
                     else:
-                        loss = self.bce_loss(pred, target)
+                        loss = self.ce_loss(pred, target)
                 else:
                     loss = self.criterion(pred, target)
 

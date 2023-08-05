@@ -117,7 +117,7 @@ class SynthNetwork(nn.Module):
         else:
             in_channels = 1
         if self.chain is None:
-            ValueError("Unknown self.cfg.CHAIN")
+            raise ValueError("Unknown self.cfg.CHAIN")
 
         self.device = device
 
@@ -155,9 +155,10 @@ class SynthNetwork(nn.Module):
                     param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10,
                                            len(synth_constants.wave_type_dict)])
                 elif param == 'filter_type':
-                    param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                    #todo: make sure that the final layer should be 2 and not 1 (for later feeding gumbel softmax)
+                    param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 2])
                 elif param in ['active', 'fm_active']:
-                    param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
+                    param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 2])
                 else:
                     param_head = MLPBlock([LATENT_SPACE_SIZE, LATENT_SPACE_SIZE // 2, 10, 1])
 
@@ -227,6 +228,14 @@ class MLPBlock(nn.Module):
             layers.extend([linear, relu])
 
         self.mlp = nn.Sequential(*layers[:-1])
+        self.initialize_weights_mlp()
+
+    def initialize_weights_mlp(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.kaiming_normal_(m.weight)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
         return self.mlp(x)
@@ -311,6 +320,21 @@ class RNNBackbone(nn.Module):
 
         self.fc = nn.Sequential(nn.Linear(hidden_size, output_size, bias=False),
                                 nn.ReLU())
+        self.apply(self.initialize_weights_rnn)
+
+    def initialize_weights_rnn(self, m: nn.Module):
+        if isinstance(m, nn.LSTM) or isinstance(m, nn.GRU):
+            for name, param in m.named_parameters():
+                if 'weight_ih' in name:
+                    torch.nn.init.xavier_uniform_(param.data)
+                elif 'weight_hh' in name:
+                    torch.nn.init.orthogonal_(param.data)
+                elif 'bias' in name:
+                    param.data.fill_(0)
+        elif isinstance(m, nn.Linear):
+            torch.nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                m.bias.data.fill_(0)
 
     def forward(self, x):
         x = x.squeeze()

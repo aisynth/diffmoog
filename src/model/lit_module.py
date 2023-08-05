@@ -1,4 +1,3 @@
-import copy
 from collections import defaultdict
 from typing import Any, Tuple, Optional
 
@@ -208,6 +207,7 @@ class LitModularSynth(LightningModule):
         self._accumulate_batch_values(self.epoch_vals_raw, step_artifacts['raw_predicted_parameters'])
         self._accumulate_batch_values(self.epoch_vals_normalized, step_artifacts['full_range_predicted_parameters'])
         step_losses['loss'] = loss
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         return step_losses
 
     @torch.no_grad()

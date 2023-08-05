@@ -99,7 +99,7 @@ class Normalizer:
 
             denormalized_params_dict[key] = {'operation': operation, 'parameters': {}}
             for param_name, param_val in params.items():
-                if (operation in ['osc', 'saw_square_osc'] and param_name in ['freq']) or \
+                if (operation in ['osc', 'saw_square_osc', 'osc_saw', 'osc_square'] and param_name in ['freq']) or \
                         (param_name == 'freq_c' and 'lfo' not in operation):
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.oscillator_freq_normalizer.denormalise(params[param_name])
@@ -112,6 +112,7 @@ class Normalizer:
                 elif param_name in ['filter_freq']:
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.filter_freq_normalizer.denormalise(params[param_name])
+                #todo: add denormalization for adsr release_t such that its max timing is (signal_length - note_off_time)
                 elif operation in ['env_adsr', 'lowpass_filter_adsr'] and param_name in ['attack_t', 'decay_t', 'sustain_t']:
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.adsr_normalizer.denormalise(params[param_name])

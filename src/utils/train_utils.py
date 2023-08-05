@@ -163,10 +163,10 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
             elif param_name == 'envelope':
                 diff = [np.linalg.norm(pred_vals[k] - target_vals[k]) for k in range(pred_vals.shape[0])]
             elif param_name in ['active', 'fm_active', 'filter_type']:
-                active_targets = [0 if f else 1 for f in target_vals]
+                active_targets = np.array([1 if f else 0 for f in target_vals])
                 pred_vals_squeezed = np.squeeze(pred_vals)
-                sigmoid_pred_vals = expit(pred_vals_squeezed)
-                active_preds = np.round(sigmoid_pred_vals)
+                softmax_pred_vals = softmax(pred_vals_squeezed)
+                active_preds = np.argmax(softmax_pred_vals, axis=-1)
                 conf_mat = confusion_matrix(active_targets, active_preds, labels=[0, 1])
 
                 true_negative = conf_mat[0][0]
@@ -174,7 +174,7 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
 
                 accuracy = (true_negative + true_positive) / len(active_preds)
                 all_diffs[op_index][f'{param_name}_accuracy'] = accuracy
-                diff = np.abs(active_targets - sigmoid_pred_vals)
+                diff = np.abs(active_targets - active_preds)
             else:
                 if pred_vals.shape == (1, 1):
                     diff = np.abs(target_vals - pred_vals.squeeze(axis=0))
