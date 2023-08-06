@@ -122,7 +122,7 @@ class SynthModule(ABC):
         standartized_active_vector = self._standardize_input(active_vector, requested_dtype=torch.float32, requested_dims=2,
                                                 batch_size=batch_size)
         active_vector_gumble = gumbel_softmax(standartized_active_vector, hard=True, device=self.device)
-        ret_active_vector = active_vector_gumble[:, :1]
+        ret_active_vector = active_vector_gumble[:, 1:]
 
         return ret_active_vector
 
