@@ -95,7 +95,8 @@ class SynthConstants:
         self.osc_freq_list = [self.middle_c_freq * (2 ** (1 / 12)) ** x for x in self.semitones_list]
         self.osc_freq_dic = {round(key, 4): value for value, key in enumerate(self.osc_freq_list)}
         self.osc_freq_dic_inv = {v: k for k, v in self.osc_freq_dic.items()}
-        self.oscillator_freq = self.osc_freq_list[-1] + self.margin
+        self.min_oscillator_freq = self.osc_freq_list[0]
+        self.max_oscillator_freq = self.osc_freq_list[-1] + self.margin
 
         self.all_params_presets = {
             'lfo': {'freq': np.asarray([0.5] + [k+1 for k in range(int(self.max_lfo_freq))])},

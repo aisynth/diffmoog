@@ -36,7 +36,7 @@ synth:
   use_multi_spec_input: false
   signal_duration: 4.0
   note_off_time: 3.0
-  added_noise_std: 0.001
+  added_noise_std: 0.0001
 
 logging:
   n_images_to_log: 5

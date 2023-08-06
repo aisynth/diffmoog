@@ -44,16 +44,28 @@ class Normalizer:
                                                 original_min_val=0,
                                                 original_max_val=note_off_time)
 
-        self.filter_freq_normalizer = MinMaxNormaliser(target_min_val=0,
-                                                       target_max_val=1,
-                                                       original_min_val=synth_structure.min_filter_freq,
-                                                       original_max_val=synth_structure.max_filter_freq,
-                                                       clip=clip)
+        # self.filter_freq_normalizer = MinMaxNormaliser(target_min_val=0,
+        #                                                target_max_val=1,
+        #                                                original_min_val=synth_structure.min_filter_freq,
+        #                                                original_max_val=synth_structure.max_filter_freq,
+        #                                                clip=clip)
 
-        self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
-                                                           target_max_val=1,
-                                                           original_min_val=0,
-                                                           original_max_val=synth_structure.oscillator_freq)
+        self.filter_freq_normalizer = LogMinMaxNormaliser(target_min_val=0,
+                                                          target_max_val=1,
+                                                          original_min_val=synth_structure.min_filter_freq,
+                                                          original_max_val=synth_structure.max_filter_freq,
+                                                          clip=clip)
+
+        self.oscillator_freq_normalizer = LogMinMaxNormaliser(target_min_val=0,
+                                                              target_max_val=1,
+                                                              original_min_val=synth_structure.min_oscillator_freq,
+                                                              original_max_val=synth_structure.max_oscillator_freq,
+                                                              clip=clip)
+
+        # self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
+        #                                                    target_max_val=1,
+        #                                                    original_min_val=0,
+        #                                                    original_max_val=synth_structure.oscillator_freq)
 
     def normalize(self, parameters_dict: dict):
         normalized_params_dict = {}
@@ -219,6 +231,48 @@ class MinMaxNormaliser:
         array = array * (self.original_max_val - self.original_min_val) + self.original_min_val
         return array
 
+class LogMinMaxNormaliser:
+    """LogMinMaxNormaliser applies logarithmic min max normalisation to a tensor"""
+
+    def __init__(self, target_min_val, target_max_val, original_min_val, original_max_val, clip=False, epsilon=1e-10):
+        self.target_min_val = target_min_val
+        self.target_max_val = target_max_val
+        self.original_max_val = original_max_val
+        self.original_min_val = original_min_val
+        self.clip = clip
+
+        # Ensure original_min_val is not zero or very close to zero.
+        if self.original_min_val < epsilon:
+            self.original_min_val += epsilon
+
+        # Pre-compute the logarithmic values to make the transformations faster.
+        self.log_original_min_val = torch.log(torch.tensor(original_min_val))
+        self.log_original_max_val = torch.log(torch.tensor(original_max_val))
+
+    def normalise(self, tensor, epsilon=1e-10):
+        """
+        From original frequency range to (0-1) using a logarithmic scale.
+        """
+        # Ensure that no values in the tensor are zero.
+        tensor = torch.clamp(tensor, min=epsilon)
+
+        log_tensor = torch.log(tensor)
+        norm_tensor = (log_tensor - self.log_original_min_val) / (self.log_original_max_val - self.log_original_min_val)
+
+        if self.clip:
+            norm_tensor = torch.clamp(norm_tensor, 0, 1)
+
+        return norm_tensor
+
+    def denormalise(self, norm_tensor):
+        """
+        From (0-1) range to original frequency range using an exponential scale.
+        """
+        tensor = (norm_tensor - self.target_min_val) / (self.target_max_val - self.target_min_val)
+        tensor = torch.exp(tensor * (self.log_original_max_val - self.log_original_min_val) + self.log_original_min_val)
+        denormalized_values = torch.clamp(tensor, min=0, max=self.original_max_val)
+
+        return denormalized_values
 
 class LogNormaliser:
     """LogNormaliser applies log normalisation to a tensor"""
