@@ -9,9 +9,11 @@ from synth.synth_chains import synth_chains_dict
 from synth.synth_constants import synth_constants
 from model.loss.spectral_loss_presets import loss_presets
 from utils.train_utils import process_categorical_variable
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 
 LATENT_SPACE_SIZE = 128
-
 
 class DecoderNetwork(nn.Module):
     def __init__(self, chain: str, device):
@@ -123,6 +125,7 @@ class SynthNetwork(nn.Module):
 
         if backbone in ['lstm', 'gru']:
             self.backbone = RNNBackbone(backbone)
+            self.batch_norm2d = nn.BatchNorm2d(1, affine=False)
         elif backbone == 'resnet':
             # self.backbone = resnet18(weights=None)
             # todo: ask almog why weights is configured
@@ -165,6 +168,8 @@ class SynthNetwork(nn.Module):
                 self.heads_module_dict[self.get_key(index, operation, param)] = param_head
 
     def forward(self, x):
+        x = self.batch_norm2d(x)
+        x = x.squeeze()
         latent = self.backbone(x)
 
         # Apply different heads to predict each synth parameter
@@ -193,6 +198,43 @@ class SynthNetwork(nn.Module):
 
                 output_dict[index]['parameters'][param] = final_model_output
 
+        # This commented code is for the case of constraining parameters in case of activness parameter is present.
+        # The idea is to preprocess the output such that module parameters with active=0
+        # will be forced in some way to be 0. Without this, the model may learn that active=0 while the other parameters
+        # are not 0, which doesn't make sense.
+        # For example,for an oscillator if active=0, then the amplitude and frequency should be 0 as well. This shall
+        # be inlined with the default values of the parameters in the case of active=0 when creating the dataset.
+        #
+        #     module_has_activeness_param = False
+        #     if 'active' in synth_constants.modular_synth_params[operation]:
+        #         module_has_activeness_param = True
+        #         param_head = self.heads_module_dict[self.get_key(index, operation, 'active')]
+        #         activeness_logits = param_head(latent)
+        #         activeness_probs = self.softmax(activeness_logits)
+        #         probability_active = activeness_probs[:, 1]
+        #         output_dict[index]['parameters']['active'] = activeness_logits
+        #
+        #     for param in synth_constants.modular_synth_params[operation]:
+        #         if param == 'active':
+        #             continue
+        #
+        #         param_head = self.heads_module_dict[self.get_key(index, operation, param)]
+        #         model_output = param_head(latent)
+        #
+        #         if param in ['waveform']:
+        #             final_model_output = self.softmax(model_output)
+        #         elif param not in ['active', 'fm_active', 'filter_type']:
+        #             final_model_output = self.sigmoid(model_output)
+        #         else:
+        #             final_model_output = model_output
+        #
+        #         # todo: additional constraints for other sound modules with activeness parameter may be needed
+        #         #  (for example if fm_active=False we shall do mod_index=0)
+        #         if param in ['amp', 'freq'] and module_has_activeness_param:
+        #             final_model_output = final_model_output * probability_active.unsqueeze(1)
+        #
+        #         output_dict[index]['parameters'][param] = final_model_output
+        #
         return output_dict
 
 
@@ -214,7 +256,6 @@ class ConvBlock(nn.Module):
 
     def forward(self, x):
         return self.conv_op(x)
-
 
 class MLPBlock(nn.Module):
 
@@ -294,32 +335,39 @@ class SimpleWeightLayer(nn.Module):
 
 class RNNBackbone(nn.Module):
 
-    def __init__(self, rnn_type: str = 'lstm', input_size: int = 128, hidden_size: int = 1024, output_size: int = LATENT_SPACE_SIZE,
-                 agg_mean: bool = False):
+    def __init__(self, rnn_type: str = 'lstm', input_size: int = 128, hidden_size: int = 512, output_size: int = LATENT_SPACE_SIZE,
+                 agg_mean: bool = False, channels: int = 64, n_mels: int = 128):
 
         super().__init__()
 
         self.agg_mean = agg_mean
         self.rnn_type = rnn_type
+        self.channels = channels
+        self.n_mels = n_mels
 
         if rnn_type.lower() == 'lstm':
             self.rnn = nn.LSTM(input_size, hidden_size, num_layers=4, batch_first=True, bias=False)
         elif rnn_type.lower() == 'gru':
-            self.conv1 = nn.Conv1d(in_channels=128, out_channels=64, kernel_size=7, stride=2)
-            self.bn1 = nn.BatchNorm1d(num_features=64)
+            self.conv1 = nn.Conv1d(in_channels=1, out_channels=channels, kernel_size=7, stride=2, padding=3)
+            self.bn1 = nn.BatchNorm1d(num_features=channels)
+            self.relu1 = nn.ReLU()
 
-            self.conv2 = nn.Conv1d(in_channels=64, out_channels=32, kernel_size=7, stride=2)
-            self.bn2 = nn.BatchNorm1d(num_features=32)
+            self.conv2 = nn.Conv1d(in_channels=channels, out_channels=channels, kernel_size=7, stride=2, padding=3)
+            self.bn2 = nn.BatchNorm1d(num_features=channels)
+            self.relu2 = nn.ReLU()
 
-            self.conv3 = nn.Conv1d(in_channels=32, out_channels=16, kernel_size=7, stride=2)
-            self.bn3 = nn.BatchNorm1d(num_features=16)
+            self.conv3 = nn.Conv1d(in_channels=channels, out_channels=channels, kernel_size=7, stride=2, padding=3)
+            self.bn3 = nn.BatchNorm1d(num_features=channels)
+            self.relu3 = nn.ReLU()
 
-            self.rnn = nn.GRU(input_size=16, hidden_size=hidden_size, num_layers=1, batch_first=True)
+            self.l_out = self.get_downsampled_length()[-1]  # downsampled in frequency dimension
+            print('output dims after convolution', self.l_out)
+
+            self.rnn = nn.GRU(input_size=self.l_out * channels, hidden_size=hidden_size, num_layers=1, batch_first=True)
         else:
             raise ValueError(f"{rnn_type} RNN not supported")
 
-        self.fc = nn.Sequential(nn.Linear(hidden_size, output_size, bias=False),
-                                nn.ReLU())
+        self.fc = nn.Linear(hidden_size, output_size, bias=False)
         self.apply(self.initialize_weights_rnn)
 
     def initialize_weights_rnn(self, m: nn.Module):
@@ -336,14 +384,34 @@ class RNNBackbone(nn.Module):
             if m.bias is not None:
                 m.bias.data.fill_(0)
 
+    def get_downsampled_length(self):
+        l = self.n_mels
+        lengths = [l]
+
+        # Create a list of convolution modules for easier iteration
+        conv_layers = [self.conv1, self.conv2, self.conv3]
+
+        # Loop through each convolution module
+        for conv_module in conv_layers:
+            l = (l + 2 * conv_module.padding[0]
+                 - conv_module.dilation[0] * (conv_module.kernel_size[0] - 1)
+                 - 1) // conv_module.stride[0] + 1
+            lengths.append(l)
+
+        return lengths
+
     def forward(self, x):
-        x = x.squeeze()
 
         if self.rnn_type == 'gru':
-            x = self.bn1(self.conv1(x))
-            x = self.bn2(self.conv2(x))
-            x = self.bn3(self.conv3(x))
-            x = x.transpose(1, 2)
+            batch_size, n_mels, n_frames = x.shape
+            x = x.permute(0, 2, 1).contiguous()
+            x = x.view(-1, self.n_mels).unsqueeze(1)
+            # x: [batch_size*n_frames, 1, n_mels]
+            x = self.relu1(self.bn1(self.conv1(x)))
+            x = self.relu2(self.bn2(self.conv2(x)))
+            x = self.relu3(self.bn3(self.conv3(x)))
+            x = x.view(batch_size, n_frames, self.channels, self.l_out)
+            x = x.view(batch_size, n_frames, -1)
 
         else:  # assuming the only other option is 'lstm'
             x = x.transpose(2, 1)
@@ -354,6 +422,9 @@ class RNNBackbone(nn.Module):
             hidden = hidden[0]
 
         rnn_pred = output[:, -1, :]
+        # output: [batch_size, self.output_dim]
+
         fc_output = self.fc(rnn_pred)
 
         return fc_output
+
