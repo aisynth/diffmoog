@@ -1,6 +1,7 @@
 import os
 import subprocess
 import sys
+import torch
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
 from shutil import rmtree
@@ -41,15 +42,30 @@ def run(run_args):
     datamodule.setup()
 
     device = get_device(run_args.gpu_index)
+    torch.set_float32_matmul_precision('medium')
 
-    lit_module = LitModularSynth(cfg, device)
+    is_load_ckpt = False
     if cfg.model.get('ckpt_path', None):
-        lit_module.load_from_checkpoint(checkpoint_path=cfg.model.ckpt_path, train_cfg=cfg, device=device)
-
-    callbacks = [LearningRateMonitor(logging_interval='step')]
+        is_load_ckpt = True
+        lit_module = LitModularSynth.load_from_checkpoint(checkpoint_path=cfg.model.ckpt_path, train_cfg=cfg,
+                                                          device=device)
+    else:
+        lit_module = LitModularSynth(cfg, device)
 
     tb_logger = TensorBoardLogger(cfg.logs_dir, name=exp_name)
     lit_module.tb_logger = tb_logger.experiment
+
+    next_version = get_next_version('./my_checkpoints')
+    checkpoint_callback = ModelCheckpoint(
+        dirpath=f'./my_checkpoints/version_{next_version}',  # Use next version for versioning
+        filename='{epoch}-{train_loss:.2f}',  # the filename includes epoch number and validation loss
+        save_top_k=-1,  # set to save all checkpoints
+        verbose=True,
+        monitor='train_loss',
+        mode='min',
+    )
+
+    callbacks = [LearningRateMonitor(logging_interval='step'), checkpoint_callback]
 
     if len(datamodule.train_dataset.params) < 50:
         log_every_n_steps = len(datamodule.train_dataset.params)
@@ -68,7 +84,10 @@ def run(run_args):
                       accumulate_grad_batches=4,
                       reload_dataloaders_every_n_epochs=cfg.loss.in_domain_epochs)
 
-    trainer.fit(lit_module, datamodule=datamodule)
+    if is_load_ckpt:
+        trainer.fit(lit_module, datamodule=datamodule, ckpt_path=cfg.model.ckpt_path)
+    else:
+        trainer.fit(lit_module, datamodule=datamodule)
 
 def configure_experiment(exp_name: str, dataset_name: str, config_name: str, debug: bool = False):
 
@@ -111,6 +130,18 @@ def configure_experiment(exp_name: str, dataset_name: str, config_name: str, deb
         f.write(f"Arguments: {args}\n")
 
     return cfg
+
+
+def get_next_version(base_dir):
+    existing_versions = [d for d in os.listdir(base_dir) if
+                         os.path.isdir(os.path.join(base_dir, d)) and "version_" in d]
+    existing_versions.sort(key=lambda x: int(x.split("_")[1]))
+
+    if not existing_versions:
+        return 0
+    else:
+        last_version = int(existing_versions[-1].split("_")[1])
+        return last_version + 1
 
 
 if __name__ == "__main__":
