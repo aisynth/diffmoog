@@ -44,6 +44,11 @@ class Normalizer:
                                                 original_min_val=0,
                                                 original_max_val=note_off_time)
 
+        self.release_t_normalizer = MinMaxNormaliser(target_min_val=0,
+                                                     target_max_val=1,
+                                                     original_min_val=0,
+                                                     original_max_val=signal_duration - note_off_time)
+
         # self.filter_freq_normalizer = MinMaxNormaliser(target_min_val=0,
         #                                                target_max_val=1,
         #                                                original_min_val=synth_structure.min_filter_freq,
@@ -61,6 +66,13 @@ class Normalizer:
                                                               original_min_val=synth_structure.min_oscillator_freq,
                                                               original_max_val=synth_structure.max_oscillator_freq,
                                                               clip=clip)
+
+        self.adsr_normalizers = {
+            'release_t': self.release_t_normalizer,
+            'attack_t': self.adsr_normalizer,
+            'decay_t': self.adsr_normalizer,
+            'sustain_t': self.adsr_normalizer,
+        }
 
         # self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
         #                                                    target_max_val=1,
@@ -126,11 +138,9 @@ class Normalizer:
                 elif param_name in ['filter_freq']:
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.filter_freq_normalizer.denormalise(params[param_name])
-                # todo: add denormalization for adsr release_t such that its max timing is (signal_length - note_off_time)
-                elif operation in ['env_adsr', 'lowpass_filter_adsr'] and param_name in ['attack_t', 'decay_t',
-                                                                                         'sustain_t']:
+                elif operation in ['env_adsr', 'lowpass_filter_adsr'] and param_name in self.adsr_normalizers:
                     denormalized_params_dict[key]['parameters'][param_name] = \
-                        self.adsr_normalizer.denormalise(params[param_name])
+                        self.adsr_normalizers[param_name].denormalise(params[param_name])
                 else:
                     denormalized_params_dict[key]['parameters'][param_name] = params[param_name]
 
