@@ -17,6 +17,7 @@ loss:
   control_spec_preset: cumsum_time
   parameters_loss_norm: L1
 
+  apply_loss_normalization: True
   parameters_loss_weight: 10
   spectrogram_loss_weight: 1
 
@@ -33,10 +34,11 @@ loss:
 synth:
   chain: REDUCED_SIMPLE_FILTER
   transform: MEL
+  apply_log_transform_to_input: true
   use_multi_spec_input: false
   signal_duration: 4.0
   note_off_time: 3.0
-  added_noise_std: 0.001
+  added_noise_std: 0.0001
 
 logging:
   n_images_to_log: 5

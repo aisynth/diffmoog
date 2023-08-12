@@ -16,8 +16,10 @@ from synth.parameters_normalizer import Normalizer
 from synth.synth_architecture import SynthModular
 from synth.synth_constants import synth_constants
 from utils.metrics import lsd, pearsonr_dist, mae, mfcc_distance, spectral_convergence, paper_lsd
-from utils.train_utils import log_dict_recursive, parse_synth_params, get_param_diffs, to_numpy_recursive, MultiSpecTransform
+from utils.train_utils import log_dict_recursive, parse_synth_params, get_param_diffs, to_numpy_recursive, \
+    MultiSpecTransform
 from utils.visualization_utils import visualize_signal_prediction
+from typing import Dict, Any
 
 
 class LitModularSynth(LightningModule):
@@ -46,7 +48,7 @@ class LitModularSynth(LightningModule):
         if train_cfg.synth.transform.lower() == 'mel':
             self.signal_transform = torchaudio.transforms.MelSpectrogram(sample_rate=synth_constants.sample_rate,
                                                                          n_fft=1024, hop_length=256, n_mels=128,
-                                                                         power=2.0, f_min=0, f_max=8000).to(device)
+                                                                         power=1.0, center=True).to(device)
         elif train_cfg.synth.transform.lower() == 'spec':
             self.signal_transform = torchaudio.transforms.Spectrogram(n_fft=512, power=2.0).to(device)
         else:
@@ -54,6 +56,8 @@ class LitModularSynth(LightningModule):
 
         self.multi_spec_transform = MultiSpecTransform(loss_preset=train_cfg.loss.loss_preset,
                                                        synth_constants=synth_constants, device=device)
+
+        self.apply_log_transform_to_input = train_cfg.synth.get('apply_log_transform_to_input', False)
 
         self.spec_loss = SpectralLoss(loss_preset=train_cfg.loss.loss_preset,
                                       synth_constants=synth_constants, device=device)
@@ -65,6 +69,14 @@ class LitModularSynth(LightningModule):
         self.params_loss = ParametersLoss(loss_norm=train_cfg.loss.parameters_loss_norm,
                                           synth_constants=synth_constants, ignore_params=self.ignore_params,
                                           device=device)
+
+        if self.cfg.loss.apply_loss_normalization:
+            self.is_parameters_loss_initialized = False
+            self.is_spectrogram_loss_initialized = False
+            self.is_control_spectral_loss_initialized = False
+            self.running_avg_parameters_loss = 0
+            self.running_avg_spectrogram_loss = 0
+            self.running_avg_control_spectral_loss = 0
 
         self.epoch_param_diffs = defaultdict(list)
         self.epoch_vals_raw = defaultdict(list)
@@ -80,16 +92,11 @@ class LitModularSynth(LightningModule):
         assert len(raw_signal.shape) == 2, f'Expected tensor of dimensions [batch_size, signal_length]' \
                                            f' but got shape {raw_signal.shape}'
 
-        raw_signal = torch.unsqueeze(raw_signal, 1)
+        spectrograms = self._preprocess_signal(raw_signal)
 
-        # Transform raw signal to spectrogram
-        if self.use_multi_spec_input:
-            spectrograms = self.multi_spec_transform.call(raw_signal)
-        else:
-            spectrograms = self.signal_transform(raw_signal)
-
-        # Run NN model and convert predicted params from (0, 1) to original range
+        # Run NN encoder model and get predicted parameters
         predicted_parameters_unit_range = self.synth_net(spectrograms)
+        # convert predicted params from (0, 1) to original range
         predicted_params_full_range = self.normalizer.denormalize(predicted_parameters_unit_range)
 
         return predicted_parameters_unit_range, predicted_params_full_range
@@ -106,6 +113,33 @@ class LitModularSynth(LightningModule):
         return pred_final_signal, pred_signals_through_chain
 
     def in_domain_step(self, batch, log: bool = False, return_metrics=False):
+        """
+        Processes a given batch to compute the model's losses and, optionally, other metrics.
+
+        This function computes the parameter and spectrogram losses, balances and weights them
+        based on configuration settings, and can optionally return additional evaluation metrics.
+        If `tuning_mode` is enabled, the LSD (log-spectral distance) between the target and predicted signals
+        is also computed.
+
+        Parameters:
+        - batch (tuple): Contains the target signal, target parameters in full range, and the signal index.
+        - log (bool, optional): If True, specific information is logged. Defaults to False.
+        - return_metrics (bool, optional): If True, returns additional evaluation metrics. Defaults to False.
+
+        Returns:
+        - loss_total - torch.Tensor: The total computed loss for the batch.
+        - step_losses - dict:
+            Dictionary containing detailed loss values (e.g., raw and weighted parameter/spectrogram losses).
+        - step_artifacts - dict (optional):
+            Dictionary containing various artifacts, such as predicted parameters and differences.
+        - step_metrics - dict (optional, if return_metrics=True): Dictionary containing additional evaluation metrics.
+
+        Notes:
+        - If the current epoch is before `self.cfg.loss.spectrogram_loss_warmup_epochs`, the spectrogram loss
+          used in the total loss calculation is set to zero.
+        - The `return_metrics` flag affects the return type and the computations done. If it's set to True,
+          additional metrics are computed, and the function's return type will include the metrics dictionary.
+        """
 
         target_signal, target_params_full_range, signal_index = batch
         batch_size = len(signal_index)
@@ -119,34 +153,36 @@ class LitModularSynth(LightningModule):
 
         total_params_loss, per_parameter_loss = self.params_loss.call(predicted_params_unit_range,
                                                                       target_params_unit_range)
-        pred_final_signal = None
-        if self.current_epoch < self.cfg.loss.spectrogram_loss_warmup_epochs and not return_metrics:
-            spec_loss = torch.tensor(0)
-        else:
-            pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
-                                                                                      batch_size)
-            if self.cfg.loss.use_chain_loss:
-                _, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
-                spec_loss = self._calculate_spectrogram_chain_loss(target_signals_through_chain,
-                                                                   pred_signals_through_chain, log=True)
-            else:
-                spec_loss, per_op_loss, per_op_weighted_loss = self.spec_loss.call(target_signal, pred_final_signal,
-                                                                                   step=self.global_step)
-                self._log_recursive(per_op_weighted_loss, f'final_spec_losses_weighted')
 
-        loss_total, weighted_params_loss, weighted_spec_loss = self._balance_losses(total_params_loss, spec_loss, log)
+        pred_final_signal, spec_loss_for_total, spec_loss_for_logging = (
+            self._calculate_spec_loss(target_signal,
+                                      target_params_full_range,
+                                      predicted_params_full_range,
+                                      batch_size,
+                                      return_metrics))
+
+        balanced_parameters_loss, balanced_spectrogram_loss = self._balance_losses(total_params_loss,
+                                                                                   spec_loss_for_total, log)
+
+        loss_total = balanced_parameters_loss + balanced_spectrogram_loss
+
         param_diffs, active_only_diffs = get_param_diffs(predicted_params_full_range.copy(),
                                                          target_params_full_range.copy(), self.ignore_params)
 
-        step_losses = {'raw_params_loss': total_params_loss.detach(),
-                       'raw_spec_loss': spec_loss.detach(),
-                       'weighted_params_loss': weighted_params_loss.detach(),
-                       'weighted_spec_loss': weighted_spec_loss.detach(),
-                       'loss_total': loss_total.item()}
+        step_losses = {
+            'raw_params_loss': total_params_loss.detach(),
+            'raw_spec_loss': spec_loss_for_logging.detach(),
+            'weighted_params_loss': balanced_parameters_loss.detach(),
+            'weighted_spec_loss': balanced_spectrogram_loss.detach(),
+            'loss_total': loss_total.item()
+        }
 
-        step_artifacts = {'raw_predicted_parameters': predicted_params_unit_range,
-                          'full_range_predicted_parameters': predicted_params_full_range, 'param_diffs': param_diffs,
-                          'active_only_diffs': active_only_diffs}
+        step_artifacts = {
+            'raw_predicted_parameters': predicted_params_unit_range,
+            'full_range_predicted_parameters': predicted_params_full_range,
+            'param_diffs': param_diffs,
+            'active_only_diffs': active_only_diffs
+        }
 
         if return_metrics:
             step_metrics = self._calculate_audio_metrics(target_signal, pred_final_signal)
@@ -157,10 +193,67 @@ class LitModularSynth(LightningModule):
                 pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
                                                                                           batch_size)
             lsd_val = paper_lsd(target_signal, pred_final_signal)
-
             step_losses['train_lsd'] = lsd_val
 
         return loss_total, step_losses, step_artifacts
+
+    # def in_domain_step(self, batch, log: bool = False, return_metrics=False):
+    #
+    #     target_signal, target_params_full_range, signal_index = batch
+    #     batch_size = len(signal_index)
+    #
+    #     predicted_params_unit_range, predicted_params_full_range = self(target_signal)
+    #     target_params_unit_range = self.normalizer.normalize(target_params_full_range)
+    #
+    #     if self.ignore_params is not None:
+    #         predicted_params_unit_range = self._update_param_dict(target_params_unit_range, predicted_params_unit_range)
+    #         predicted_params_full_range = self._update_param_dict(target_params_full_range, predicted_params_full_range)
+    #
+    #     total_params_loss, per_parameter_loss = self.params_loss.call(predicted_params_unit_range,
+    #                                                                   target_params_unit_range)
+    #     pred_final_signal = None
+    #     if self.current_epoch < self.cfg.loss.spectrogram_loss_warmup_epochs and not return_metrics:
+    #         spec_loss = torch.tensor(0.0, dtype=torch.float32)
+    #     else:
+    #         pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
+    #                                                                                   batch_size)
+    #         if self.cfg.loss.use_chain_loss:
+    #             _, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
+    #             spec_loss = self._calculate_spectrogram_chain_loss(target_signals_through_chain,
+    #                                                                pred_signals_through_chain, log=True)
+    #         else:
+    #             spec_loss, per_op_loss, per_op_weighted_loss = self.spec_loss.call(target_signal, pred_final_signal,
+    #                                                                                step=self.global_step)
+    #             self._log_recursive(per_op_weighted_loss, f'final_spec_losses_weighted')
+    #
+    #     loss_total, weighted_params_loss, weighted_spec_loss = self._balance_losses(total_params_loss, spec_loss, log)
+    #     param_diffs, active_only_diffs = get_param_diffs(predicted_params_full_range.copy(),
+    #                                                      target_params_full_range.copy(), self.ignore_params)
+    #
+    #     step_losses = {'raw_params_loss': total_params_loss.detach(),
+    #                    'raw_spec_loss': spec_loss.detach(),
+    #                    'weighted_params_loss': weighted_params_loss.detach(),
+    #                    'weighted_spec_loss': weighted_spec_loss.detach(),
+    #                    'loss_total': loss_total.item()}
+    #
+    #     step_artifacts = {'raw_predicted_parameters': predicted_params_unit_range,
+    #                       'full_range_predicted_parameters': predicted_params_full_range,
+    #                       'param_diffs': param_diffs,
+    #                       'active_only_diffs': active_only_diffs}
+    #
+    #     if return_metrics:
+    #         step_metrics = self._calculate_audio_metrics(target_signal, pred_final_signal)
+    #         return loss_total, step_losses, step_metrics, step_artifacts
+    #
+    #     if self.tuning_mode:
+    #         if pred_final_signal is None:
+    #             pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
+    #                                                                                       batch_size)
+    #         lsd_val = paper_lsd(target_signal, pred_final_signal)
+    #
+    #         step_losses['train_lsd'] = lsd_val
+    #
+    #     return loss_total, step_losses, step_artifacts
 
     def out_of_domain_step(self, batch, return_metrics=False):
 
@@ -265,6 +358,74 @@ class LitModularSynth(LightningModule):
         self.val_epoch_param_diffs = defaultdict(list)
         self.val_epoch_param_active_diffs = defaultdict(list)
 
+    # Gradient check
+    # def on_after_backward(self):
+    #     # Check the gradients
+    #     for name, params in self.named_parameters():
+    #         if params.grad is not None:
+    #             grad_norm = params.grad.data.norm(2).item()
+    #             if grad_norm == 0 or np.isnan(grad_norm):
+    #                 print(f"Gradient for {name} has vanished.")
+    #             if grad_norm > 1e+5:
+    #                 print(f"Gradient for {name} is exploding.")
+
+    def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+        checkpoint['is_parameters_loss_initialized'] = self.is_parameters_loss_initialized
+        checkpoint['running_avg_parameters_loss'] = self.running_avg_parameters_loss
+        checkpoint['is_spectrogram_loss_initialized'] = self.is_spectrogram_loss_initialized
+        checkpoint['running_avg_spectrogram_loss'] = self.running_avg_spectrogram_loss
+
+    def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+        self.is_parameters_loss_initialized = checkpoint['is_parameters_loss_initialized']
+        self.running_avg_parameters_loss = checkpoint['running_avg_parameters_loss']
+        self.is_spectrogram_loss_initialized = checkpoint['is_spectrogram_loss_initialized']
+        self.running_avg_spectrogram_loss = checkpoint['running_avg_spectrogram_loss']
+
+    def _preprocess_signal(self, raw_signal: torch.Tensor) -> torch.Tensor:
+
+        # Add channel dimension
+        raw_signal = torch.unsqueeze(raw_signal, 1)
+
+        # Transform raw signal to spectrogram
+        if self.use_multi_spec_input:
+            spectrograms = self.multi_spec_transform.call(raw_signal)
+        else:
+            spectrograms = self.signal_transform(raw_signal)
+
+        # Apply log transform if required
+        if self.apply_log_transform_to_input:
+            spectrograms = torch.log(spectrograms + 1e-8)
+
+        return spectrograms
+
+    def _calculate_spec_loss(self, target_signal, target_params_full_range, predicted_params_full_range, batch_size,
+                             return_metrics):
+        """Calculates the spectrogram loss."""
+
+        # Initial assumption that we don't need to compute the spec loss.
+        pred_final_signal = None
+        spec_loss = torch.tensor(0.0, dtype=torch.float32)
+        spec_loss_for_total = torch.tensor(0.0, dtype=torch.float32)  # Set this to zero initially
+
+        # Only calculate the spec loss if it's time to do so or if metrics are requested
+        if self.current_epoch >= self.cfg.loss.spectrogram_loss_warmup_epochs or return_metrics:
+            pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
+                                                                                      batch_size)
+
+            if self.cfg.loss.use_chain_loss:
+                _, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
+                spec_loss = self._calculate_spectrogram_chain_loss(target_signals_through_chain,
+                                                                   pred_signals_through_chain, log=True)
+            else:
+                spec_loss, per_op_loss, per_op_weighted_loss = self.spec_loss.call(target_signal, pred_final_signal,
+                                                                                   step=self.global_step)
+                self._log_recursive(per_op_weighted_loss, f'final_spec_losses_weighted')
+
+            if self.current_epoch >= self.cfg.loss.spectrogram_loss_warmup_epochs:
+                spec_loss_for_total = spec_loss
+
+        return pred_final_signal, spec_loss_for_total, spec_loss,
+
     def _calculate_spectrogram_chain_loss(self, target_signals_through_chain: dict, pred_signals_through_chain: dict,
                                           log=False):
 
@@ -309,8 +470,89 @@ class LitModularSynth(LightningModule):
 
         return spectrogram_loss
 
-    def _balance_losses(self, parameters_loss, spectrogram_loss, log=False):
+    def _update_running_averages(self, parameters_loss, spectrogram_loss, log, alpha=0.99):
+        """
+        Update running averages for both the parameters loss and the spectrogram loss.
 
+        Args:
+            parameters_loss (torch.Tensor): The current value of the parameters loss.
+            spectrogram_loss (torch.Tensor): The current value of the spectrogram loss.
+            alpha (float): The decay factor for the running average. Default is 0.99.
+        """
+        # Check if the parameters loss has started contributing and initialize its running average
+        if not self.is_parameters_loss_initialized and parameters_loss.item() > 0:
+            self.running_avg_parameters_loss = parameters_loss.clone().detach()
+            self.is_parameters_loss_initialized = True
+
+        # Always update parameters loss running average if initialized
+        if self.is_parameters_loss_initialized:
+            self.running_avg_parameters_loss = alpha * self.running_avg_parameters_loss + (1 - alpha) * parameters_loss
+
+        # Check if the spectrogram loss has started contributing and initialize its running average
+        if not self.is_spectrogram_loss_initialized and spectrogram_loss.item() > 0:
+            current_normalized_parameter_loss = parameters_loss / self.running_avg_parameters_loss
+            self.running_avg_spectrogram_loss = spectrogram_loss.clone().detach() / current_normalized_parameter_loss
+            self.is_spectrogram_loss_initialized = True
+
+        # Update spectrogram loss running average if initialized
+        if self.is_spectrogram_loss_initialized:
+            self.running_avg_spectrogram_loss = alpha * self.running_avg_spectrogram_loss + (
+                    1 - alpha) * spectrogram_loss
+
+        if log:
+            self.tb_logger.add_scalar('normalized_losses/running_avg_parameters_loss',
+                                      self.running_avg_parameters_loss,
+                                      self.global_step)
+            self.tb_logger.add_scalar('normalized_losses/running_avg_spectrogram_loss',
+                                      self.running_avg_spectrogram_loss,
+                                      self.global_step)
+
+    def _normalize_losses(self, parameters_loss, spectrogram_loss, log):
+        """
+        Normalize the provided losses using maintained running averages.
+
+        Args:
+            parameters_loss (torch.Tensor): The current value of the parameters loss.
+            spectrogram_loss (torch.Tensor): The current value of the spectrogram loss.
+
+        Returns:
+            tuple: A tuple containing normalized parameters loss and normalized spectrogram loss.
+        """
+
+        self._update_running_averages(parameters_loss, spectrogram_loss, log)
+
+        if self.is_parameters_loss_initialized:
+            normalized_parameters_loss = parameters_loss / self.running_avg_parameters_loss
+        else:
+            normalized_parameters_loss = parameters_loss
+
+        if self.is_spectrogram_loss_initialized:
+            normalized_spectrogram_loss = spectrogram_loss / self.running_avg_spectrogram_loss
+        else:
+            normalized_spectrogram_loss = spectrogram_loss
+
+        if log:
+            self.tb_logger.add_scalar('normalized_losses/pre_rampup_normalized_parameters_loss',
+                                      normalized_parameters_loss,
+                                      self.global_step)
+            self.tb_logger.add_scalar('normalized_losses/pre_rampup_normalized_spectrogram_loss',
+                                      normalized_spectrogram_loss,
+                                      self.global_step)
+
+        return normalized_parameters_loss, normalized_spectrogram_loss
+
+    def _apply_ramp_up(self, normalized_parameters_loss, normalized_spectrogram_loss, log=False):
+        """
+        Adjust the provided normalized losses using a ramp-up strategy.
+
+        Args:
+            normalized_parameters_loss (torch.Tensor): The normalized value of the parameters loss.
+            normalized_spectrogram_loss (torch.Tensor): The normalized value of the spectrogram loss.
+            log (bool): Whether to log specific values to a logger. Default is False.
+
+        Returns:
+            tuple: A tuple containing total loss, weighted parameters loss, and weighted spectrogram loss.
+        """
         step = self.current_epoch
         cfg = self.cfg.loss
 
@@ -325,16 +567,52 @@ class LitModularSynth(LightningModule):
             parameters_loss_decay_factor = max(1 - linear_mix_factor, cfg.min_parameters_loss_decay)
             spec_loss_rampup_factor = linear_mix_factor
 
-        weighted_params_loss = parameters_loss * cfg.parameters_loss_weight * parameters_loss_decay_factor
-        weighted_spec_loss = cfg.spectrogram_loss_weight * spectrogram_loss * spec_loss_rampup_factor
-
-        loss_total = weighted_params_loss + weighted_spec_loss
+        weighted_params_loss = normalized_parameters_loss * parameters_loss_decay_factor
+        weighted_spec_loss = normalized_spectrogram_loss * spec_loss_rampup_factor
 
         if log:
             self.tb_logger.add_scalar('loss/parameters_decay_factor', parameters_loss_decay_factor, self.global_step)
             self.tb_logger.add_scalar('loss/spec_loss_rampup_factor', spec_loss_rampup_factor, self.global_step)
+            if log:
+                self.tb_logger.add_scalar('normalized_losses/post_rampup_weighted_params_loss',
+                                          weighted_params_loss,
+                                          self.global_step)
+                self.tb_logger.add_scalar('normalized_losses/post_rampup_weighted_spec_loss',
+                                          weighted_spec_loss,
+                                          self.global_step)
 
-        return loss_total, weighted_params_loss, weighted_spec_loss
+        return weighted_params_loss, weighted_spec_loss
+
+    def _balance_losses(self, parameters_loss, spectrogram_loss, log=False):
+        """
+        Balance the given losses using normalization ramp-up and configured factorization strategies.
+
+        Args:
+            parameters_loss (torch.Tensor): The current value of the parameters loss.
+            spectrogram_loss (torch.Tensor): The current value of the spectrogram loss.
+            log (bool): Whether to log specific values to a logger. Default is False.
+
+        Returns:
+            tuple: A tuple containing total loss, weighted parameters loss, and weighted spectrogram loss.
+        """
+        params_loss_factor = self.cfg.loss.parameters_loss_weight
+        spec_loss_factor = self.cfg.loss.spectrogram_loss_weight
+
+        if self.cfg.loss.apply_loss_normalization:
+            parameters_loss, spectrogram_loss = self._normalize_losses(parameters_loss,
+                                                                       spectrogram_loss,
+                                                                       log)
+            params_loss_factor = 1.0
+            spec_loss_factor = 1.0
+
+        post_rampup_params_loss, post_rampup_spec_loss = self._apply_ramp_up(parameters_loss,
+                                                                             spectrogram_loss,
+                                                                             log)
+
+        balanced_parameters_loss = params_loss_factor * post_rampup_params_loss
+        balanced_spectrogram_loss = spec_loss_factor * post_rampup_spec_loss
+
+        return balanced_parameters_loss, balanced_spectrogram_loss
 
     @torch.no_grad()
     def _calculate_audio_metrics(self, target_signal: torch.Tensor, predicted_signal: torch.Tensor):
