@@ -111,8 +111,8 @@ REDUCED = [
 ]
 
 REDUCED_SIMPLE_FILTER = [
-    {'index': (0, 0), 'operation': 'osc_saw', 'audio_input': None, 'control_input': None, 'outputs': [[0, 1]]},
-    {'index': (1, 0), 'operation': 'osc_square', 'audio_input': None, 'control_input': None, 'outputs': [[0, 1]]},
+    {'index': (0, 0), 'operation': 'osc_saw_no_activeness', 'audio_input': None, 'control_input': None, 'outputs': [[0, 1]]},
+    {'index': (1, 0), 'operation': 'osc_square_no_activeness', 'audio_input': None, 'control_input': None, 'outputs': [[0, 1]]},
     {'index': (0, 1), 'operation': 'mix', 'audio_input': [[0, 0], [1, 0]], 'control_input': None, 'outputs': [[0, 2]]},
     {'index': (0, 2), 'operation': 'env_adsr', 'audio_input': [[0, 1]], 'control_input': None, 'outputs': [[0, 3]]},
     {'index': (0, 3), 'operation': 'lowpass_filter', 'audio_input': [[0, 2]], 'control_input': None, 'outputs': None},

@@ -78,8 +78,9 @@ class Normalizer:
 
             normalized_params_dict[key] = {'operation': operation, 'parameters': {}}
             for param_name, param_val in params.items():
-                if (operation in ['osc', 'saw_square_osc', 'osc_saw', 'osc_square'] and param_name in ['freq']) or \
-                        (param_name == 'freq_c' and 'lfo' not in operation):
+                if ((operation in ['osc', 'saw_square_osc', 'osc_sine', 'osc_saw', 'osc_square',
+                                   'osc_sine_no_activeness', 'osc_square_no_activeness', 'osc_saw_no_activeness']
+                     and param_name in ['freq']) or (param_name == 'freq_c' and 'lfo' not in operation)):
                     normalized_params_dict[key]['parameters'][param_name] = \
                         self.oscillator_freq_normalizer.normalise(params[param_name])
                 elif 'lfo' in operation and param_name in ['freq', 'freq_c']:
@@ -111,8 +112,9 @@ class Normalizer:
 
             denormalized_params_dict[key] = {'operation': operation, 'parameters': {}}
             for param_name, param_val in params.items():
-                if (operation in ['osc', 'saw_square_osc', 'osc_saw', 'osc_square'] and param_name in ['freq']) or \
-                        (param_name == 'freq_c' and 'lfo' not in operation):
+                if ((operation in ['osc', 'saw_square_osc', 'osc_saw', 'osc_square',
+                                   'osc_sine_no_activeness', 'osc_square_no_activeness', 'osc_saw_no_activeness']
+                     and param_name in ['freq']) or (param_name == 'freq_c' and 'lfo' not in operation)):
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.oscillator_freq_normalizer.denormalise(params[param_name])
                 elif 'lfo' in operation and param_name in ['freq', 'freq_c']:
@@ -124,8 +126,9 @@ class Normalizer:
                 elif param_name in ['filter_freq']:
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.filter_freq_normalizer.denormalise(params[param_name])
-                #todo: add denormalization for adsr release_t such that its max timing is (signal_length - note_off_time)
-                elif operation in ['env_adsr', 'lowpass_filter_adsr'] and param_name in ['attack_t', 'decay_t', 'sustain_t']:
+                # todo: add denormalization for adsr release_t such that its max timing is (signal_length - note_off_time)
+                elif operation in ['env_adsr', 'lowpass_filter_adsr'] and param_name in ['attack_t', 'decay_t',
+                                                                                         'sustain_t']:
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.adsr_normalizer.denormalise(params[param_name])
                 else:
@@ -149,18 +152,19 @@ class Normalizer:
             ret_params = {'attack_t': clamped_attack,
                           'decay_t': clamped_decay,
                           'sustain_t': clamped_sustain,
-                          'sustain_level': torch.clamp(params['sustain_level'], min=0, max=self.synth_structure.max_amp),
+                          'sustain_level': torch.clamp(params['sustain_level'], min=0,
+                                                       max=self.synth_structure.max_amp),
                           'release_t': clamped_release}
 
         elif operation == 'lowpass_filter_adsr':
             ret_params = {'attack_t': clamped_attack,
                           'decay_t': clamped_decay,
                           'sustain_t': clamped_sustain,
-                          'sustain_level': torch.clamp(params['sustain_level'], min=0, max=self.synth_structure.max_amp),
+                          'sustain_level': torch.clamp(params['sustain_level'], min=0,
+                                                       max=self.synth_structure.max_amp),
                           'release_t': clamped_release,
                           'intensity': params['intensity'],
                           'filter_freq': params['filter_freq']}
-
 
         return ret_params
 
@@ -231,6 +235,7 @@ class MinMaxNormaliser:
         array = array * (self.original_max_val - self.original_min_val) + self.original_min_val
         return array
 
+
 class LogMinMaxNormaliser:
     """LogMinMaxNormaliser applies logarithmic min max normalisation to a tensor"""
 
@@ -273,6 +278,7 @@ class LogMinMaxNormaliser:
         denormalized_values = torch.clamp(tensor, min=0, max=self.original_max_val)
 
         return denormalized_values
+
 
 class LogNormaliser:
     """LogNormaliser applies log normalisation to a tensor"""

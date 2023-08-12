@@ -116,8 +116,9 @@ def _verify_activity(sample_params_dict):
     for key in sample_params_dict.keys():
         if sample_params_dict[key]:
             operation = sample_params_dict[key]['operation']
-            if operation in ['osc', 'osc_sine', 'osc_saw', 'osc_square', 'fm_saw', 'fm_sine', 'fm_square', 'fm', 'fm_lfo', 'saw_square_osc',
-                             'surrogate_lfo', 'surrogate_fm_sine', 'surrogate_fm_saw']:
+            if operation in ['osc', 'osc_sine', 'osc_saw', 'osc_square', 'fm_saw', 'fm_sine', 'fm_square', 'fm',
+                             'fm_lfo', 'saw_square_osc', 'surrogate_lfo', 'surrogate_fm_sine', 'surrogate_fm_saw',
+                             'osc_sine_no_activeness', 'osc_square_no_activeness', 'osc_saw_no_activeness']:
                 is_active = sample_params_dict[key]['parameters'].get('active', True)
                 has_active_osc = has_active_osc or is_active
         else:
