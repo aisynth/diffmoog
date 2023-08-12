@@ -17,7 +17,7 @@ class SynthConstants:
 
     semitones_max_offset: int = 36
     middle_c_freq: float = 261.6255653005985
-    min_amp: float = 0.05
+    min_amp: float = 0.01
     max_amp: float = 1
 
     min_mod_index: float = 0.01

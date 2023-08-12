@@ -70,13 +70,12 @@ class LitModularSynth(LightningModule):
                                           synth_constants=synth_constants, ignore_params=self.ignore_params,
                                           device=device)
 
-        if self.cfg.loss.apply_loss_normalization:
-            self.is_parameters_loss_initialized = False
-            self.is_spectrogram_loss_initialized = False
-            self.is_control_spectral_loss_initialized = False
-            self.running_avg_parameters_loss = 0
-            self.running_avg_spectrogram_loss = 0
-            self.running_avg_control_spectral_loss = 0
+        self.is_parameters_loss_initialized = False
+        self.is_spectrogram_loss_initialized = False
+        self.is_control_spectral_loss_initialized = False
+        self.running_avg_parameters_loss = 0
+        self.running_avg_spectrogram_loss = 0
+        self.running_avg_control_spectral_loss = 0
 
         self.epoch_param_diffs = defaultdict(list)
         self.epoch_vals_raw = defaultdict(list)
