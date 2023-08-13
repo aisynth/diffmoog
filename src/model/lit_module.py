@@ -29,6 +29,7 @@ class LitModularSynth(LightningModule):
         super().__init__()
 
         self.cfg = train_cfg
+        self.lr = self.cfg.model.optimizer.base_lr
         self.tuning_mode = tuning_mode
         self.synth = SynthModular(chain_name=train_cfg.synth.chain, synth_constants=synth_constants,
                                   device=device)
@@ -95,10 +96,8 @@ class LitModularSynth(LightningModule):
 
         # Run NN encoder model and get predicted parameters
         predicted_parameters_unit_range = self.synth_net(spectrograms)
-        # convert predicted params from (0, 1) to original range
-        predicted_params_full_range = self.normalizer.denormalize(predicted_parameters_unit_range)
 
-        return predicted_parameters_unit_range, predicted_params_full_range
+        return predicted_parameters_unit_range
 
     def generate_synth_sound(self, full_range_synth_params: dict, batch_size: int) -> Tuple[torch.Tensor, dict]:
 
@@ -143,7 +142,9 @@ class LitModularSynth(LightningModule):
         target_signal, target_params_full_range, signal_index = batch
         batch_size = len(signal_index)
 
-        predicted_params_unit_range, predicted_params_full_range = self(target_signal)
+        predicted_params_unit_range = self(target_signal)
+        predicted_params_full_range = self.normalizer.denormalize(predicted_params_unit_range)
+
         target_params_unit_range = self.normalizer.normalize(target_params_full_range)
 
         if self.ignore_params is not None:
@@ -259,7 +260,9 @@ class LitModularSynth(LightningModule):
         target_final_signal, signal_index = batch
         batch_size = len(signal_index)
 
-        predicted_params_unit_range, predicted_params_full_range = self(target_final_signal)
+        predicted_params_unit_range = self(target_final_signal)
+        predicted_params_full_range = self.normalizer.denormalize(predicted_params_unit_range)
+
         pred_final_signal, _ = self.generate_synth_sound(predicted_params_full_range, batch_size)
 
         loss, per_op_loss, per_op_weighted_loss = self.spec_loss.call(target_final_signal, pred_final_signal,
@@ -640,7 +643,9 @@ class LitModularSynth(LightningModule):
 
         batch_size = len(target_signals)
 
-        predicted_params_unit_range, predicted_params_full_range = self(target_signals)
+        predicted_params_unit_range = self(target_signals)
+        predicted_params_full_range = self.normalizer.denormalize(predicted_params_unit_range)
+
         pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
                                                                                   batch_size)
 
@@ -724,7 +729,7 @@ class LitModularSynth(LightningModule):
 
         # Configure optimizer
         if 'optimizer' not in optimizer_params or optimizer_params['optimizer'].lower() == 'adam':
-            optimizer = torch.optim.Adam(self.parameters(), lr=optimizer_params.base_lr)
+            optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         else:
             raise NotImplementedError(f"Optimizer {self.optimizer_params['optimizer']} not implemented")
 
@@ -743,7 +748,7 @@ class LitModularSynth(LightningModule):
                 "interval": "epoch"}
         elif optimizer_params.scheduler.lower() == 'cyclic':
             scheduler_config = {"scheduler": torch.optim.lr_scheduler.CyclicLR(
-                optimizer, base_lr=self.cfg.model.optimizer.base_lr, max_lr=self.cfg.model.optimizer.max_lr,
+                optimizer, base_lr=self.lr, max_lr=self.cfg.model.optimizer.max_lr,
                 step_size_up=self.cfg.model.optimizer.cyclic_step_size_up),
                 "interval": "step"}
         elif optimizer_params.scheduler.lower() == 'exponential':
