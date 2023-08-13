@@ -8,7 +8,7 @@ from shutil import rmtree
 
 from omegaconf import OmegaConf
 from pytorch_lightning import Trainer, seed_everything
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, LearningRateFinder
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from termcolor import colored
@@ -18,6 +18,19 @@ from utils.gpu_utils import get_device
 
 from model.lit_module import LitModularSynth
 from utils.train_utils import get_project_root
+
+
+class FineTuneLearningRateFinder(LearningRateFinder):
+    def __init__(self, milestones, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.milestones = milestones
+
+    def on_fit_start(self, *args, **kwargs):
+        return
+
+    def on_train_epoch_start(self, trainer, pl_module):
+        if trainer.current_epoch in self.milestones or trainer.current_epoch == 0:
+            self.lr_find(trainer, pl_module)
 
 
 root = get_project_root()
@@ -66,6 +79,7 @@ def run(run_args):
     )
 
     callbacks = [LearningRateMonitor(logging_interval='step'), checkpoint_callback]
+    # callbacks = [LearningRateMonitor(logging_interval='step'), checkpoint_callback, FineTuneLearningRateFinder(milestones=(5, 10))]
 
     if len(datamodule.train_dataset.params) < 50:
         log_every_n_steps = len(datamodule.train_dataset.params)
@@ -79,7 +93,8 @@ def run(run_args):
                       max_epochs=cfg.model.num_epochs,
                       accelerator="gpu",
                       detect_anomaly=True,
-                      log_every_n_steps=log_every_n_steps,
+                      # log_every_n_steps=log_every_n_steps,
+                      log_every_n_steps=1,
                       check_val_every_n_epoch=1,
                       accumulate_grad_batches=4,
                       reload_dataloaders_every_n_epochs=cfg.loss.in_domain_epochs)

@@ -15,6 +15,7 @@ class Normalizer:
         self.signal_duration = signal_duration
         self.clamp_adsr = clamp_adsr
         self.synth_structure = synth_structure
+        self.note_off_time = note_off_time
 
         self.mod_index_normalizer = MinMaxNormaliser(target_min_val=0,
                                                      target_max_val=1,
@@ -166,18 +167,17 @@ class Normalizer:
     def _clamp_adsr_params(self, params: dict, operation: 'str'):
         """look for adsr operations to send to clamping function"""
 
-        clamped_attack, clamped_decay, clamped_sustain, clamped_release = \
-            self._clamp_adsr_superposition(params['attack_t'],
+        clamped_attack, clamped_decay, clamped_sustain = \
+            self._clamp_ads_superposition(params['attack_t'],
                                            params['decay_t'],
-                                           params['sustain_t'],
-                                           params['release_t'])
+                                           params['sustain_t'])
         if operation == 'env_adsr':
             ret_params = {'attack_t': clamped_attack,
                           'decay_t': clamped_decay,
                           'sustain_t': clamped_sustain,
                           'sustain_level': torch.clamp(params['sustain_level'], min=0,
                                                        max=self.synth_structure.max_amp),
-                          'release_t': clamped_release}
+                          'release_t': params['release_t']}
 
         elif operation == 'lowpass_filter_adsr':
             ret_params = {'attack_t': clamped_attack,
@@ -185,50 +185,45 @@ class Normalizer:
                           'sustain_t': clamped_sustain,
                           'sustain_level': torch.clamp(params['sustain_level'], min=0,
                                                        max=self.synth_structure.max_amp),
-                          'release_t': clamped_release,
+                          'release_t': params['release_t'],
                           'intensity': params['intensity'],
                           'filter_freq': params['filter_freq']}
 
         return ret_params
 
-    def _clamp_adsr_superposition(self, attack_t, decay_t, sustain_t, release_t):
-        """This function clamps the superposition of adsr times, so it does not exceed signal length"""
+    def _clamp_ads_superposition(self, attack_t, decay_t, sustain_t):
+        """This function clamps the superposition of attack decay sustain times, so it does not exceed note off time"""
 
-        adsr_length_in_sec = attack_t + decay_t + sustain_t + release_t
+        ads_length_in_sec = attack_t + decay_t + sustain_t
 
-        adsr_clamp_indices = torch.nonzero(adsr_length_in_sec >= self.signal_duration, as_tuple=True)[0]
+        ads_clamp_indices = torch.nonzero(ads_length_in_sec >= self.note_off_time, as_tuple=True)[0]
 
         normalized_attack_list = []
         normalized_decay_list = []
         normalized_sustain_list = []
-        normalized_release_list = []
 
-        for i in range(adsr_length_in_sec.shape[0]):
-            if i in adsr_clamp_indices.tolist():
-                # add small number to normalization to prevent numerical issue where the sum exceeds 1
-                normalization_value = adsr_length_in_sec[i] + 1e-3
-                normalized_attack = attack_t[i] / normalization_value
-                normalized_decay = decay_t[i] / normalization_value
-                normalized_sustain = sustain_t[i] / normalization_value
-                normalized_release = release_t[i] / normalization_value
+        for i in range(ads_length_in_sec.shape[0]):
+            if i in ads_clamp_indices.tolist():
+                # add small number to normalization to prevent numerical issues
+                normalization_value = ads_length_in_sec[i] + 1e-8
+                normalized_attack = attack_t[i] * self.note_off_time / normalization_value
+                normalized_decay = decay_t[i] * self.note_off_time / normalization_value
+                normalized_sustain = sustain_t[i] * self.note_off_time / normalization_value
 
             else:
                 normalized_attack = attack_t[i]
                 normalized_decay = decay_t[i]
                 normalized_sustain = sustain_t[i]
-                normalized_release = release_t[i]
 
             normalized_attack_list.append(normalized_attack)
             normalized_decay_list.append(normalized_decay)
             normalized_sustain_list.append(normalized_sustain)
-            normalized_release_list.append(normalized_release)
 
         normalized_attack_tensor = torch.stack(normalized_attack_list)
         normalized_decay_tensor = torch.stack(normalized_decay_list)
         normalized_sustain_tensor = torch.stack(normalized_sustain_list)
-        normalized_release_tensor = torch.stack(normalized_release_list)
 
-        return normalized_attack_tensor, normalized_decay_tensor, normalized_sustain_tensor, normalized_release_tensor
+        return normalized_attack_tensor, normalized_decay_tensor, normalized_sustain_tensor
 
 
 class MinMaxNormaliser:
