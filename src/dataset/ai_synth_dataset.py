@@ -84,7 +84,7 @@ class NSynthDataset(Dataset):
     Holds a path for the sound files
 
     Upon using dataloader:
-    1. The raw audio is returned represented as PCM
+    1. The raw audio is transformed from representation as PCM to [-1,1] range
     2. The non-numeric parameters are translated to integers
     3. All data is saved as GPU tensors
     """
@@ -101,6 +101,7 @@ class NSynthDataset(Dataset):
         audio_path = self._get_audio_path(index)
 
         signal, _ = torchaudio.load(audio_path)
+        signal = signal / 32768.0  # transform NSynth to range [-1,1]
         signal = signal.squeeze()
 
         return signal, index
