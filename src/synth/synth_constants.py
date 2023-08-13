@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 @dataclass
 class SynthConstants:
-
     wave_type_dict = {"sine": 0,
                       "square": 1,
                       "sawtooth": 2}
@@ -57,16 +56,20 @@ class SynthConstants:
     seed = 2345124
 
     # Modular synth possible modules from synth_modules.py
-    modular_synth_operations = ['osc', 'fm', 'lfo', 'mix', 'filter', 'env_adsr', 'fm_lfo', 'lfo_sine', 'lfo_non_sine',
+    modular_synth_operations = ['osc', 'osc_sine', 'osc_square', 'osc_saw', 'fm', 'lfo', 'mix', 'filter', 'env_adsr',
+                                'fm_lfo', 'lfo_sine', 'lfo_non_sine',
                                 'fm_sine', 'fm_square', 'fm_saw', 'lowpass_filter']
 
     modular_synth_params = {'osc': ['amp', 'freq', 'waveform', 'active', 'phase'],
-                            'osc_sine': ['amp', 'active', 'freq'],
+                            'osc_sine': ['amp', 'active', 'freq'],  # 'freq' is discrete from piano notes
                             'osc_square': ['amp', 'active', 'freq'],
                             'osc_saw': ['amp', 'active', 'freq'],
                             'osc_sine_no_activeness': ['amp', 'freq'],
                             'osc_square_no_activeness': ['amp', 'freq'],
                             'osc_saw_no_activeness': ['amp', 'freq'],
+                            'osc_sine_no_activeness_cont_freq': ['amp', 'freq'],  # 'freq' is continuous
+                            'osc_square_no_activeness_cont_freq': ['amp', 'freq'],
+                            'osc_saw_no_activeness_cont_freq': ['amp', 'freq'],
                             'lfo_sine': ['active', 'freq'],
                             'lfo_non_sine': ['freq', 'waveform'],
                             'lfo': ['freq', 'waveform', 'active'],
@@ -102,15 +105,15 @@ class SynthConstants:
         self.max_oscillator_freq = self.osc_freq_list[-1] + self.margin
 
         self.all_params_presets = {
-            'lfo': {'freq': np.asarray([0.5] + [k+1 for k in range(int(self.max_lfo_freq))])},
+            'lfo': {'freq': np.asarray([0.5] + [k + 1 for k in range(int(self.max_lfo_freq))])},
             'fm': {'freq_c': np.asarray(self.osc_freq_list),
                    'mod_index': np.linspace(0, self.max_mod_index, 16)},
-            'filter': {'filter_freq': np.asarray([100*1.4**k for k in range(14)])}
+            'filter': {'filter_freq': np.asarray([100 * 1.4 ** k for k in range(14)])}
         }
-        
+
         self.sampling_configurations = self._create_sampling_config()
         self.param_configs = self._create_op_types_dict()
-        
+
     def _create_sampling_config(self):
         sampling_configurations = {
             'uniform_amp': {'type': 'uniform',
@@ -122,6 +125,9 @@ class SynthConstants:
             'osc_freq': {'type': 'choice',
                          'values': self.osc_freq_list,
                          'non_active_default': self.non_active_freq_default},
+            'osc_cont_freq': {'type': 'uniform',
+                              'values': (self.min_oscillator_freq, self.max_oscillator_freq),
+                              'non_active_default': self.non_active_freq_default},
             'osc_phase': {'type': 'uniform',
                           'values': (0, 2 * np.pi),
                           'non_active_default': self.non_active_phase_default},
@@ -158,7 +164,7 @@ class SynthConstants:
                                    'values': (0, 1),
                                    'sum': 1},
         }
-        
+
         return sampling_configurations
 
     def _create_op_types_dict(self):
@@ -180,11 +186,18 @@ class SynthConstants:
                                          'freq': sampling_configurations['osc_freq']},
             'osc_saw_no_activeness': {'amp': sampling_configurations['uniform_amp'],
                                       'freq': sampling_configurations['osc_freq']},
+            'osc_sine_no_activeness_cont_freq': {'amp': sampling_configurations['uniform_amp'],
+                                                 'freq': sampling_configurations['osc_cont_freq']},
+            'osc_square_no_activeness_cont_freq': {'amp': sampling_configurations['uniform_amp'],
+                                                   'freq': sampling_configurations['osc_cont_freq']},
+            'osc_saw_no_activeness_cont_freq': {'amp': sampling_configurations['uniform_amp'],
+                                                'freq': sampling_configurations['osc_cont_freq']},
             'lfo_sine': {'freq': sampling_configurations['lfo_freq']},
             'lfo_non_sine': {'freq': sampling_configurations['lfo_freq'],
                              'waveform': sampling_configurations['non_sine_waveform']},
             'lfo': {'freq': sampling_configurations['lfo_freq'], 'waveform': sampling_configurations['waveform']},
-            'surrogate_lfo': {'freq': sampling_configurations['lfo_freq'], 'waveform': sampling_configurations['waveform']},
+            'surrogate_lfo': {'freq': sampling_configurations['lfo_freq'],
+                              'waveform': sampling_configurations['waveform']},
             'fm_lfo': {'freq_c': sampling_configurations['lfo_freq'], 'waveform': sampling_configurations['waveform'],
                        'fm_lfo_mod_index': sampling_configurations['fm_lfo_mod_index']},
             'fm': {'freq_c': sampling_configurations['fm_freq'], 'waveform': sampling_configurations['waveform'],
@@ -195,11 +208,12 @@ class SynthConstants:
                           'mod_index': sampling_configurations['mod_index']},
             'fm_saw': {'amp_c': sampling_configurations['uniform_amp'], 'freq_c': sampling_configurations['fm_freq'],
                        'mod_index': sampling_configurations['mod_index']},
-            'surrogate_fm_saw': {'amp_c': sampling_configurations['uniform_amp'], 'freq_c': sampling_configurations['fm_freq'],
-                       'mod_index': sampling_configurations['mod_index']},
+            'surrogate_fm_saw': {'amp_c': sampling_configurations['uniform_amp'],
+                                 'freq_c': sampling_configurations['fm_freq'],
+                                 'mod_index': sampling_configurations['mod_index']},
             'surrogate_fm_sine': {'amp_c': sampling_configurations['uniform_amp'],
                                   'freq_c': sampling_configurations['fm_freq'],
-                                 'mod_index': sampling_configurations['mod_index']},
+                                  'mod_index': sampling_configurations['mod_index']},
             'saw_square_osc': {'square_amp': sampling_configurations['uniform_amp'],
                                'saw_amp': sampling_configurations['uniform_amp'],
                                'freq': sampling_configurations['fm_freq'],

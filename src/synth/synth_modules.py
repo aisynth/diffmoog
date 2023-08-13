@@ -997,7 +997,10 @@ def get_synth_module(op_name: str, device: str, synth_structure: SynthConstants)
         waveform = op_name.split('_')[1]
         return FMOscillator(op_name, device, synth_structure, waveform)
     elif op_name in ['osc_sine', 'osc_square', 'osc_saw',
-                     'osc_sine_no_activeness', 'osc_square_no_activeness', 'osc_saw_no_activeness']:
+                     'osc_sine_no_activeness', 'osc_square_no_activeness', 'osc_saw_no_activeness',
+                     'osc_sine_no_activeness_cont_freq',
+                     'osc_square_no_activeness_cont_freq',
+                     'osc_saw_no_activeness_cont_freq']:
         waveform = op_name.split('_')[1]
         return Oscillator(op_name, device, synth_structure, waveform)
     elif op_name in ['surrogate_fm_sine', 'surrogate_fm_square', 'surrogate_fm_saw']:

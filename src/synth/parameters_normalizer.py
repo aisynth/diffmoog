@@ -49,23 +49,28 @@ class Normalizer:
                                                      original_min_val=0,
                                                      original_max_val=signal_duration - note_off_time)
 
-        # self.filter_freq_normalizer = MinMaxNormaliser(target_min_val=0,
-        #                                                target_max_val=1,
-        #                                                original_min_val=synth_structure.min_filter_freq,
-        #                                                original_max_val=synth_structure.max_filter_freq,
-        #                                                clip=clip)
+        self.filter_freq_normalizer = MinMaxNormaliser(target_min_val=0,
+                                                       target_max_val=1,
+                                                       original_min_val=synth_structure.min_filter_freq,
+                                                       original_max_val=synth_structure.max_filter_freq,
+                                                       clip=clip)
 
-        self.filter_freq_normalizer = LogMinMaxNormaliser(target_min_val=0,
-                                                          target_max_val=1,
-                                                          original_min_val=synth_structure.min_filter_freq,
-                                                          original_max_val=synth_structure.max_filter_freq,
-                                                          clip=clip)
-
-        self.oscillator_freq_normalizer = LogMinMaxNormaliser(target_min_val=0,
+        self.filter_freq_log_normalizer = LogMinMaxNormaliser(target_min_val=0,
                                                               target_max_val=1,
-                                                              original_min_val=synth_structure.min_oscillator_freq,
-                                                              original_max_val=synth_structure.max_oscillator_freq,
+                                                              original_min_val=synth_structure.min_filter_freq,
+                                                              original_max_val=synth_structure.max_filter_freq,
                                                               clip=clip)
+
+        self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
+                                                           target_max_val=1,
+                                                           original_min_val=0,
+                                                           original_max_val=synth_structure.max_oscillator_freq)
+
+        self.oscillator_freq_log_normalizer = LogMinMaxNormaliser(target_min_val=0,
+                                                                  target_max_val=1,
+                                                                  original_min_val=synth_structure.min_oscillator_freq,
+                                                                  original_max_val=synth_structure.max_oscillator_freq,
+                                                                  clip=clip)
 
         self.adsr_normalizers = {
             'release_t': self.release_t_normalizer,
@@ -74,10 +79,6 @@ class Normalizer:
             'sustain_t': self.adsr_normalizer,
         }
 
-        # self.oscillator_freq_normalizer = MinMaxNormaliser(target_min_val=0,
-        #                                                    target_max_val=1,
-        #                                                    original_min_val=0,
-        #                                                    original_max_val=synth_structure.oscillator_freq)
 
     def normalize(self, parameters_dict: dict):
         normalized_params_dict = {}
@@ -94,6 +95,12 @@ class Normalizer:
                                    'osc_sine_no_activeness', 'osc_square_no_activeness', 'osc_saw_no_activeness']
                      and param_name in ['freq']) or (param_name == 'freq_c' and 'lfo' not in operation)):
                     normalized_params_dict[key]['parameters'][param_name] = \
+                        self.oscillator_freq_log_normalizer.normalise(params[param_name])
+                elif ((operation in ['osc_sine_no_activeness_cont_freq',
+                                     'osc_square_no_activeness_cont_freq',
+                                     'osc_saw_no_activeness_cont_freq']
+                      and param_name in ['freq'])):
+                    normalized_params_dict[key]['parameters'][param_name] = \
                         self.oscillator_freq_normalizer.normalise(params[param_name])
                 elif 'lfo' in operation and param_name in ['freq', 'freq_c']:
                     normalized_params_dict[key]['parameters'][param_name] = \
@@ -104,9 +111,9 @@ class Normalizer:
                 elif param_name in ['filter_freq']:
                     normalized_params_dict[key]['parameters'][param_name] = \
                         self.filter_freq_normalizer.normalise(params[param_name])
-                elif operation == 'env_adsr' and param_name in ['attack_t', 'decay_t', 'sustain_t']:
+                elif operation in ['env_adsr', 'lowpass_filter_adsr'] and param_name in self.adsr_normalizers:
                     normalized_params_dict[key]['parameters'][param_name] = \
-                        self.adsr_normalizer.normalise(params[param_name])
+                        self.adsr_normalizers[param_name].normalise(params[param_name])
                 else:
                     normalized_params_dict[key]['parameters'][param_name] = params[param_name]
 
@@ -127,6 +134,12 @@ class Normalizer:
                 if ((operation in ['osc', 'saw_square_osc', 'osc_saw', 'osc_square',
                                    'osc_sine_no_activeness', 'osc_square_no_activeness', 'osc_saw_no_activeness']
                      and param_name in ['freq']) or (param_name == 'freq_c' and 'lfo' not in operation)):
+                    denormalized_params_dict[key]['parameters'][param_name] = \
+                        self.oscillator_freq_log_normalizer.denormalise(params[param_name])
+                elif ((operation in ['osc_sine_no_activeness_cont_freq',
+                                     'osc_square_no_activeness_cont_freq',
+                                     'osc_saw_no_activeness_cont_freq']
+                      and param_name in ['freq'])):
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.oscillator_freq_normalizer.denormalise(params[param_name])
                 elif 'lfo' in operation and param_name in ['freq', 'freq_c']:

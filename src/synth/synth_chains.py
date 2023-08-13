@@ -118,6 +118,14 @@ REDUCED_SIMPLE_FILTER = [
     {'index': (0, 3), 'operation': 'lowpass_filter', 'audio_input': [[0, 2]], 'control_input': None, 'outputs': None},
 ]
 
+REDUCED_SIMPLE_OSC = [
+    {'index': (0, 0), 'operation': 'osc_saw_no_activeness_cont_freq', 'audio_input': None, 'control_input': None, 'outputs': [[0, 1]]},
+    {'index': (1, 0), 'operation': 'osc_square_no_activeness_cont_freq', 'audio_input': None, 'control_input': None, 'outputs': [[0, 1]]},
+    {'index': (0, 1), 'operation': 'mix', 'audio_input': [[0, 0], [1, 0]], 'control_input': None, 'outputs': [[0, 2]]},
+    {'index': (0, 2), 'operation': 'env_adsr', 'audio_input': [[0, 1]], 'control_input': None, 'outputs': [[0, 3]]},
+    {'index': (0, 3), 'operation': 'lowpass_filter', 'audio_input': [[0, 2]], 'control_input': None, 'outputs': None},
+]
+
 SAW_SQUARE_MIX = [
     {'index': (0, 0), 'operation': 'saw_square_osc', 'default_connection': True},
 ]
@@ -326,4 +334,5 @@ synth_chains_dict = {'BASIC_FLOW': BASIC_FLOW,
                       'OSC_TREMOLO': OSC_TREMOLO,
                       'FM_DX7': FM_DX7,
                       'REDUCED_SIMPLE_FILTER': REDUCED_SIMPLE_FILTER,
+                      'REDUCED_SIMPLE_OSC': REDUCED_SIMPLE_OSC
                       }
