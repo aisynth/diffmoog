@@ -125,7 +125,7 @@ class SynthNetwork(nn.Module):
 
         if backbone in ['lstm', 'gru']:
             self.backbone = RNNBackbone(backbone)
-            self.batch_norm2d = nn.BatchNorm2d(1, affine=False)
+
         elif backbone == 'resnet':
             # self.backbone = resnet18(weights=None)
             # todo: ask almog why weights is configured
@@ -168,8 +168,7 @@ class SynthNetwork(nn.Module):
                 self.heads_module_dict[self.get_key(index, operation, param)] = param_head
 
     def forward(self, x):
-        x = self.batch_norm2d(x)
-        x = x.squeeze()
+
         latent = self.backbone(x)
 
         # Apply different heads to predict each synth parameter
@@ -262,13 +261,14 @@ class MLPBlock(nn.Module):
     def __init__(self, layer_sizes: Sequence[int]):
         super(MLPBlock, self).__init__()
 
-        layers = []
-        for i in range(len(layer_sizes) - 1):
-            linear = nn.Linear(layer_sizes[i], layer_sizes[i + 1], bias=False)
-            relu = nn.ReLU()
-            layers.extend([linear, relu])
+        self.linear1 = nn.Linear(layer_sizes[0], layer_sizes[1], bias=False)
+        self.relu1 = nn.ReLU()
 
-        self.mlp = nn.Sequential(*layers[:-1])
+        self.linear2 = nn.Linear(layer_sizes[1], layer_sizes[2], bias=False)
+        self.relu2 = nn.ReLU()
+
+        self.linear3 = nn.Linear(layer_sizes[2], layer_sizes[3], bias=False)
+
         self.initialize_weights_mlp()
 
     def initialize_weights_mlp(self):
@@ -279,7 +279,14 @@ class MLPBlock(nn.Module):
                     nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
-        return self.mlp(x)
+        latent = x
+        x = self.linear1(latent)
+        x = self.relu1(x)
+        x = self.linear2(x)
+        x = self.relu2(x)
+        x = self.linear3(x)
+
+        return x
 
 
 class SimpleWeightLayer(nn.Module):
@@ -336,7 +343,7 @@ class SimpleWeightLayer(nn.Module):
 class RNNBackbone(nn.Module):
 
     def __init__(self, rnn_type: str = 'lstm', input_size: int = 128, hidden_size: int = 512, output_size: int = LATENT_SPACE_SIZE,
-                 agg_mean: bool = False, channels: int = 64, n_mels: int = 128):
+                 agg_mean: bool = False, channels: int = 128, n_mels: int = 128):
 
         super().__init__()
 
@@ -344,45 +351,36 @@ class RNNBackbone(nn.Module):
         self.rnn_type = rnn_type
         self.channels = channels
         self.n_mels = n_mels
+        self.hidden_size = hidden_size
+        desired_input_size = 512
 
         if rnn_type.lower() == 'lstm':
             self.rnn = nn.LSTM(input_size, hidden_size, num_layers=4, batch_first=True, bias=False)
         elif rnn_type.lower() == 'gru':
             self.conv1 = nn.Conv1d(in_channels=1, out_channels=channels, kernel_size=7, stride=2, padding=3)
             self.bn1 = nn.BatchNorm1d(num_features=channels)
-            self.relu1 = nn.ReLU()
+            self.relu1 = nn.LeakyReLU()
 
             self.conv2 = nn.Conv1d(in_channels=channels, out_channels=channels, kernel_size=7, stride=2, padding=3)
             self.bn2 = nn.BatchNorm1d(num_features=channels)
-            self.relu2 = nn.ReLU()
+            self.relu2 = nn.LeakyReLU()
 
-            self.conv3 = nn.Conv1d(in_channels=channels, out_channels=channels, kernel_size=7, stride=2, padding=3)
+            self.conv3 = nn.Conv1d(in_channels=channels, out_channels=channels, kernel_size=7, stride=4, padding=3)
             self.bn3 = nn.BatchNorm1d(num_features=channels)
-            self.relu3 = nn.ReLU()
+            self.relu3 = nn.LeakyReLU()
 
             self.l_out = self.get_downsampled_length()[-1]  # downsampled in frequency dimension
             print('output dims after convolution', self.l_out)
 
             self.rnn = nn.GRU(input_size=self.l_out * channels, hidden_size=hidden_size, num_layers=1, batch_first=True)
+
+            self.batch_norm2d = nn.BatchNorm2d(1, affine=False)
+
         else:
             raise ValueError(f"{rnn_type} RNN not supported")
 
         self.fc = nn.Linear(hidden_size, output_size, bias=False)
-        self.apply(self.initialize_weights_rnn)
 
-    def initialize_weights_rnn(self, m: nn.Module):
-        if isinstance(m, nn.LSTM) or isinstance(m, nn.GRU):
-            for name, param in m.named_parameters():
-                if 'weight_ih' in name:
-                    torch.nn.init.xavier_uniform_(param.data)
-                elif 'weight_hh' in name:
-                    torch.nn.init.orthogonal_(param.data)
-                elif 'bias' in name:
-                    param.data.fill_(0)
-        elif isinstance(m, nn.Linear):
-            torch.nn.init.xavier_uniform_(m.weight)
-            if m.bias is not None:
-                m.bias.data.fill_(0)
 
     def get_downsampled_length(self):
         l = self.n_mels
@@ -401,8 +399,14 @@ class RNNBackbone(nn.Module):
         return lengths
 
     def forward(self, x):
-
         if self.rnn_type == 'gru':
+            # print('mean', x.mean())
+            # print('std', x.std())
+            before_batch_norm = x
+            x = self.batch_norm2d(x)
+            # print('mean', x.mean())
+            # print('std', x.std())
+            x = x.squeeze()
             batch_size, n_mels, n_frames = x.shape
             x = x.permute(0, 2, 1).contiguous()
             x = x.view(-1, self.n_mels).unsqueeze(1)
@@ -415,8 +419,10 @@ class RNNBackbone(nn.Module):
 
         else:  # assuming the only other option is 'lstm'
             x = x.transpose(2, 1)
-
-        output, hidden = self.rnn(x)
+        if self.rnn_type == 'gru':
+            output, hidden = self.rnn(x, torch.zeros(1, batch_size, self.hidden_size, device=x.device))
+        else:
+            output, hidden = self.rnn(x)
 
         if self.rnn_type == 'lstm':
             hidden = hidden[0]
