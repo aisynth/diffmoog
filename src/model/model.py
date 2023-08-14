@@ -168,6 +168,14 @@ class SynthNetwork(nn.Module):
                 self.heads_module_dict[self.get_key(index, operation, param)] = param_head
 
     def forward(self, x):
+        """
+        param x: input spectrogram (may be log spectrogram, mel spectrogram or any representation)
+        return: dictionary of synth parameters. regression parameters are in range [0,1] (after sigmoid) and
+        classification parameters are provided as logits (before softmax, since later we use nn.CrossEntropyLoss)
+        classification parameter waveform is provided as probabilities (after softmax, since later we use gumbel softmax)
+
+        note: in general, the model output is referred in the code as "normalized"
+        """
 
         latent = self.backbone(x)
 
@@ -189,51 +197,14 @@ class SynthNetwork(nn.Module):
                 model_output = param_head(latent)
 
                 if param in ['waveform']:
-                    final_model_output = self.softmax(model_output)
-                elif param not in ['active', 'fm_active', 'filter_type']:
-                    final_model_output = self.sigmoid(model_output)
+                    final_model_output = self.softmax(model_output)  # probabilities, since later we use gumbel softmax
+                elif param in ['active', 'fm_active', 'filter_type']:
+                    final_model_output = model_output  # logits, since later we use nn.CrossEntropyLoss
                 else:
-                    final_model_output = model_output
+                    final_model_output = self.sigmoid(model_output)
 
                 output_dict[index]['parameters'][param] = final_model_output
 
-        # This commented code is for the case of constraining parameters in case of activness parameter is present.
-        # The idea is to preprocess the output such that module parameters with active=0
-        # will be forced in some way to be 0. Without this, the model may learn that active=0 while the other parameters
-        # are not 0, which doesn't make sense.
-        # For example,for an oscillator if active=0, then the amplitude and frequency should be 0 as well. This shall
-        # be inlined with the default values of the parameters in the case of active=0 when creating the dataset.
-        #
-        #     module_has_activeness_param = False
-        #     if 'active' in synth_constants.modular_synth_params[operation]:
-        #         module_has_activeness_param = True
-        #         param_head = self.heads_module_dict[self.get_key(index, operation, 'active')]
-        #         activeness_logits = param_head(latent)
-        #         activeness_probs = self.softmax(activeness_logits)
-        #         probability_active = activeness_probs[:, 1]
-        #         output_dict[index]['parameters']['active'] = activeness_logits
-        #
-        #     for param in synth_constants.modular_synth_params[operation]:
-        #         if param == 'active':
-        #             continue
-        #
-        #         param_head = self.heads_module_dict[self.get_key(index, operation, param)]
-        #         model_output = param_head(latent)
-        #
-        #         if param in ['waveform']:
-        #             final_model_output = self.softmax(model_output)
-        #         elif param not in ['active', 'fm_active', 'filter_type']:
-        #             final_model_output = self.sigmoid(model_output)
-        #         else:
-        #             final_model_output = model_output
-        #
-        #         # todo: additional constraints for other sound modules with activeness parameter may be needed
-        #         #  (for example if fm_active=False we shall do mod_index=0)
-        #         if param in ['amp', 'freq'] and module_has_activeness_param:
-        #             final_model_output = final_model_output * probability_active.unsqueeze(1)
-        #
-        #         output_dict[index]['parameters'][param] = final_model_output
-        #
         return output_dict
 
 

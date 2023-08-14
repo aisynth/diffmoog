@@ -113,7 +113,8 @@ class LitModularSynthDecOnly(LightningModule):
     def forward(self, raw_signal: torch.Tensor, *args, **kwargs) -> Any:
 
         # Run NN model and convert predicted params from (0, 1) to original range
-        predicted_params_unit_range = self.decoder_only_net()
+        model_output = self.decoder_only_net()
+        predicted_params_unit_range = self.normalizer.post_process_inherent_constraints(model_output)
         predicted_params_full_range = self.normalizer.denormalize(predicted_params_unit_range)
 
         return predicted_params_unit_range, predicted_params_full_range
@@ -136,7 +137,8 @@ class LitModularSynthDecOnly(LightningModule):
 
         target_params_unit_range = self.normalizer.normalize(target_params_full_range)
 
-        predicted_params_unit_range = self.decoder_only_net()
+        model_output = self.decoder_only_net()
+        predicted_params_unit_range = self.normalizer.post_process_inherent_constraints(model_output)
         predicted_params_full_range = self.normalizer.denormalize(predicted_params_unit_range)
 
         total_params_loss, per_parameter_loss = self.params_loss.call(predicted_params_unit_range,

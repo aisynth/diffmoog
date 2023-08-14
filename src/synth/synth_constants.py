@@ -26,7 +26,7 @@ class SynthConstants:
     min_lfo_freq: float = 0.5
     max_lfo_freq: float = 15
     min_filter_freq: float = 100
-    max_filter_freq: float = 8000
+    max_filter_freq: float = sample_rate / 2
     min_amount_tremolo: float = 0.05
     max_amount_tremolo: float = 1
     min_intensity_filter: float = 0

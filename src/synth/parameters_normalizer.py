@@ -4,10 +4,13 @@ import numpy as np
 import torch
 
 from synth.synth_constants import SynthConstants
+from typing import Dict
 
 
 class Normalizer:
-    """ normalize/de-normalise regression parameters"""
+    """ normalize/de-normalise regression parameters
+    The class also takes care of inherent constraints in the parameters (see post_process_inherent_constraints)
+    """
 
     def __init__(self, note_off_time: float, signal_duration: int, synth_structure: SynthConstants, clamp_adsr=True,
                  clip=False):
@@ -15,7 +18,7 @@ class Normalizer:
         self.signal_duration = signal_duration
         self.clamp_adsr = clamp_adsr
         self.synth_structure = synth_structure
-        self.note_off_time = note_off_time
+        self.note_off_time = torch.tensor(note_off_time)
 
         self.mod_index_normalizer = MinMaxNormaliser(target_min_val=0,
                                                      target_max_val=1,
@@ -80,7 +83,6 @@ class Normalizer:
             'sustain_t': self.adsr_normalizer,
         }
 
-
     def normalize(self, parameters_dict: dict):
         normalized_params_dict = {}
         for key, val in parameters_dict.items():
@@ -100,7 +102,7 @@ class Normalizer:
                 elif ((operation in ['osc_sine_no_activeness_cont_freq',
                                      'osc_square_no_activeness_cont_freq',
                                      'osc_saw_no_activeness_cont_freq']
-                      and param_name in ['freq'])):
+                       and param_name in ['freq'])):
                     normalized_params_dict[key]['parameters'][param_name] = \
                         self.oscillator_freq_normalizer.normalise(params[param_name])
                 elif 'lfo' in operation and param_name in ['freq', 'freq_c']:
@@ -140,7 +142,7 @@ class Normalizer:
                 elif ((operation in ['osc_sine_no_activeness_cont_freq',
                                      'osc_square_no_activeness_cont_freq',
                                      'osc_saw_no_activeness_cont_freq']
-                      and param_name in ['freq'])):
+                       and param_name in ['freq'])):
                     denormalized_params_dict[key]['parameters'][param_name] = \
                         self.oscillator_freq_normalizer.denormalise(params[param_name])
                 elif 'lfo' in operation and param_name in ['freq', 'freq_c']:
@@ -160,70 +162,157 @@ class Normalizer:
 
             if operation in ['env_adsr', 'lowpass_filter_adsr'] and self.clamp_adsr:
                 denormalized_params_dict[key]['parameters'] = \
-                    self._clamp_adsr_params(denormalized_params_dict[key]['parameters'], operation)
+                    self._clamp_adsr_params(denormalized_params_dict[key]['parameters'],
+                                            operation,
+                                            is_data_normalized=False)
 
         return denormalized_params_dict
 
-    def _clamp_adsr_params(self, params: dict, operation: 'str'):
-        """look for adsr operations to send to clamping function"""
+    def post_process_inherent_constraints(self, model_output: dict):
+        """
+        Post-process the predicted parameters to satisfy the inherent constraints within the dataset.
+        For example:
+            - The attack, decay, and sustain timings summed up should not exceed 1 when normalized
+            - Non-active modules should have zeroed out (or other default) parameters
+        This function may be further implemented to more cases.
+        Args:
+            model_output (dict): The predicted parameters in the unit range.
+
+        Returns:
+            post_processed_model_output: The post-processed parameters.
+        """
+        model_output = self._force_default_parameters_if_non_active(model_output)
+        post_processed_model_output = self._clamp_normalized_ads_params(model_output)
+        return post_processed_model_output
+
+    def _clamp_adsr_params(self, params: dict, operation: 'str', is_data_normalized=False):
+        """
+        Clamp the attack, decay, and sustain parameters to satisfy the inherent constraints within the dataset.
+        Args:
+            params (dict): The predicted parameters
+            operation (str): The operation of the module
+            is_data_normalized (bool): Whether the data is normalized (unit range) or not (full range in the dataset)
+        """
+
+        if is_data_normalized:
+            time_limit = torch.tensor(1.0)
+            sustain_level_max = torch.tensor(1.0)
+        else:
+            time_limit = self.note_off_time
+            sustain_level_max = self.synth_structure.max_amp
 
         clamped_attack, clamped_decay, clamped_sustain = \
             self._clamp_ads_superposition(params['attack_t'],
-                                           params['decay_t'],
-                                           params['sustain_t'])
+                                          params['decay_t'],
+                                          params['sustain_t'],
+                                          time_limit=time_limit)
+
+        clamped_sustain_level = torch.clamp(params['sustain_level'], min=0, max=sustain_level_max)
+
+        ret_params = {}
         if operation == 'env_adsr':
             ret_params = {'attack_t': clamped_attack,
                           'decay_t': clamped_decay,
                           'sustain_t': clamped_sustain,
-                          'sustain_level': torch.clamp(params['sustain_level'], min=0,
-                                                       max=self.synth_structure.max_amp),
+                          'sustain_level': clamped_sustain_level,
                           'release_t': params['release_t']}
 
         elif operation == 'lowpass_filter_adsr':
             ret_params = {'attack_t': clamped_attack,
                           'decay_t': clamped_decay,
                           'sustain_t': clamped_sustain,
-                          'sustain_level': torch.clamp(params['sustain_level'], min=0,
-                                                       max=self.synth_structure.max_amp),
+                          'sustain_level': clamped_sustain_level,
                           'release_t': params['release_t'],
                           'intensity': params['intensity'],
                           'filter_freq': params['filter_freq']}
 
         return ret_params
 
-    def _clamp_ads_superposition(self, attack_t, decay_t, sustain_t):
-        """This function clamps the superposition of attack decay sustain times, so it does not exceed note off time"""
+    def _clamp_ads_superposition(self, attack_t: torch.Tensor, decay_t: torch.Tensor, sustain_t: torch.Tensor,
+                                 time_limit: torch.Tensor):
+        """This function clamps the superposition of attack decay sustain times, so it does not exceed time limit"""
 
-        ads_length_in_sec = attack_t + decay_t + sustain_t
+        ads_length = attack_t + decay_t + sustain_t
 
-        ads_clamp_indices = torch.nonzero(ads_length_in_sec >= self.note_off_time, as_tuple=True)[0]
+        # Create a mask where ads_length exceeds the time limit
+        exceed_mask = ads_length > time_limit
+        normalization_values = torch.where(exceed_mask, ads_length + 1e-8, torch.ones_like(ads_length))
 
-        normalized_attack_list = []
-        normalized_decay_list = []
-        normalized_sustain_list = []
+        # Normalize the attack, decay, and sustain values, but only change the exceeding ones.
+        normalized_attack = torch.where(exceed_mask, attack_t * time_limit / normalization_values, attack_t)
+        normalized_decay = torch.where(exceed_mask, decay_t * time_limit / normalization_values, decay_t)
+        normalized_sustain = torch.where(exceed_mask, sustain_t * time_limit / normalization_values, sustain_t)
 
-        for i in range(ads_length_in_sec.shape[0]):
-            if i in ads_clamp_indices.tolist():
-                # add small number to normalization to prevent numerical issues
-                normalization_value = ads_length_in_sec[i] + 1e-8
-                normalized_attack = attack_t[i] * self.note_off_time / normalization_value
-                normalized_decay = decay_t[i] * self.note_off_time / normalization_value
-                normalized_sustain = sustain_t[i] * self.note_off_time / normalization_value
+        return normalized_attack, normalized_decay, normalized_sustain
 
-            else:
-                normalized_attack = attack_t[i]
-                normalized_decay = decay_t[i]
-                normalized_sustain = sustain_t[i]
+    def _clamp_normalized_ads_params(self, model_output: dict):
+        """
+        Normalize Attack, Decay, and Sustain timings, so they sum up to 1.
 
-            normalized_attack_list.append(normalized_attack)
-            normalized_decay_list.append(normalized_decay)
-            normalized_sustain_list.append(normalized_sustain)
+        Parameters:
+        - model_output: Dictionary of the model output. The keys are the cell indexes of the modules,
+         and the values are dictionaries of the operation and parameters.
 
-        normalized_attack_tensor = torch.stack(normalized_attack_list)
-        normalized_decay_tensor = torch.stack(normalized_decay_list)
-        normalized_sustain_tensor = torch.stack(normalized_sustain_list)
+        Returns:
+        - attack_pred_normalized: Tensor of normalized Attack timings.
+        - decay_pred_normalized: Tensor of normalized Decay timings.
+        - sustain_pred_normalized: Tensor of normalized Sustain timings.
+        """
+        for key, val in model_output.items():
+            operation = val['operation']
 
-        return normalized_attack_tensor, normalized_decay_tensor, normalized_sustain_tensor
+            if operation == "None":
+                continue
+
+            if operation in ['env_adsr', 'lowpass_filter_adsr'] and self.clamp_adsr:
+                model_output[key]['parameters'] = \
+                    self._clamp_adsr_params(model_output[key]['parameters'],
+                                            operation,
+                                            is_data_normalized=True)
+
+        return model_output
+
+    def _force_default_parameters_if_non_active(self, parameters_dict: dict):
+        # currently not implemented
+
+        # This commented code is for the case of constraining parameters in case of activeness parameter is present.
+        # The idea is to preprocess the output such that module parameters with active=0
+        # will be forced in some way to be 0. Without this, the model may learn that active=0 while the other parameters
+        # are not 0, which doesn't make sense.
+        # For example,for an oscillator if active=0, then the amplitude and frequency should be 0 as well. This shall
+        # be inlined with the default values of the parameters in the case of active=0 when creating the dataset.
+        #
+        #     module_has_activeness_param = False
+        #     if 'active' in synth_constants.modular_synth_params[operation]:
+        #         module_has_activeness_param = True
+        #         param_head = self.heads_module_dict[self.get_key(index, operation, 'active')]
+        #         activeness_logits = param_head(latent)
+        #         activeness_probs = self.softmax(activeness_logits)
+        #         probability_active = activeness_probs[:, 1]
+        #         output_dict[index]['parameters']['active'] = activeness_logits
+        #
+        #     for param in synth_constants.modular_synth_params[operation]:
+        #         if param == 'active':
+        #             continue
+        #
+        #         param_head = self.heads_module_dict[self.get_key(index, operation, param)]
+        #         model_output = param_head(latent)
+        #
+        #         if param in ['waveform']:
+        #             final_model_output = self.softmax(model_output)
+        #         elif param not in ['active', 'fm_active', 'filter_type']:
+        #             final_model_output = self.sigmoid(model_output)
+        #         else:
+        #             final_model_output = model_output
+        #
+        #         # todo: additional constraints for other sound modules with activeness parameter may be needed
+        #         #  (for example if fm_active=False we shall do mod_index=0)
+        #         if param in ['amp', 'freq'] and module_has_activeness_param:
+        #             final_model_output = final_model_output * probability_active.unsqueeze(1)
+        #
+        #         output_dict[index]['parameters'][param] = final_model_output
+        #
+        return parameters_dict
 
 
 class MinMaxNormaliser:

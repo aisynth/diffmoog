@@ -95,9 +95,9 @@ class LitModularSynth(LightningModule):
         spectrograms = self._preprocess_signal(raw_signal)
 
         # Run NN encoder model and get predicted parameters
-        predicted_parameters_unit_range = self.synth_net(spectrograms)
+        model_output_dict = self.synth_net(spectrograms)
 
-        return predicted_parameters_unit_range
+        return model_output_dict
 
     def generate_synth_sound(self, full_range_synth_params: dict, batch_size: int) -> Tuple[torch.Tensor, dict]:
 
@@ -142,7 +142,8 @@ class LitModularSynth(LightningModule):
         target_signal, target_params_full_range, signal_index = batch
         batch_size = len(signal_index)
 
-        predicted_params_unit_range = self(target_signal)
+        model_output_dict = self(target_signal)
+        predicted_params_unit_range = self.normalizer.post_process_inherent_constraints(model_output_dict)
         predicted_params_full_range = self.normalizer.denormalize(predicted_params_unit_range)
 
         target_params_unit_range = self.normalizer.normalize(target_params_full_range)
@@ -197,70 +198,13 @@ class LitModularSynth(LightningModule):
 
         return loss_total, step_losses, step_artifacts
 
-    # def in_domain_step(self, batch, log: bool = False, return_metrics=False):
-    #
-    #     target_signal, target_params_full_range, signal_index = batch
-    #     batch_size = len(signal_index)
-    #
-    #     predicted_params_unit_range, predicted_params_full_range = self(target_signal)
-    #     target_params_unit_range = self.normalizer.normalize(target_params_full_range)
-    #
-    #     if self.ignore_params is not None:
-    #         predicted_params_unit_range = self._update_param_dict(target_params_unit_range, predicted_params_unit_range)
-    #         predicted_params_full_range = self._update_param_dict(target_params_full_range, predicted_params_full_range)
-    #
-    #     total_params_loss, per_parameter_loss = self.params_loss.call(predicted_params_unit_range,
-    #                                                                   target_params_unit_range)
-    #     pred_final_signal = None
-    #     if self.current_epoch < self.cfg.loss.spectrogram_loss_warmup_epochs and not return_metrics:
-    #         spec_loss = torch.tensor(0.0, dtype=torch.float32)
-    #     else:
-    #         pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
-    #                                                                                   batch_size)
-    #         if self.cfg.loss.use_chain_loss:
-    #             _, target_signals_through_chain = self.generate_synth_sound(target_params_full_range, batch_size)
-    #             spec_loss = self._calculate_spectrogram_chain_loss(target_signals_through_chain,
-    #                                                                pred_signals_through_chain, log=True)
-    #         else:
-    #             spec_loss, per_op_loss, per_op_weighted_loss = self.spec_loss.call(target_signal, pred_final_signal,
-    #                                                                                step=self.global_step)
-    #             self._log_recursive(per_op_weighted_loss, f'final_spec_losses_weighted')
-    #
-    #     loss_total, weighted_params_loss, weighted_spec_loss = self._balance_losses(total_params_loss, spec_loss, log)
-    #     param_diffs, active_only_diffs = get_param_diffs(predicted_params_full_range.copy(),
-    #                                                      target_params_full_range.copy(), self.ignore_params)
-    #
-    #     step_losses = {'raw_params_loss': total_params_loss.detach(),
-    #                    'raw_spec_loss': spec_loss.detach(),
-    #                    'weighted_params_loss': weighted_params_loss.detach(),
-    #                    'weighted_spec_loss': weighted_spec_loss.detach(),
-    #                    'loss_total': loss_total.item()}
-    #
-    #     step_artifacts = {'raw_predicted_parameters': predicted_params_unit_range,
-    #                       'full_range_predicted_parameters': predicted_params_full_range,
-    #                       'param_diffs': param_diffs,
-    #                       'active_only_diffs': active_only_diffs}
-    #
-    #     if return_metrics:
-    #         step_metrics = self._calculate_audio_metrics(target_signal, pred_final_signal)
-    #         return loss_total, step_losses, step_metrics, step_artifacts
-    #
-    #     if self.tuning_mode:
-    #         if pred_final_signal is None:
-    #             pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
-    #                                                                                       batch_size)
-    #         lsd_val = paper_lsd(target_signal, pred_final_signal)
-    #
-    #         step_losses['train_lsd'] = lsd_val
-    #
-    #     return loss_total, step_losses, step_artifacts
-
     def out_of_domain_step(self, batch, return_metrics=False):
 
         target_final_signal, signal_index = batch
         batch_size = len(signal_index)
 
-        predicted_params_unit_range = self(target_final_signal)
+        model_output_dict = self(target_final_signal)
+        predicted_params_unit_range = self.normalizer.post_process_inherent_constraints(model_output_dict)
         predicted_params_full_range = self.normalizer.denormalize(predicted_params_unit_range)
 
         pred_final_signal, _ = self.generate_synth_sound(predicted_params_full_range, batch_size)
@@ -643,7 +587,8 @@ class LitModularSynth(LightningModule):
 
         batch_size = len(target_signals)
 
-        predicted_params_unit_range = self(target_signals)
+        model_output_dict = self(target_signals)
+        predicted_params_unit_range = self.normalizer.post_process_inherent_constraints(model_output_dict)
         predicted_params_full_range = self.normalizer.denormalize(predicted_params_unit_range)
 
         pred_final_signal, pred_signals_through_chain = self.generate_synth_sound(predicted_params_full_range,
