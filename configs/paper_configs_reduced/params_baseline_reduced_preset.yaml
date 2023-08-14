@@ -8,7 +8,7 @@ model:
 #  ckpt_path: 'C:\Users\noamk\PycharmProjects\ai_synth\src\my_checkpoints\version_6\epoch=80-train_loss=1.77.ckpt'
 
   optimizer:
-    base_lr: 0.005
+    base_lr: 0.001
     optimizer: adam
     scheduler: exponential
     gamma: 0.99

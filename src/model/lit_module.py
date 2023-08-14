@@ -71,12 +71,12 @@ class LitModularSynth(LightningModule):
                                           synth_constants=synth_constants, ignore_params=self.ignore_params,
                                           device=device)
 
-        self.is_parameters_loss_initialized = False
-        self.is_spectrogram_loss_initialized = False
+        self.is_running_avg_parameters_loss_initialized = False
+        self.is_running_avg_spectrogram_loss_initialized = False
         self.is_control_spectral_loss_initialized = False
-        self.running_avg_parameters_loss = 0
-        self.running_avg_spectrogram_loss = 0
-        self.running_avg_control_spectral_loss = 0
+        self.running_avg_parameters_loss = torch.tensor(1)
+        self.running_avg_spectrogram_loss = torch.tensor(1)
+        self.running_avg_control_spectral_loss = torch.tensor(1)
 
         self.epoch_param_diffs = defaultdict(list)
         self.epoch_vals_raw = defaultdict(list)
@@ -161,6 +161,15 @@ class LitModularSynth(LightningModule):
                                       predicted_params_full_range,
                                       batch_size,
                                       return_metrics))
+
+        if self.training:
+            if not self.is_running_avg_parameters_loss_initialized and total_params_loss.item() > 0:
+                self._initialize_parameters_loss_running_avg(total_params_loss)
+
+            if not self.is_running_avg_spectrogram_loss_initialized and spec_loss_for_total.item() > 0:
+                self._initialize_spectrogram_loss_running_avg(spec_loss_for_total, total_params_loss)
+
+            self._update_running_averages(total_params_loss, spec_loss_for_total, log)
 
         balanced_parameters_loss, balanced_spectrogram_loss = self._balance_losses(total_params_loss,
                                                                                    spec_loss_for_total, log)
@@ -316,15 +325,15 @@ class LitModularSynth(LightningModule):
     #                 print(f"Gradient for {name} is exploding.")
 
     def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
-        checkpoint['is_parameters_loss_initialized'] = self.is_parameters_loss_initialized
+        checkpoint['is_parameters_loss_initialized'] = self.is_running_avg_parameters_loss_initialized
         checkpoint['running_avg_parameters_loss'] = self.running_avg_parameters_loss
-        checkpoint['is_spectrogram_loss_initialized'] = self.is_spectrogram_loss_initialized
+        checkpoint['is_spectrogram_loss_initialized'] = self.is_running_avg_spectrogram_loss_initialized
         checkpoint['running_avg_spectrogram_loss'] = self.running_avg_spectrogram_loss
 
     def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
-        self.is_parameters_loss_initialized = checkpoint['is_parameters_loss_initialized']
+        self.is_running_avg_parameters_loss_initialized = checkpoint['is_parameters_loss_initialized']
         self.running_avg_parameters_loss = checkpoint['running_avg_parameters_loss']
-        self.is_spectrogram_loss_initialized = checkpoint['is_spectrogram_loss_initialized']
+        self.is_running_avg_spectrogram_loss_initialized = checkpoint['is_spectrogram_loss_initialized']
         self.running_avg_spectrogram_loss = checkpoint['running_avg_spectrogram_loss']
 
     def _preprocess_signal(self, raw_signal: torch.Tensor) -> torch.Tensor:
@@ -416,42 +425,30 @@ class LitModularSynth(LightningModule):
 
         return spectrogram_loss
 
+    def _initialize_parameters_loss_running_avg(self, parameters_loss):
+        self.running_avg_parameters_loss = parameters_loss.clone().detach()
+        self.is_running_avg_parameters_loss_initialized = True
+
+    def _initialize_spectrogram_loss_running_avg(self, spectrogram_loss, parameters_loss):
+        current_normalized_parameter_loss = parameters_loss.clone().detach() / self.running_avg_parameters_loss.clone().detach()
+        self.running_avg_spectrogram_loss = spectrogram_loss.clone().detach() / current_normalized_parameter_loss
+        self.is_running_avg_spectrogram_loss_initialized = True
+
     def _update_running_averages(self, parameters_loss, spectrogram_loss, log, alpha=0.99):
-        """
-        Update running averages for both the parameters loss and the spectrogram loss.
+        """Update the running averages of the losses."""
+        if self.is_running_avg_parameters_loss_initialized:
+            new_params_loss_avg = alpha * self.running_avg_parameters_loss + (1 - alpha) * parameters_loss
+            self.running_avg_parameters_loss = new_params_loss_avg.detach().clone()
 
-        Args:
-            parameters_loss (torch.Tensor): The current value of the parameters loss.
-            spectrogram_loss (torch.Tensor): The current value of the spectrogram loss.
-            alpha (float): The decay factor for the running average. Default is 0.99.
-        """
-        # Check if the parameters loss has started contributing and initialize its running average
-        if not self.is_parameters_loss_initialized and parameters_loss.item() > 0:
-            self.running_avg_parameters_loss = parameters_loss.clone().detach()
-            self.is_parameters_loss_initialized = True
-
-        # Always update parameters loss running average if initialized
-        if self.is_parameters_loss_initialized:
-            self.running_avg_parameters_loss = alpha * self.running_avg_parameters_loss + (1 - alpha) * parameters_loss
-
-        # Check if the spectrogram loss has started contributing and initialize its running average
-        if not self.is_spectrogram_loss_initialized and spectrogram_loss.item() > 0:
-            current_normalized_parameter_loss = parameters_loss / self.running_avg_parameters_loss
-            self.running_avg_spectrogram_loss = spectrogram_loss.clone().detach() / current_normalized_parameter_loss
-            self.is_spectrogram_loss_initialized = True
-
-        # Update spectrogram loss running average if initialized
-        if self.is_spectrogram_loss_initialized:
-            self.running_avg_spectrogram_loss = alpha * self.running_avg_spectrogram_loss + (
-                    1 - alpha) * spectrogram_loss
+        if self.is_running_avg_spectrogram_loss_initialized:
+            new_spec_loss_avg = alpha * self.running_avg_spectrogram_loss + (1 - alpha) * spectrogram_loss
+            self.running_avg_parameters_loss = new_spec_loss_avg.detach().clone()
 
         if log:
-            self.tb_logger.add_scalar('normalized_losses/running_avg_parameters_loss',
-                                      self.running_avg_parameters_loss,
+            self.tb_logger.add_scalar('normalized_losses/running_avg_parameters_loss', self.running_avg_parameters_loss,
                                       self.global_step)
             self.tb_logger.add_scalar('normalized_losses/running_avg_spectrogram_loss',
-                                      self.running_avg_spectrogram_loss,
-                                      self.global_step)
+                                      self.running_avg_spectrogram_loss, self.global_step)
 
     def _normalize_losses(self, parameters_loss, spectrogram_loss, log):
         """
@@ -464,18 +461,8 @@ class LitModularSynth(LightningModule):
         Returns:
             tuple: A tuple containing normalized parameters loss and normalized spectrogram loss.
         """
-
-        self._update_running_averages(parameters_loss, spectrogram_loss, log)
-
-        if self.is_parameters_loss_initialized:
-            normalized_parameters_loss = parameters_loss / self.running_avg_parameters_loss
-        else:
-            normalized_parameters_loss = parameters_loss
-
-        if self.is_spectrogram_loss_initialized:
-            normalized_spectrogram_loss = spectrogram_loss / self.running_avg_spectrogram_loss
-        else:
-            normalized_spectrogram_loss = spectrogram_loss
+        normalized_parameters_loss = parameters_loss / self.running_avg_parameters_loss
+        normalized_spectrogram_loss = spectrogram_loss / self.running_avg_spectrogram_loss
 
         if log:
             self.tb_logger.add_scalar('normalized_losses/pre_rampup_normalized_parameters_loss',

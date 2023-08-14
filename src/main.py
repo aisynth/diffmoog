@@ -86,7 +86,7 @@ def run(run_args):
     else:
         log_every_n_steps = 50
 
-    seed_everything(42, workers=True)
+    seed_everything(3125, workers=True)
 
     trainer = Trainer(logger=tb_logger,
                       callbacks=callbacks,

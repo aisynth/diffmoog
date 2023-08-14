@@ -7,7 +7,7 @@ model:
   num_epochs: 200
 
   optimizer:
-    base_lr: 0.005
+    base_lr: 0.001
     optimizer: adam
     scheduler: exponential
     gamma: 0.99
