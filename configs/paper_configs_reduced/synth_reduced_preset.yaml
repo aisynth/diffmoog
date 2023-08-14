@@ -1,7 +1,7 @@
 model:
   arch: simple
   backbone: gru
-  chain: REDUCED_SIMPLE_FILTER
+  chain: REDUCED_SIMPLE_OSC
   num_workers: 8
   batch_size: 64
   num_epochs: 200
@@ -18,7 +18,7 @@ loss:
   parameters_loss_norm: L1
 
   apply_loss_normalization: True
-  parameters_loss_weight: 5
+  parameters_loss_weight: 1
   spectrogram_loss_weight: 1
 
   spectrogram_loss_warmup_epochs: 25
@@ -32,7 +32,7 @@ loss:
   chain_warmup_factor: 5
 
 synth:
-  chain: REDUCED_SIMPLE_FILTER
+  chain: REDUCED_SIMPLE_OSC
   transform: MEL
   apply_log_transform_to_input: true
   use_multi_spec_input: false

@@ -93,8 +93,7 @@ def run(run_args):
                       max_epochs=cfg.model.num_epochs,
                       accelerator="gpu",
                       detect_anomaly=True,
-                      # log_every_n_steps=log_every_n_steps,
-                      log_every_n_steps=1,
+                      log_every_n_steps=log_every_n_steps,
                       check_val_every_n_epoch=1,
                       accumulate_grad_batches=4,
                       reload_dataloaders_every_n_epochs=cfg.loss.in_domain_epochs)
