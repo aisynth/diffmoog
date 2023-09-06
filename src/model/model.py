@@ -1,3 +1,6 @@
+"""
+This file contains the neural network architecture for sound matching using the modular synthesizer.
+"""
 from typing import Sequence
 
 import numpy as np
@@ -9,13 +12,15 @@ from synth.synth_chains import synth_chains_dict
 from synth.synth_constants import synth_constants
 from model.loss.spectral_loss_presets import loss_presets
 from utils.train_utils import process_categorical_variable
-import matplotlib
-matplotlib.use('TkAgg')
-import matplotlib.pyplot as plt
 
 LATENT_SPACE_SIZE = 128
 
 class DecoderNetwork(nn.Module):
+    """
+    This is a decoder only network, which is used as a tool to research:
+     1. The ability to backpropagate gradients through the synthesizer
+     2. The ability to train the synthesizer input parameters to reconstruct a given spectrogram.
+    """
     def __init__(self, chain: str, device):
         self.chain = synth_chains_dict.get(chain, None)
         if self.chain is None:
@@ -108,8 +113,21 @@ class DecoderNetwork(nn.Module):
 
 
 class SynthNetwork(nn.Module):
+    """
+    This is the main network for predicting the modular synthesizer parameters.
+    It is based on a backbone network (e.g. Resnet, GRU) and a set of heads for each parameter.
+    """
 
     def __init__(self, cfg, synth_chain: str, loss_preset: str, device, backbone='resnet'):
+        """
+        param cfg: configuration object
+        param synth_chain: the name of the synthesizer chain to use
+        param loss_preset: the name of the loss preset to use
+        param device: the device to use for the network
+        param backbone: the backbone network to use
+
+        This function initializes the network, and creates the backbone and heads modules.
+        """
         super().__init__()
 
         self.chain = synth_chains_dict.get(synth_chain, None)
@@ -145,6 +163,9 @@ class SynthNetwork(nn.Module):
         return f'{index}' + '_' + operation + '_' + parameter
 
     def make_heads_from_chain(self):
+        """
+        This function creates the heads modules for each parameter in the synthesizer chain.
+        """
         for cell in self.chain:
             index = cell.get('index')
             operation = cell.get('operation')
@@ -209,6 +230,9 @@ class SynthNetwork(nn.Module):
 
 
 class ConvBlock(nn.Module):
+    """
+    This is a convolutional block, which is used as a building block for the backbone network.
+    """
     def __init__(self, in_channels: int, out_channels: int):
         super().__init__()
         self.conv_op = nn.Sequential(
@@ -228,6 +252,9 @@ class ConvBlock(nn.Module):
         return self.conv_op(x)
 
 class MLPBlock(nn.Module):
+    """
+    This is a multi-layer perceptron block, which is used as a building block for the parameter heads.
+    """
 
     def __init__(self, layer_sizes: Sequence[int]):
         super(MLPBlock, self).__init__()
@@ -312,6 +339,9 @@ class SimpleWeightLayer(nn.Module):
 
 
 class RNNBackbone(nn.Module):
+    """
+    This is an RNN backbone network for the synthesizer parameters prediction.
+    """
 
     def __init__(self, rnn_type: str = 'lstm', input_size: int = 128, hidden_size: int = 512, output_size: int = LATENT_SPACE_SIZE,
                  agg_mean: bool = False, channels: int = 128, n_mels: int = 128):
@@ -371,17 +401,13 @@ class RNNBackbone(nn.Module):
 
     def forward(self, x):
         if self.rnn_type == 'gru':
-            # print('mean', x.mean())
-            # print('std', x.std())
-            before_batch_norm = x
             x = self.batch_norm2d(x)
-            # print('mean', x.mean())
-            # print('std', x.std())
             x = x.squeeze()
             batch_size, n_mels, n_frames = x.shape
+            # convolve in frequency dimension, to obtain local features.
+            # code from https://github.com/hyakuchiki/diffsynth
             x = x.permute(0, 2, 1).contiguous()
             x = x.view(-1, self.n_mels).unsqueeze(1)
-            # x: [batch_size*n_frames, 1, n_mels]
             x = self.relu1(self.bn1(self.conv1(x)))
             x = self.relu2(self.bn2(self.conv2(x)))
             x = self.relu3(self.bn3(self.conv3(x)))

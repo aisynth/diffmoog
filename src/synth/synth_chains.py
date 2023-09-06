@@ -1,3 +1,8 @@
+"""
+This file contains the synth chains that are used to generate the synth patches.
+One can add new synth chains here, and use them for dataset generation and experiments.
+"""
+
 BASIC_FLOW_LFO_DECOUPLING = [
     {'index': (0, 0), 'operation': 'lfo_sine', 'default_connection': True},
     {'index': (0, 1), 'operation': 'fm', 'default_connection': True},

@@ -1,3 +1,7 @@
+"""
+This file contains the constants used in the synth module.
+"""
+
 import numpy as np
 from dataclasses import dataclass
 
@@ -60,6 +64,7 @@ class SynthConstants:
                                 'fm_lfo', 'lfo_sine', 'lfo_non_sine',
                                 'fm_sine', 'fm_square', 'fm_saw', 'lowpass_filter']
 
+    # defined modules and their parameters
     modular_synth_params = {'osc': ['amp', 'freq', 'waveform', 'active', 'phase'],
                             'osc_sine': ['amp', 'active', 'freq'],  # 'freq' is discrete from piano notes
                             'osc_square': ['amp', 'active', 'freq'],
@@ -115,6 +120,9 @@ class SynthConstants:
         self.param_configs = self._create_op_types_dict()
 
     def _create_sampling_config(self):
+        """
+        Create a dictionary of sampling configurations for each parameter. Used for data generation.
+        """
         sampling_configurations = {
             'uniform_amp': {'type': 'uniform',
                             'values': (self.min_amp, self.max_amp),

@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Mon May 31 15:41:38 2021
-
-@author: Moshe Laufer, Noy Uzrad
+This file contains the synth modules, which are the building blocks of the modular synth.
 """
 from abc import ABC, abstractmethod
 from typing import Dict, Tuple, Union, Sequence
@@ -34,6 +32,9 @@ TWO_PI = 2 * PI
 
 
 class SynthModule(ABC):
+    """
+    Abstract class for a synth module
+    """
 
     def __init__(self, name: str, device: str, synth_structure: SynthConstants):
         self.synth_structure = synth_structure
@@ -128,6 +129,9 @@ class SynthModule(ABC):
 
 
 class Oscillator(SynthModule):
+    """
+    Basic oscillator module
+    """
 
     def __init__(self, name: str, device: str, synth_structure: SynthConstants, waveform: str = None):
 
@@ -201,6 +205,9 @@ class Oscillator(SynthModule):
         return oscillator_tensor
 
     def _generate_wave_tensors(self, t, amp, freq, phase_mod=0, sample_rate=16000, signal_duration=1.0):
+        """
+        Generates the wave tensors for the different waveforms
+        """
 
         wave_tensors = {}
 
@@ -356,6 +363,9 @@ class SawSquareOscillator(SynthModule):
 
 
 class FMOscillator(Oscillator):
+    """
+    Oscillator with FM modulation
+    """
 
     def __init__(self, name: str, device: str, synth_structure: SynthConstants, waveform: str = None):
 
@@ -518,7 +528,6 @@ class SurrogateFMOscillator(SurrogateOscillator):
 
 # todo: remove code duplication (FMLfoOscillator is the same as FMOscillator, just with fm_lfo_mod_index instead of mod_index
 class FMLfoOscillator(Oscillator):
-
     def __init__(self, name: str, device: str, synth_structure: SynthConstants, waveform: str = None):
 
         if waveform is not None:
@@ -605,6 +614,9 @@ class FMLfoOscillator(Oscillator):
 
 
 class ADSR(SynthModule):
+    """
+    ADSR (attack-decay-sustain-release) envelope module
+    """
     def __init__(self, name: str, device: str, synth_structure: SynthConstants):
         super().__init__(name=name, device=device, synth_structure=synth_structure)
 
@@ -665,6 +677,9 @@ class ADSR(SynthModule):
 
 
 class Filter(SynthModule):
+    """
+    Filter module with lowpass and highpass filters.
+    """
 
     def __init__(self, device: str, synth_structure: SynthConstants, filter_type: str = None):
         super().__init__(name='filter', device=device, synth_structure=synth_structure)
@@ -745,6 +760,9 @@ class Filter(SynthModule):
 
 #todo: chechk the ADSR parent if shall not be SynthModule
 class FilterShaper(ADSR):
+    """
+    Filter module with lowpass and highpass filters, with ADSR envelope applied to the filter cutoff frequency.
+    """
 
     def __init__(self, device: str, synth_structure: SynthConstants, filter_type: str = None):
         super().__init__(name='lowpass_filter_adsr', device=device, synth_structure=synth_structure)
@@ -881,6 +899,9 @@ class FilterShaper(ADSR):
 
 
 class Tremolo(SynthModule):
+    """
+    Tremolo effect module
+    """
 
     def __init__(self, device: str, synth_structure: SynthConstants):
         super().__init__(name='tremolo', device=device, synth_structure=synth_structure)
@@ -925,6 +946,9 @@ class Tremolo(SynthModule):
 
 
 class Mix(SynthModule):
+    """
+    Mix module
+    """
 
     def __init__(self, device: str, synth_structure: SynthConstants):
         super().__init__(name='mix', device=device, synth_structure=synth_structure)
@@ -978,6 +1002,9 @@ class Noop(SynthModule):
 
 
 def get_synth_module(op_name: str, device: str, synth_structure: SynthConstants):
+    """
+    Get appropriate synth module according to the given operation name
+    """
 
     if op_name is None or op_name in ['None', 'none']:
         return Noop('none', device, synth_structure)

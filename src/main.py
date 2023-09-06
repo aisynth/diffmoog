@@ -68,14 +68,18 @@ def run(run_args):
     tb_logger = TensorBoardLogger(cfg.logs_dir, name=exp_name)
     lit_module.tb_logger = tb_logger.experiment
 
-    next_version = get_next_version('./my_checkpoints')
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    CHECKPOINT_DIR = os.path.join(BASE_DIR, 'my_checkpoints')
+
+    next_version = get_next_version(CHECKPOINT_DIR)
     checkpoint_callback = ModelCheckpoint(
-        dirpath=f'./my_checkpoints/version_{next_version}',  # Use next version for versioning
+        dirpath=f'./my_checkpoints/exp_{exp_name}_version_{next_version}',  # Use next version for versioning
         filename='{epoch}-{train_loss:.2f}',  # the filename includes epoch number and validation loss
         save_top_k=-1,  # set to save all checkpoints
         verbose=True,
         monitor='train_loss',
         mode='min',
+        every_n_epochs=5
     )
 
     callbacks = [LearningRateMonitor(logging_interval='step'), checkpoint_callback]

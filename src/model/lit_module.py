@@ -1,3 +1,8 @@
+"""
+This file is responsible for the training loop of the model. It contains the training and validation steps, as well as
+the forward pass of the model. It also contains the logic for generating sounds from the model's output parameters.
+It uses pytorch-lightning and makes the logging of metrics using tensorboard.
+"""
 from collections import defaultdict
 from typing import Any, Tuple, Optional
 
@@ -383,6 +388,12 @@ class LitModularSynth(LightningModule):
 
     def _calculate_spectrogram_chain_loss(self, target_signals_through_chain: dict, pred_signals_through_chain: dict,
                                           log=False):
+        """
+        Calculates the spectrogram loss for each operation in the chain. This is a novel signal-chain loss, which
+        aims at guiding the optimization process to learn correctly early stage predictions, since the synthesizer
+        acts as a function composition of operations (i.e. y=f(g(x))). Early stage predictions are crucial for obtaining
+        good results, since they are used as input to the next operation in the chain.
+        """
 
         chain_losses = torch.zeros(len(target_signals_through_chain))
         for i, op_index in enumerate(target_signals_through_chain.keys()):

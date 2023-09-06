@@ -9,6 +9,9 @@ from synth.synth_constants import SynthConstants
 
 
 class ParametersSampler:
+    """
+    This class is responsible for sampling the parameters of the synth architecture, for data generation.
+    """
 
     def __init__(self, synth_structure: SynthConstants):
         self.synth_structure = synth_structure
