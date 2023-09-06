@@ -101,7 +101,7 @@ To train the model, execute the `src/main.py` script with the following argument
 
 In the *examples* directory, you will find several notebooks to help get you familiar with the DiffMoog synthesizer and its capabilities.
 
-Start with **explore_presets.ipynb** and **create_dataset.ipynb** for introduction about the synth structure, configuration and sound generation.
+Start with **explore_chains.ipynb** and **create_dataset.ipynb** for introduction about the synth structure, configuration and sound generation.
 
 Use **train_model.ipynb** and **evaluate_model.ipynb** to train and evaluate a sound matching model.
 
