@@ -9,16 +9,16 @@ from synth.synth_constants import SynthConstants
 class ParametersLoss(nn.Module):
     """This loss compares target and predicted parameters of the modular synthesizer"""
 
-    def __init__(self, loss_type: str, synth_constants: SynthConstants, ignore_params: Sequence[str] = None,
+    def __init__(self, loss_norm: str, synth_constants: SynthConstants, ignore_params: Sequence[str] = None,
                  device='cuda:0'):
 
         super().__init__()
 
         self.synth_constants = synth_constants
         self.device = device
-        if loss_type == 'L1':
+        if loss_norm == 'L1':
             self.criterion = nn.L1Loss()
-        elif loss_type == 'L2':
+        elif loss_norm == 'L2':
             self.criterion = nn.MSELoss()
         else:
             raise ValueError("unknown loss type")
@@ -58,12 +58,11 @@ class ParametersLoss(nn.Module):
                                         filter_type in target_parameters[param]]
                     target = torch.tensor(filter_type_list)
                 elif param in ['active', 'fm_active']:
-                    active_list = [0 if is_active else 1 for is_active in target_parameters[param]]
+                    active_list = [1 if is_active else 0 for is_active in target_parameters[param]]
                     target = torch.tensor(active_list)
                 else:
                     target = target_parameters[param].clone()
 
-                target = target.type(torch.FloatTensor).to(self.device)
                 if predicted_parameters[param].dim() > 1 and predicted_parameters[param].shape[0] == 1:
                     pred = predicted_parameters[param].squeeze(dim=0)
                 else:
@@ -95,7 +94,7 @@ class ParametersLoss(nn.Module):
                             pred = pred.unsqueeze(dim=0)
                         loss = self.ce_loss(pred, target)
                     else:
-                        loss = self.bce_loss(pred, target)
+                        loss = self.ce_loss(pred, target)
                 else:
                     loss = self.criterion(pred, target)
 

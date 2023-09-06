@@ -41,7 +41,22 @@ class AiSynthDataset(Dataset):
             noise = np.random.normal(0, self.noise_std, signal.shape).astype(np.float32)
             signal = signal + noise
 
+        # convert params to float32, since pandas defaults to float64
+        params_dic = self._convert_to_float32(params_dic)
+
         return signal, params_dic, index
+
+    def _convert_to_float32(self, item):
+        if isinstance(item, dict):
+            return {k: self._convert_to_float32(v) for k, v in item.items()}
+        elif isinstance(item, list):
+            return [self._convert_to_float32(v) for v in item]
+        elif isinstance(item, (float, int)):
+            return np.float32(item)
+        else:
+            return item  # if it's not a type we handle, return the item as-is
+
+    # And use it like this:
 
     def _get_audio_path(self, index):
         audio_file_name = f"sound_{index}.wav"
@@ -69,7 +84,7 @@ class NSynthDataset(Dataset):
     Holds a path for the sound files
 
     Upon using dataloader:
-    1. The raw audio is returned represented as PCM
+    1. The raw audio is transformed from representation as PCM to [-1,1] range
     2. The non-numeric parameters are translated to integers
     3. All data is saved as GPU tensors
     """
@@ -86,6 +101,7 @@ class NSynthDataset(Dataset):
         audio_path = self._get_audio_path(index)
 
         signal, _ = torchaudio.load(audio_path)
+        signal = signal / 32768.0  # transform NSynth to range [-1,1]
         signal = signal.squeeze()
 
         return signal, index

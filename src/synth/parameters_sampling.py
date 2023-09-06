@@ -9,13 +9,16 @@ from synth.synth_constants import SynthConstants
 
 
 class ParametersSampler:
+    """
+    This class is responsible for sampling the parameters of the synth architecture, for data generation.
+    """
 
     def __init__(self, synth_structure: SynthConstants):
         self.synth_structure = synth_structure
 
     def generate_activations_and_chains(self, synth_matrix: List[List[SynthModularCell]], signal_len: float,
                                         note_off_time: float, num_sounds_=1):
-
+        # todo remove cases where all fms are off
         rng = np.random.default_rng()
 
         n_channels = len(synth_matrix)
@@ -38,11 +41,8 @@ class ParametersSampler:
                 if cell.control_input is not None:
                     assert len(cell.control_input) == 1
                     control_input_cell = synth_matrix[cell.control_input[0][0]][cell.control_input[0][1]]
-                    if control_input_cell.switch_outputs is not None:
-                        has_control_input = [tuple(cell.index) in control_cell_output for control_cell_output
-                                             in control_input_cell.parameters['output']]
-                    else:
-                        has_control_input = [True for _ in range(num_sounds_)]
+                    has_control_input = [tuple(cell.index) in control_cell_output for control_cell_output
+                                         in control_input_cell.parameters['output']]
                     cell_params['fm_active'] = has_control_input
                 else:
                     has_control_input = [False for _ in range(num_sounds_)]
@@ -50,7 +50,7 @@ class ParametersSampler:
                         cell_params['fm_active'] = has_control_input
 
                 if 'active' in op_params:
-                    active_prob = cell.active_prob if cell.active_prob is not None else 1.0
+                    active_prob = cell.active_prob if cell.active_prob is not None else 0.5
                     random_activeness = np.random.choice([True, False], size=num_sounds_,
                                                          p=[active_prob, 1 - active_prob])
 
@@ -111,7 +111,7 @@ class ParametersSampler:
                                                        size=batch_size)
                 else:
                     sampled_values = np.random.uniform(low=param_config['values'][0], high=param_config['values'][1],
-                                                   size=(n_input_sounds, batch_size))
+                                                       size=(n_input_sounds, batch_size))
                     sampled_values = sampled_values / np.sum(sampled_values, axis=0) * param_config['sum']
             elif param_config['type'] == 'choice':
                 sampled_values = random.choices(param_config['values'], k=batch_size)

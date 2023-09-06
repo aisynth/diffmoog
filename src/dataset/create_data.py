@@ -1,7 +1,5 @@
 import os, sys
 
-from tqdm import tqdm
-
 sys.path.append("..")
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
@@ -21,7 +19,7 @@ from utils.gpu_utils import get_device
 from utils.train_utils import get_project_root
 
 
-def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_duration: float, note_off_time: float,
+def create_dataset(chain: str, output_dir: str, split: str, size: int, signal_duration: float, note_off_time: float,
                    device: device, batch_size: int = 1000, seed: int = 26):
     """
     Create a dataset by randomizing synthesizer parameters and generating sound.
@@ -52,14 +50,14 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
 
     # Other inits
     np.random.seed(seed)
-    synth_obj = SynthModular(preset, synth_constants, device)
+    synth_obj = SynthModular(chain, synth_constants, device)
     params_sampler = ParametersSampler(synth_constants)
 
+    train = (split.lower() == 'train')
     dataset_parameters = []
 
     # Create data
     samples_created = 0
-    pbar = tqdm(total=size)
     while samples_created < size:
 
         # Generate batch
@@ -92,9 +90,9 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
                 c_audio = np.float32(c_audio)
 
             scipy.io.wavfile.write(audio_path, synth_constants.sample_rate, c_audio)
+            print(f"Generated {file_name}")
 
             samples_created += 1
-            pbar.update(1)
             if samples_created >= size:
                 break
 
@@ -111,7 +109,6 @@ def create_dataset(preset: str, output_dir: str, split: str, size: int, signal_d
         f.write(f"Git commit: {commit}\n")
         f.write(f"Arguments: {args}\n")
 
-
 def _verify_activity(sample_params_dict):
 
     has_active_osc = False
@@ -119,12 +116,34 @@ def _verify_activity(sample_params_dict):
     for key in sample_params_dict.keys():
         if sample_params_dict[key]:
             operation = sample_params_dict[key]['operation']
-            if operation in ['osc', 'fm_saw', 'fm_sine', 'fm_square', 'fm', 'fm_lfo', 'saw_square_osc',
-                             'surrogate_lfo', 'surrogate_fm_sine', 'surrogate_fm_saw']:
+            if operation in ['osc', 'osc_sine', 'osc_saw', 'osc_square', 'fm_saw', 'fm_sine', 'fm_square', 'fm',
+                             'fm_lfo', 'saw_square_osc', 'surrogate_lfo', 'surrogate_fm_sine', 'surrogate_fm_saw',
+                             'osc_sine_no_activeness', 'osc_square_no_activeness', 'osc_saw_no_activeness',
+                             'osc_sine_no_activeness_cont_freq',
+                             'osc_square_no_activeness_cont_freq',
+                             'osc_saw_no_activeness_cont_freq']:
                 is_active = sample_params_dict[key]['parameters'].get('active', True)
                 has_active_osc = has_active_osc or is_active
         else:
             continue
+
+    # todo: commented code works only for MODULAR chain. make sure above code generalizes
+    # if sample_params_dict.get((0, 2)):
+    #     sine_osc_activeness = sample_params_dict[(0, 2)]['parameters']['active']
+    # else:
+    #     sine_osc_activeness = False
+    #
+    # if sample_params_dict.get((1, 2)):
+    #     saw_osc_activeness = sample_params_dict[(1, 2)]['parameters']['active']
+    # else:
+    #     saw_osc_activeness = False
+    #
+    # if sample_params_dict.get((2, 2)):
+    #     square_osc_activeness = sample_params_dict[(2, 2)]['parameters']['active']
+    # else:
+    #     square_osc_activeness = False
+    #
+    # has_active_osc = sine_osc_activeness or square_osc_activeness or saw_osc_activeness
 
     return has_active_osc
 
@@ -157,7 +176,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--split', required=True)
     parser.add_argument('-k', '--size', required=True, type=int)
     parser.add_argument('-n', '--name', required=True, help='name of dataset')
-    parser.add_argument('-p', '--preset', required=False, help='Synth preset', default='MODULAR')
+    parser.add_argument('-c', '--chain', required=False, help='Synth chain', default='MODULAR')
 
     parser.add_argument('-sd', '--signal_duration', required=False, type=float, default=4.0)
     parser.add_argument('-no', '--note_off', required=False, type=float, default=3.0)
@@ -169,12 +188,16 @@ if __name__ == '__main__':
     root = get_project_root()
     EXP_ROOT = root.joinpath('experiments')
     DATA_ROOT = root.joinpath('data')
+    #
+    # EXP_ROOT = os.path.join(root, 'experiments')
+    # DATA_ROOT = os.path.join(root, 'data')
 
+    #todo: change os to Path
     output_dir = os.path.join(DATA_ROOT, args.name, '')
     os.makedirs(output_dir, exist_ok=True)
 
     device = get_device(args.gpu_index)
-    create_dataset(preset=args.preset, output_dir=output_dir, split=args.split, size=args.size,
+    create_dataset(chain=args.chain, output_dir=output_dir, split=args.split, size=args.size,
                    signal_duration=args.signal_duration, note_off_time=args.note_off, batch_size=args.batch_size,
                    device=device)
 

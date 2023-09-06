@@ -13,7 +13,7 @@ from sklearn.metrics import confusion_matrix
 from scipy.special import softmax, expit
 
 from synth.synth_constants import synth_constants
-from synth.synth_presets import synth_presets_dict
+from synth.synth_chains import synth_chains_dict
 from synth.synth_constants import SynthConstants
 from model.loss.spectral_loss_presets import loss_presets
 
@@ -150,13 +150,23 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
                     waveform_idx = [synth_constants.wave_type_dict[wt] for wt in target_vals]
                     diff = [1 - v[idx] for idx, v in zip(waveform_idx, pred_vals)]
                     diff = np.asarray(diff).squeeze()
+            # elif param_name == 'filter_type':
+            #     if target_vals.ndim == 0:
+            #         filter_type_idx = [synth_constants.filter_type_dict[target_vals.item()]]
+            #         diff = (1 - pred_vals[0][filter_type_idx]).item()
+            #     else:
+            #         filter_type_idx = [synth_constants.filter_type_dict[ft] for ft in target_vals.squeeze()]
+            #         diff = [1 - v[idx] for idx, v in zip(filter_type_idx, pred_vals)]
+            #         diff = np.asarray(diff).squeeze()
+            # elif param_name in ['attack_t', 'decay_t', 'sustain_t', 'sustain_level', 'release_t']:
+            #     continue
             elif param_name == 'envelope':
                 diff = [np.linalg.norm(pred_vals[k] - target_vals[k]) for k in range(pred_vals.shape[0])]
             elif param_name in ['active', 'fm_active', 'filter_type']:
-                active_targets = [0 if f else 1 for f in target_vals]
+                active_targets = np.array([1 if f else 0 for f in target_vals])
                 pred_vals_squeezed = np.squeeze(pred_vals)
-                sigmoid_pred_vals = expit(pred_vals_squeezed)
-                active_preds = np.round(sigmoid_pred_vals)
+                softmax_pred_vals = softmax(pred_vals_squeezed)
+                active_preds = np.argmax(softmax_pred_vals, axis=-1)
                 conf_mat = confusion_matrix(active_targets, active_preds, labels=[0, 1])
 
                 true_negative = conf_mat[0][0]
@@ -164,12 +174,13 @@ def get_param_diffs(predicted_params: dict, target_params: dict, ignore_params: 
 
                 accuracy = (true_negative + true_positive) / len(active_preds)
                 all_diffs[op_index][f'{param_name}_accuracy'] = accuracy
-                diff = np.abs(active_targets - sigmoid_pred_vals)
+                diff = np.abs(active_targets - active_preds)
             else:
                 if pred_vals.shape == (1, 1):
                     diff = np.abs(target_vals - pred_vals.squeeze(axis=0))
                 else:
                     diff = np.abs(target_vals.squeeze() - pred_vals.squeeze())
+
 
             if param_name not in ['active', 'fm_active'] and pred_op_dict['operation'] not in ['env_adsr',
                                                                                                'lowpass_filter_adsr']:
@@ -230,7 +241,7 @@ def to_torch_recursive(input_to_convert, device, ignore_dtypes=None):
     if isinstance(input_to_convert, (float, np.floating)):
         return torch.tensor([input_to_convert], dtype=torch.float32, device=device)
 
-    if isinstance(input_to_convert, (bool, np.bool_)):
+    if isinstance(input_to_convert, (bool, np.bool, np.bool_)):
         return torch.tensor([input_to_convert], dtype=torch.bool, device=device)
 
     if isinstance(input_to_convert, np.ndarray):
@@ -246,15 +257,15 @@ def to_torch_recursive(input_to_convert, device, ignore_dtypes=None):
     raise ValueError(f"Input of unexpected type {type(input_to_convert)}. Please add case to this function.")
 
 
-def count_unpredicted_params(synth_preset_name, model_preset_name):
+def count_unpredicted_params(synth_chain_name, model_chain_name):
 
-    synth_preset = synth_presets_dict[synth_preset_name]
-    model_preset = synth_presets_dict[model_preset_name]
+    synth_chain = synth_chains_dict[synth_chain_name]
+    model_chain = synth_chains_dict[model_chain_name]
 
-    predicted_indices = [cell['index'] for cell in model_preset]
+    predicted_indices = [cell['index'] for cell in model_chain]
 
     n_unpredicted_params = 0
-    for cell in synth_preset:
+    for cell in synth_chain:
         index = cell.get('index')
         operation = cell.get('operation')
 
@@ -354,22 +365,23 @@ def process_categorical_variable(values: Sequence, map_fn: Callable, batch_size:
 
 class MultiSpecTransform:
 
-    def __init__(self, loss_type: str, loss_preset: Union[str, dict], synth_constants: SynthConstants, device='cuda:0'):
+    def __init__(self, loss_preset: Union[str, dict], synth_constants: SynthConstants, device='cuda:0'):
 
         super().__init__()
 
         self.loss_preset = loss_presets[loss_preset] if isinstance(loss_preset, str) else loss_preset
+        self.loss_transform = self.loss_preset['transform']
         self.device = device
         self.sample_rate = synth_constants.sample_rate
 
         self.spectrogram_ops = {}
         for size in self.loss_preset['fft_sizes']:
-            if loss_type == 'BOTH' or loss_type == 'SPECTROGRAM':
+            if self.loss_transform == 'BOTH' or self.loss_transform == 'SPECTROGRAM':
                 spec_transform = torchaudio.transforms.Spectrogram(n_fft=size, hop_length=int(size / 4), power=2.0).to(self.device)
 
                 self.spectrogram_ops[f'{size}_spectrogram'] = spec_transform
 
-            if loss_type == 'BOTH' or loss_type == 'MEL_SPECTROGRAM':
+            if self.loss_transform == 'BOTH' or self.loss_transform == 'MEL_SPECTROGRAM':
                 mel_spec_transform = torchaudio.transforms.MelSpectrogram(sample_rate=self.sample_rate, n_fft=size,
                                                                           hop_length=int(size / 4), n_mels=256,
                                                                           power=2.0).to(self.device)

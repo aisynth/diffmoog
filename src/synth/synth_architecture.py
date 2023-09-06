@@ -1,10 +1,10 @@
-from typing import Tuple, Dict, Union
+from typing import Tuple, Dict
 
 import torch
 
 from synth.synth_constants import SynthConstants
 from synth.synth_modules import get_synth_module
-from synth.synth_presets import synth_presets_dict
+from synth.synth_chains import synth_chains_dict
 
 from utils.types import TensorLike
 
@@ -22,24 +22,28 @@ class SynthModularCell:
                  switch_outputs=None,
                  allow_multiple=None,
                  active_prob=None,
-                 synth_constants: SynthConstants = None,
                  default_connection=False,
+                 synth_constants: SynthConstants = None,
                  device: str = 'cuda:0'):
 
-        self._check_inputs(index, audio_input, outputs, switch_outputs, operation, parameters, synth_constants)
+        self.check_inputs(index, audio_input, outputs, switch_outputs, operation, parameters, synth_constants)
 
         self.index = index
 
         self.module = get_synth_module(operation, device, synth_constants)
 
-        self.audio_input = audio_input
-        self.control_input = control_input
-        self.outputs = outputs
-        self.switch_outputs = switch_outputs
-        self.allow_multiple_outputs = allow_multiple
-
         if default_connection:
-            self._set_default()
+            self.audio_input = None
+            self.control_input = None
+            self.outputs = None
+            self.switch_outputs = None
+            self.allow_multiple_outputs = None
+        else:
+            self.audio_input = audio_input
+            self.control_input = control_input
+            self.outputs = outputs
+            self.switch_outputs = switch_outputs
+            self.allow_multiple_outputs = allow_multiple
 
         self.operation = operation
         self.parameters = parameters
@@ -47,8 +51,8 @@ class SynthModularCell:
         self.active_prob = active_prob
 
     @staticmethod
-    def _check_inputs(index, audio_input, outputs, switch_outputs, operation, parameters,
-                      synth_constants: SynthConstants):
+    def check_inputs(index, audio_input, outputs, switch_outputs, operation, parameters,
+                     synth_constants: SynthConstants):
         layer = index[1]
 
         if audio_input is not None:
@@ -82,17 +86,6 @@ class SynthModularCell:
                     if key not in synth_constants.modular_synth_params[operation]:
                         ValueError("Illegal parameter for the provided operation")
 
-    def _set_default(self):
-
-        channel, layer = self.index
-
-        if self.audio_input is None and layer > 0:
-            self.audio_input = [(channel, layer - 1)]
-        if self.outputs is None:
-            self.outputs = [(channel, layer+1)]
-
-        return
-
     def generate_signal(self, input_signal, modulator_signal, params, sample_rate, signal_duration, batch_size):
         signal = self.module.process_sound(input_signal, modulator_signal, params, sample_rate, signal_duration,
                                            batch_size)
@@ -104,8 +97,13 @@ class SynthModularCell:
 
 
 class SynthModular(torch.nn.Module):
-    def __init__(self, preset: Union[str, list], synth_constants: SynthConstants, device='cuda:0'):
-
+    """
+    SynthModular is a class that represents a modular synthesizer.
+    """
+    def __init__(self, chain_name: str, synth_constants: SynthConstants, device='cuda:0'):
+        """
+        init function for SynthModular class, applies the provided chain to the synthesizer.
+        """
         super().__init__()
 
         self.synth_constants = synth_constants
@@ -113,22 +111,30 @@ class SynthModular(torch.nn.Module):
 
         self.device = device
 
-        preset, (n_channels, n_layers) = self._parse_preset(preset)
+        chain, (n_channels, n_layers) = self._parse_chain(chain_name)
 
         self.n_channels = n_channels
         self.n_layers = n_layers
         self.synth_matrix = None
-        self.apply_architecture(preset, n_channels, n_layers)
+        self.apply_architecture(chain, n_channels, n_layers)
 
-    def apply_architecture(self, preset: dict, n_channels: int, n_layers: int):
+    def apply_architecture(self, chain: dict, n_channels: int, n_layers: int):
+        """
+        Applies the provided chain to the synthesizer, holding the chain's cells in the synth_matrix.
+        """
         self.synth_matrix = [[None for _ in range(n_layers)] for _ in range(n_channels)]
         for channel_idx in range(n_channels):
             for layer_idx in range(n_layers):
-                cell = preset.get((channel_idx, layer_idx), {'index': (channel_idx, layer_idx)})
+                cell = chain.get((channel_idx, layer_idx), {'index': (channel_idx, layer_idx)})
                 self.synth_matrix[channel_idx][layer_idx] = SynthModularCell(**cell, device=self.device,
                                                                              synth_constants=self.synth_constants)
 
     def generate_signal(self, signal_duration: float, batch_size: int = 1) -> (TensorLike, Dict[str, TensorLike]):
+        """
+        Generates a signal from the synthesizer, by propagating the signal through the synth_matrix, from low layers to
+        high layers. Each cell in the matrix generates a signal, which is then sent to the subswquent layer's cells as
+        input. The final signal is the average of all signals generated by the cells in the last layer.
+        """
         output_signals = {}
         for layer in range(self.n_layers):
             for channel in range(self.n_channels):
@@ -171,16 +177,22 @@ class SynthModular(torch.nn.Module):
             self._update_cell_parameters(index=cell_index, parameters=cell_params['parameters'])
 
     def _update_cell_parameters(self, index: Tuple[int, int], parameters: dict):
+        """
+        Updates the parameters of the cell in the provided index, with the provided parameters.
+        """
         cell = self.synth_matrix[index[0]][index[1]]
         if parameters is not None and (isinstance(parameters, dict) or isinstance(parameters, list)):
             for key in parameters:
                 if key not in ['output'] and key not in self.synth_constants.modular_synth_params[cell.operation]:
-                    raise ValueError(f"Illegal parameter {key} for the provided operation {cell.operation}.")
+                    raise ValueError("Illegal parameter for the provided operation.")
             cell.parameters = parameters
         else:
             raise ValueError("Unsupported or empty parameters provided for cell {index} update.")
 
     def collect_params(self) -> dict:
+        """
+        Collects the parameters of all cells in the synthesizer, and returns them as a dictionary.
+        """
         params_dict = {}
         for channel in self.synth_matrix:
             for cell in channel:
@@ -190,8 +202,10 @@ class SynthModular(torch.nn.Module):
         return params_dict
 
     def get_final_signal(self) -> TensorLike:
-
-        # Final signal summing from all channels in the last layer
+        """
+        Returns the final signal of the synthesizer, which is the average of all signals generated by the cells in the
+        last layer.
+        """
         final_signal = 0
         num_active_channels = 0
         for channel in self.synth_matrix:
@@ -213,21 +227,21 @@ class SynthModular(torch.nn.Module):
                 cell.signal = 0
 
     @staticmethod
-    def _parse_preset(preset: Union[str, list]) -> (dict, Tuple[int, int]):
+    def _parse_chain(chain_name: str) -> (dict, Tuple[int, int]):
 
-        # Load preset and convert to dictionary of cell_index: cell_parameters
-        preset_list = synth_presets_dict.get(preset, None) if isinstance(preset, str) else preset
-        if preset_list is None:
-            raise ValueError("Unknown PRESET")
+        # Load chain and convert to dictionary of cell_index: cell_parameters
+        chain_list = synth_chains_dict.get(chain_name, None)
+        if chain_list is None:
+            raise ValueError("Unknown CHAIN")
 
-        preset_dict = {}
+        chain_dict = {}
         n_layers, n_channels = 0, 0
-        for cell_desc in preset_list:
+        for cell_desc in chain_list:
             cell_idx = cell_desc['index']
-            preset_dict[cell_idx] = cell_desc
+            chain_dict[cell_idx] = cell_desc
 
-            # Deduce preset channel and layer numbers
+            # Deduce chain channel and layer numbers
             n_channels = max(n_channels, cell_idx[0] + 1)
             n_layers = max(n_layers, cell_idx[1] + 1)
 
-        return preset_dict, (n_channels, n_layers)
+        return chain_dict, (n_channels, n_layers)

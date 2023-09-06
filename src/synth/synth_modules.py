@@ -1,3 +1,8 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+This file contains the synth modules, which are the building blocks of the modular synth.
+"""
 from abc import ABC, abstractmethod
 from typing import Dict, Tuple, Union, Sequence
 
@@ -15,12 +20,21 @@ from utils.gumble_softmax import gumbel_softmax
 from synth.synth_constants import SynthConstants
 from utils.types import TensorLike
 
+# try:
+#     from functorch import vmap
+#     has_vmap = True
+# except ModuleNotFoundError:
+has_vmap = False
+
 
 PI = math.pi
 TWO_PI = 2 * PI
 
 
 class SynthModule(ABC):
+    """
+    Abstract class for a synth module
+    """
 
     def __init__(self, name: str, device: str, synth_structure: SynthConstants):
         self.synth_structure = synth_structure
@@ -58,7 +72,7 @@ class SynthModule(ABC):
                            value_range: Tuple = None) -> torch.Tensor:
 
         # Single scalar input value
-        if isinstance(input_val, (float, np.floating, int, np.int32, np.int64)):
+        if isinstance(input_val, (float, np.floating, int)):
             assert batch_size == 1, f"Input expected to be of batch size {batch_size} but is scalar"
             input_val = torch.tensor(input_val, dtype=requested_dtype, device=self.device)
 
@@ -106,15 +120,18 @@ class SynthModule(ABC):
             ret_active_vector = active_vector.long().unsqueeze(1).to(self.device)
             return ret_active_vector
 
-        active_vector = self._standardize_input(active_vector, requested_dtype=torch.float32, requested_dims=2,
+        standartized_active_vector = self._standardize_input(active_vector, requested_dtype=torch.float32, requested_dims=2,
                                                 batch_size=batch_size)
-        active_vector_gumble = gumbel_softmax(active_vector, hard=True, device=self.device)
-        ret_active_vector = active_vector_gumble[:, :1]
+        active_vector_gumble = gumbel_softmax(standartized_active_vector, hard=True, device=self.device)
+        ret_active_vector = active_vector_gumble[:, 1:]
 
         return ret_active_vector
 
 
 class Oscillator(SynthModule):
+    """
+    Basic oscillator module
+    """
 
     def __init__(self, name: str, device: str, synth_structure: SynthConstants, waveform: str = None):
 
@@ -166,10 +183,17 @@ class Oscillator(SynthModule):
         freq = self._standardize_input(params['freq'], requested_dtype=torch.float32, requested_dims=2,
                                        batch_size=batch_size)
 
+        if 'phase' not in params:
+            phase = torch.zeros((batch_size, 1), dtype=torch.float32, device=self.device)
+        else:
+            phase = self._standardize_input(params['phase'], requested_dtype=torch.float32, requested_dims=2,
+                                       batch_size=batch_size)
+
         amp = active_signal * amp
         freq = active_signal * freq
+        phase = active_signal * phase
 
-        wave_tensors = self._generate_wave_tensors(t, amp, freq, phase_mod=0, sample_rate=sample_rate,
+        wave_tensors = self._generate_wave_tensors(t, amp, freq, phase_mod=phase, sample_rate=sample_rate,
                                                    signal_duration=signal_duration)
 
         if self.waveform is not None:
@@ -180,7 +204,10 @@ class Oscillator(SynthModule):
 
         return oscillator_tensor
 
-    def _generate_wave_tensors(self, t, amp, freq, phase_mod, sample_rate, signal_duration):
+    def _generate_wave_tensors(self, t, amp, freq, phase_mod=0, sample_rate=16000, signal_duration=1.0):
+        """
+        Generates the wave tensors for the different waveforms
+        """
 
         wave_tensors = {}
 
@@ -208,6 +235,49 @@ class Oscillator(SynthModule):
             print(f'Missing amp param in Oscillator module {self.name}. Assuming fixed amp.'
                   f' Please check Synth structure if this is unexpected.')
             self.warning_sent = True
+
+
+class SurrogateOscillator(Oscillator):
+
+    def _generate_wave_tensors(self, t, amp, freq, phase_mod, sample_rate, signal_duration, modulator=None):
+
+        wave_tensors = {}
+
+        z_freq = TWO_PI * freq / sample_rate
+        if modulator is not None:
+            z = torch.exp(1j * (z_freq + (2 * math.pi * modulator) * (100.0 / sample_rate)))
+        else:
+            z = torch.exp(1j * (z_freq.repeat(1, int(sample_rate * signal_duration) - 1)))  # complex parameter
+
+        if self.waveform == 'sine' or self.waveform is None:
+            sine_wave = amp * self.complex_oscillator_cumprod(z)
+            wave_tensors['sine'] = sine_wave
+
+        if self.waveform == 'square' or self.waveform is None:
+            sine_wave = self.complex_oscillator_cumprod(z)
+            square_wave = amp * torch.sign(sine_wave)
+            wave_tensors['square'] = square_wave
+
+        if self.waveform == 'saw' or self.waveform is None:
+            sawtooth_wave = 2 * (t * freq - torch.floor(0.5 + t * freq))  # Sawtooth closed form
+            if modulator is not None:
+                sawtooth_wave = (((sawtooth_wave + 1) / 2) + torch.cumsum(modulator, dim=1) / TWO_PI) % 1
+            else:
+                # Phase shift (by normalization to range [0,1] and modulo operation)
+                sawtooth_wave = (((sawtooth_wave + 1) / 2) + phase_mod / TWO_PI) % 1
+
+            sawtooth_wave = amp * (sawtooth_wave * 2 - 1)  # re-normalization to range [-amp, amp]
+            wave_tensors['saw'] = sawtooth_wave
+
+        return wave_tensors
+
+    def complex_oscillator_cumprod(self, z: torch.complex):
+        """Implements the complex surrogate by taking the cumulative product along the time
+        dimension."""
+        initial = torch.ones(*z.shape[:-1], 1, dtype=z.dtype, device=z.device)
+        z_cat = torch.cat([initial, z], dim=-1)
+
+        return torch.cumprod(z_cat, dim=-1).real
 
 
 class SawSquareOscillator(SynthModule):
@@ -293,6 +363,9 @@ class SawSquareOscillator(SynthModule):
 
 
 class FMOscillator(Oscillator):
+    """
+    Oscillator with FM modulation
+    """
 
     def __init__(self, name: str, device: str, synth_structure: SynthConstants, waveform: str = None):
 
@@ -382,7 +455,168 @@ class FMOscillator(Oscillator):
         return wave_tensors
 
 
+class SurrogateFMOscillator(SurrogateOscillator):
+
+    def __init__(self, name: str, device: str, synth_structure: SynthConstants, waveform: str = None):
+
+        if waveform is not None:
+            assert waveform in ['sine', 'square', 'saw'], f'Unexpected waveform {waveform} given to FMOscillator'
+
+        super().__init__(name=name, device=device, synth_structure=synth_structure)
+
+        self.waveform = waveform
+
+    def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
+                      sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
+
+        """
+        Batch oscillator with FM modulation
+
+        Creates an oscillator and modulates its frequency by a given modulator
+        Args come as vector of values, with length of the numer of sounds to create
+        params:
+            self: Self object
+            amp_c: Vector of amplitude in range [0, 1]
+            freq_c: Vector of Frequencies in range [0, 22000]
+            waveform: Vector of waveform with type from [sine, square, triangle, sawtooth]
+            mod_index: Vector of modulation indexes, which affects the amount of modulation
+            modulator: Vector of modulator signals, to affect carrier frequency
+
+        Returns:
+            A torch with the constructed FM signal
+
+        Raises:
+            ValueError: Provided variables are out of range
+        """
+
+        self._verify_input_params(params)
+
+        active_signal = self._process_active_signal(params.get('active', None), batch_size)
+        fm_active_signal = self._process_active_signal(params.get('fm_active', None), batch_size)
+
+        parsed_params = {}
+        for k in ['amp_c', 'freq_c', 'mod_index']:
+            if k == 'amp_c' and k not in params:
+                self._amp_warning()
+                parsed_params[k] = torch.ones((batch_size, 1), dtype=torch.float32, device=self.device)
+            else:
+                parsed_params[k] = self._standardize_input(params[k], requested_dtype=torch.float32, requested_dims=2,
+                                                           batch_size=batch_size)
+
+        parsed_params['freq_c'] = parsed_params['freq_c'] * active_signal
+        active_and_fm_active = torch.mul(fm_active_signal, active_signal)
+        parsed_params['mod_index'] = parsed_params['mod_index'] * active_and_fm_active
+
+        if modulator_signal is None:
+            modulator_signal = torch.zeros(int(sample_rate * signal_duration), requires_grad=False, device=self.device)
+        modulator_signal = modulator_signal * active_and_fm_active
+
+        t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True,
+                           device=self.device)
+        wave_tensors = self._generate_wave_tensors(t, amp=parsed_params['amp_c'], freq=parsed_params['freq_c'],
+                                                   phase_mod=0, sample_rate=sample_rate,
+                                                   signal_duration=signal_duration, modulator=modulator_signal)
+
+        if self.waveform is not None:
+            return wave_tensors[self.waveform]
+
+        waves_tensor = torch.stack([wave_tensors['sine'], wave_tensors['square'], wave_tensors['saw']])
+        oscillator_tensor = self._mix_waveforms(waves_tensor, params['waveform'], self.wave_type_indices)
+
+        return oscillator_tensor
+
+
+# todo: remove code duplication (FMLfoOscillator is the same as FMOscillator, just with fm_lfo_mod_index instead of mod_index
+class FMLfoOscillator(Oscillator):
+    def __init__(self, name: str, device: str, synth_structure: SynthConstants, waveform: str = None):
+
+        if waveform is not None:
+            assert waveform in ['sine', 'square', 'saw'], f'Unexpected waveform {waveform} given to FMOscillator'
+
+        super().__init__(name=name, device=device, synth_structure=synth_structure)
+
+        self.waveform = waveform
+
+    def process_sound(self, input_signal: torch.Tensor, modulator_signal: torch.Tensor, params: dict,
+                      sample_rate: int, signal_duration: float, batch_size: int = 1) -> torch.Tensor:
+
+        """
+        Batch oscillator with FM modulation
+
+        Creates an oscillator and modulates its frequency by a given modulator
+        Args come as vector of values, with length of the numer of sounds to create
+        params:
+            self: Self object
+            amp_c: Vector of amplitude in range [0, 1]
+            freq_c: Vector of Frequencies in range [0, 22000]
+            waveform: Vector of waveform with type from [sine, square, triangle, sawtooth]
+            mod_index: Vector of modulation indexes, which affects the amount of modulation
+            modulator: Vector of modulator signals, to affect carrier frequency
+
+        Returns:
+            A torch with the constructed FM signal
+
+        Raises:
+            ValueError: Provided variables are out of range
+        """
+
+        self._verify_input_params(params)
+
+        active_signal = self._process_active_signal(params.get('active', None), batch_size)
+        fm_active_signal = self._process_active_signal(params.get('fm_active', None), batch_size)
+
+        parsed_params = {}
+        for k in ['amp_c', 'freq_c', 'fm_lfo_mod_index']:
+            if k == 'amp_c' and k not in params:
+                self._amp_warning()
+                parsed_params[k] = torch.ones((batch_size, 1), dtype=torch.float32, device=self.device)
+            else:
+                parsed_params[k] = self._standardize_input(params[k], requested_dtype=torch.float32, requested_dims=2,
+                                                           batch_size=batch_size)
+
+        parsed_params['freq_c'] = parsed_params['freq_c'] * active_signal
+        active_and_fm_active = torch.mul(fm_active_signal, active_signal)
+        parsed_params['fm_lfo_mod_index'] = parsed_params['fm_lfo_mod_index'] * active_and_fm_active
+        modulator_signal = modulator_signal * active_and_fm_active
+
+        t = torch.linspace(0, signal_duration, steps=int(sample_rate * signal_duration), requires_grad=True,
+                           device=self.device)
+        wave_tensors = self._generate_modulated_wave_tensors(t, modulator=modulator_signal, **parsed_params)
+
+        if self.waveform is not None:
+            return wave_tensors[self.waveform]
+
+        waves_tensor = torch.stack([wave_tensors['sine'], wave_tensors['square'], wave_tensors['saw']])
+        oscillator_tensor = self._mix_waveforms(waves_tensor, params['waveform'], self.wave_type_indices)
+
+        return oscillator_tensor
+
+    def _generate_modulated_wave_tensors(self, t, amp_c, freq_c, fm_lfo_mod_index, modulator):
+
+        wave_tensors = {}
+
+        if self.waveform == 'sine' or self.waveform is None:
+            fm_sine_wave = amp_c * torch.sin(TWO_PI * freq_c * t + fm_lfo_mod_index * torch.cumsum(modulator, dim=1))
+            wave_tensors['sine'] = fm_sine_wave
+
+        if self.waveform == 'square' or self.waveform is None:
+            fm_square_wave = amp_c * torch.sign(torch.sin(TWO_PI * freq_c * t + fm_lfo_mod_index *
+                                                          torch.cumsum(modulator, dim=1)))
+            wave_tensors['square'] = fm_square_wave
+
+        if self.waveform == 'saw' or self.waveform is None:
+            fm_sawtooth_wave = 2 * (t * freq_c - torch.floor(0.5 + t * freq_c))
+            fm_sawtooth_wave = (((fm_sawtooth_wave + 1) / 2) + fm_lfo_mod_index * torch.cumsum(modulator, dim=1) / TWO_PI) % 1
+            fm_sawtooth_wave = amp_c * (fm_sawtooth_wave * 2 - 1)
+            wave_tensors['saw'] = fm_sawtooth_wave
+
+        return wave_tensors
+
+
 class ADSR(SynthModule):
+    """
+    ADSR (attack-decay-sustain-release) envelope module
+    """
     def __init__(self, name: str, device: str, synth_structure: SynthConstants):
         super().__init__(name=name, device=device, synth_structure=synth_structure)
 
@@ -443,6 +677,9 @@ class ADSR(SynthModule):
 
 
 class Filter(SynthModule):
+    """
+    Filter module with lowpass and highpass filters.
+    """
 
     def __init__(self, device: str, synth_structure: SynthConstants, filter_type: str = None):
         super().__init__(name='filter', device=device, synth_structure=synth_structure)
@@ -485,12 +722,20 @@ class Filter(SynthModule):
 
         filtered_signals = {}
         if self.filter_type == 'lowpass' or self.filter_type is None:
-            low_pass_signals = [self.low_pass(input_signal[i], filter_freq[i].cpu(), sample_rate) for i in
+            if has_vmap:
+                low_pass_signals = vmap(lowpass_biquad)(input_signal.double(), filter_freq,
+                                                        sample_rate=sample_rate)
+            else:
+                low_pass_signals = [self.low_pass(input_signal[i], filter_freq[i].cpu(), sample_rate) for i in
                                     range(batch_size)]
-            filtered_signals['lowpass'] = torch.stack(low_pass_signals)
+                filtered_signals['lowpass'] = torch.stack(low_pass_signals)
 
         if self.filter_type == 'highpass' or self.filter_type is None:
-            high_pass_signals = [self.high_pass(input_signal[i], filter_freq[i].cpu(), sample_rate) for i in
+            if has_vmap:
+                high_pass_signals = vmap(highpass_biquad)(input_signal.double(), cutoff_freq=filter_freq,
+                                                          sample_rate=sample_rate)
+            else:
+                high_pass_signals = [self.high_pass(input_signal[i], filter_freq[i].cpu(), sample_rate) for i in
                                      range(batch_size)]
             filtered_signals['highpass'] = torch.stack(high_pass_signals)
 
@@ -513,7 +758,11 @@ class Filter(SynthModule):
             return filtered_waveform_new
 
 
+#todo: chechk the ADSR parent if shall not be SynthModule
 class FilterShaper(ADSR):
+    """
+    Filter module with lowpass and highpass filters, with ADSR envelope applied to the filter cutoff frequency.
+    """
 
     def __init__(self, device: str, synth_structure: SynthConstants, filter_type: str = None):
         super().__init__(name='lowpass_filter_adsr', device=device, synth_structure=synth_structure)
@@ -562,11 +811,15 @@ class FilterShaper(ADSR):
 
         filtered_signals = {}
         if self.filter_type == 'lowpass' or self.filter_type is None:
-            low_pass_signals = [self.low_pass_frequency(input_signal[i], filter_freq[i],
+            if has_vmap:
+                low_pass_signals = vmap(lowpass_biquad)(input_signal.double(), filter_freq,
+                                                        sample_rate=sample_rate)
+            else:
+                low_pass_signals = [self.low_pass_frequency(input_signal[i], filter_freq[i],
                                                             filter_intensity[i],
                                                             envelope[i], sample_rate) for i in
                                     range(batch_size)]
-            filtered_signals['lowpass'] = torch.stack(low_pass_signals)
+                filtered_signals['lowpass'] = torch.stack(low_pass_signals)
 
         return filtered_signals
 
@@ -646,6 +899,9 @@ class FilterShaper(ADSR):
 
 
 class Tremolo(SynthModule):
+    """
+    Tremolo effect module
+    """
 
     def __init__(self, device: str, synth_structure: SynthConstants):
         super().__init__(name='tremolo', device=device, synth_structure=synth_structure)
@@ -690,6 +946,9 @@ class Tremolo(SynthModule):
 
 
 class Mix(SynthModule):
+    """
+    Mix module
+    """
 
     def __init__(self, device: str, synth_structure: SynthConstants):
         super().__init__(name='mix', device=device, synth_structure=synth_structure)
@@ -743,6 +1002,9 @@ class Noop(SynthModule):
 
 
 def get_synth_module(op_name: str, device: str, synth_structure: SynthConstants):
+    """
+    Get appropriate synth module according to the given operation name
+    """
 
     if op_name is None or op_name in ['None', 'none']:
         return Noop('none', device, synth_structure)
@@ -751,14 +1013,26 @@ def get_synth_module(op_name: str, device: str, synth_structure: SynthConstants)
 
     if op_name in ['osc', 'lfo', 'lfo_non_sine']:
         return Oscillator(op_name, device, synth_structure)
+    elif op_name in ['surrogate_osc', 'surrogate_lfo', 'surrogate_lfo_non_sine']:
+        return SurrogateOscillator(op_name, device, synth_structure)
     elif op_name in ['lfo_sine', 'lfo_square', 'lfo_saw']:
         waveform = op_name.split('_')[1]
         return Oscillator(op_name, device, synth_structure, waveform)
-    elif op_name in ['fm']:
-        return FMOscillator(op_name, device, synth_structure)
+    elif op_name in ['fm', 'fm_lfo']:
+        return FMLfoOscillator(op_name, device, synth_structure)
     elif op_name in ['fm_sine', 'fm_square', 'fm_saw']:
         waveform = op_name.split('_')[1]
         return FMOscillator(op_name, device, synth_structure, waveform)
+    elif op_name in ['osc_sine', 'osc_square', 'osc_saw',
+                     'osc_sine_no_activeness', 'osc_square_no_activeness', 'osc_saw_no_activeness',
+                     'osc_sine_no_activeness_cont_freq',
+                     'osc_square_no_activeness_cont_freq',
+                     'osc_saw_no_activeness_cont_freq']:
+        waveform = op_name.split('_')[1]
+        return Oscillator(op_name, device, synth_structure, waveform)
+    elif op_name in ['surrogate_fm_sine', 'surrogate_fm_square', 'surrogate_fm_saw']:
+        waveform = op_name.split('_')[-1]
+        return SurrogateFMOscillator(op_name, device, synth_structure, waveform)
     elif op_name in ['env_adsr']:
         return ADSR('ebv_adsr', device, synth_structure)
     elif op_name in ['filter', 'lowpass_filter', 'highpass_filter']:
