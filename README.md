@@ -109,9 +109,3 @@ In the *examples* directory, you will find several notebooks to help get you fam
 Start with `explore_chains.ipynb` and `create_dataset.ipynb` for introduction about the synth structure, configuration and sound generation.
 
 Use `train_model.ipynb` and `evaluate_model.ipynb` to train and evaluate a sound matching model.
-
-#### Note
-- There are many notebooks available in the `root/misc_notebooks` directory that helped us with the development of the project. These notebooks are not necessary for the training and evaluation of the model, but they may be useful for understanding the code the data, and getting deeper insights into research questions. It my be clattered and not well organized, but we chose to keep it for publication
-
-
-
