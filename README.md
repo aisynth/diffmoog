@@ -6,6 +6,9 @@ This repo contains the implementation of DiffMoog, a differential, subtractive, 
 
 The repo contains code for the synthesizer modules and architecture, as well as a platform for training and evaluating sound matching models using the synthesizer as a basis.
 
+## Paper
+https://arxiv.org/abs/2401.12570
+
 ## Getting started
 To get started, simply clone the repo and install the requirements in requirements.txt, then follow the instructions below.
 
