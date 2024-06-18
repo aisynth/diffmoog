@@ -1,0 +1,7 @@
+synth_obj = SynthModular(preset_name='OSC_TREMOLO', synth_constants=synth_constants, device='cpu')
+
+params = {
+    (0, 0): {'operation': 'lfo_sine', 'parameters': {'freq': [5], 'active': [True]}},
+    (0, 1): {'operation': 'osc', 'parameters': {'amp': [1], 'freq': [440], 'waveform': 'square', 'active': [True]}},
+    (0, 2): {'operation': 'tremolo', 'parameters': {'amount': [1], 'active': [True], 'fm_active': [True]}}
+    }

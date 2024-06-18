@@ -1,0 +1,51 @@
+"""
+This is an example config file. It is used to define the hyperparameters of the model and the training process.
+"""
+
+model:
+  arch: simple
+  backbone: gru # gru, resnet, lstm
+  chain: REDUCED_SIMPLE_OSC # a chain from the list in src/synth/synth_chains.py
+  num_workers: 8 # number of workers for the dataloader
+  batch_size: 64 # batch size for training. reduce if GPU memory is not enough
+  num_epochs: 200 # number of epochs to train
+
+  # path to a checkpoint to load from. comment to train from scratch
+  ckpt_path: 'C:\Users\{user_name}\PycharmProjects\ai_synth\src\my_checkpoints\version_x\{ckpt_name}.ckpt'
+
+  optimizer: # optimizer parameters for use in src/model/lit_module.py::configure_optimizers()
+    base_lr: 0.001
+    optimizer: adam # currently only adam is supported
+    scheduler: exponential #constant, exponential, cosine, cyclic
+    gamma: 0.99 # decay factor for exponential scheduler
+
+loss:
+  loss_preset: cumsum_time # loss preset from src/losses/spectral_loss_presets.py
+  control_spec_preset: cumsum_time # loss preset special for control signals (non-audible signals). Control signals are characterized differently than audio signals, so it might help to use a different loss function for them.
+  parameters_loss_norm: L1 # L1, L2
+
+  apply_loss_normalization: true # whether to apply loss normalization, which normalizes parameters loss and spectral loss to be in the same scale. See src/model/lit_module.py::_normalize_losses()
+  parameters_loss_weight: 1 # weight of parameters loss, in general it shall stay 1
+  spectrogram_loss_weight: 0 # weight of spectrogram loss, shall result in a similar scale to parameters loss
+
+  spectrogram_loss_warmup_epochs: 3333333333333333 # number of epochs to train with only parameters loss. After this number of epochs, the model will apply gradual, linear decrease of parameters loss weighting and increase of spectrogram loss weighting
+  loss_switch_epochs: 0 # number of epochs to apply the loss switch. After this number of epochs, only spectrogram loss will be applied (when min_parameters_loss_decay is indeed 0)
+  min_parameters_loss_decay: 0 # minimum value of parameters loss weight. After the loss switch, the parameters loss weight will gradually decrease to this value.
+  in_domain_epochs: 200 # number of epochs to train with in-domain data. After this number of epochs, the model will be trained with out-of-domain data
+
+  use_chain_loss: false # whether to apply chain loss, comparing signals all along the synthesizer chain. If false, only the last signal is compared to the target signal.
+  chain_loss_weight: 1.0 # weight of chain loss, to multiply the average spectral losses from all along the chain, to scale them to the same scale as parameters loss
+  use_gradual_chain_loss: false # whether to gradually introduce chain loss, with early layers introduced first and later layers introduced later as part of the chain loss
+  chain_warmup_factor: 5 # the number of epochs to introduce a new layer to the chain loss, when use_gradual_chain_loss is true . For example, if chain_warmup_factor is 5, and the chain has 5 layers, then the chain loss will be introduced gradually over 25 epochs, with each layer introduced after 5 epochs.
+
+synth:
+  chain: REDUCED_SIMPLE_OSC # the chain to use for synthesis. This chain is used for both training and inference.
+  transform: MEL # the transform to use for the input spectrogram. Mel or SPECTROGRAM
+  apply_log_transform_to_input: true # whether to apply log transform to the input spectrogram
+  use_multi_spec_input: false # apply multiresolution spectrogram input
+  signal_duration: 4.0 # duration of the output signal in seconds
+  note_off_time: 3.0 # note off event time, in seconds. Equivalent to event of note off in MIDI or note release of the piano keyboard.
+  added_noise_std: 0.0001 # standard deviation of added noise to the output signal, aimed at regularizing the model.
+
+logging:
+  n_images_to_log: 5 # number of sounds (and their spectrograms) to log to tensorboard in each epoch. used for analysis

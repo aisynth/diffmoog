@@ -1,0 +1,12 @@
+synth_obj = SynthModular(preset_name='MODULAR_NEW', synth_constants=synth_constants, device='cpu')
+
+params = {(0,0): {'operation': 'lfo_sine', 'parameters': {'freq': [0.025], 'active': [True], 'output': [[1, 1]]}},
+          (1,1): {'operation': 'fm_lfo', 'parameters': {'freq_c': [1], 'waveform': ['sine'], 'fm_lfo_mod_index': [0.01], 'active': [True], 'fm_active': [True], 'output': [[0, 2]]}},
+          (0,2): {'operation': 'fm_sine', 'parameters': {'amp_c': [1], 'freq_c': [440], 'mod_index': [0.1], 'active': [True], 'fm_active': [True]}},
+          (1,2): {'operation': 'fm_saw', 'parameters': {'amp_c': [1], 'freq_c': [523.2511], 'mod_index': [0.1], 'active': [True], 'fm_active': [True]}},
+          (2,2): {'operation': 'fm_square', 'parameters': {'amp_c': [1], 'freq_c': [659.2551], 'mod_index': [0.1], 'active': [True], 'fm_active': [True]}},
+          (0,3): {'operation': 'mix', 'parameters': {}},
+          (0,4): {'operation': 'env_adsr', 'parameters': {'attack_t': [0.5], 'decay_t': [0.5], 'sustain_t': [0.5], 'sustain_level': [0.3], 'release_t': [0.5]}},
+          (0,5): {'operation': 'lowpass_filter_adsr', 'parameters': {'attack_t': [1], 'decay_t': [0.2], 'sustain_t': [0.5], 'sustain_level': [0.1], 'release_t': [0.1], 'filter_freq': [200], 'intensity': [0.01]}},
+          (0,6): {'operation': 'tremolo', 'parameters': {'amount': [0.4], 'active': [False], 'fm_active': [False]}}
+          }

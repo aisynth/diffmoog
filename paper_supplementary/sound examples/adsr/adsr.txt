@@ -1,0 +1,6 @@
+synth_obj = SynthModular(preset_name='OSC_ADSR', synth_constants=synth_constants, device='cpu')
+
+params = {
+    (0, 0): {'operation': 'osc', 'parameters': {'amp': [1], 'freq': [440], 'waveform': 'sawtooth', 'active': [True]}},
+    (0, 1): {'operation': 'env_adsr', 'parameters': {'attack_t': [0.75], 'decay_t': [0.75], 'sustain_t': [0.5], 'sustain_level': [0.03], 'release_t': [0]}}
+    }

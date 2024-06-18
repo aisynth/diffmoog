@@ -1,0 +1,6 @@
+synth_obj = SynthModular(preset_name='LFO_SIN', synth_constants=synth_constants, device='cpu')
+
+params = {
+    (1, 1): {'operation': 'lfo', 'parameters': {'freq': [2], 'waveform': 'sine', 'active': [True]}},
+    (0, 2): {'operation': 'fm_sine', 'parameters': {'amp_c': [1], 'freq_c': [1000], 'mod_index': [0.1], 'active': [True], 'fm_active': [True]}}
+    }
